@@ -110,6 +110,7 @@ export function Garden() {
           position: placement.position,
           geometry,
           tint: tintFor(signalHealth({ ...node, ...vitals }), stale),
+          vitality: vitals.vitality,
         },
       ];
     });

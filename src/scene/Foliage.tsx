@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
-import { smoothActivity, swayMatrix } from './sway';
+import { droopSag, smoothActivity, smoothVitality, swayMatrix } from './sway';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -55,6 +55,7 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
     for (const plant of plants) {
       const { geometry, position, node } = plant;
       swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t);
+      const vit = smoothVitality(node.id, plant.vitality, t);
 
       for (let l = 0; l < geometry.leafCount; l++) {
         const l3 = l * 3;
@@ -65,6 +66,7 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
             geometry.leafPosition[l3 + 2],
           )
           .applyMatrix4(sway);
+        dummy.position.y -= droopSag(dummy.position.x, dummy.position.z, vit);
         dummy.position.x += position[0];
         dummy.position.y += position[1];
         dummy.position.z += position[2];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { smoothActivity, swayMatrix } from './sway';
+import { droopSag, smoothActivity, swayMatrix } from './sway';
 
 const read = (id: string, activity: number, t: number) => {
   const m = new THREE.Matrix4();
@@ -54,5 +54,28 @@ describe('swayMatrix', () => {
     const b = read('svc-a', 0.55, t);
     const maxDelta = Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     expect(maxDelta).toBeLessThan(0.05);
+  });
+});
+
+describe('droopSag', () => {
+  it('a thriving plant does not droop', () => {
+    expect(droopSag(0.6, 0.6, 1)).toBe(0);
+  });
+
+  it('a dying plant droops, and more the further from the trunk', () => {
+    const near = droopSag(0.1, 0, 0.1);
+    const far = droopSag(0.9, 0, 0.1);
+    expect(near).toBeGreaterThan(0);
+    expect(far).toBeGreaterThan(near);
+  });
+
+  it('the trunk axis never sags, so the plant stays planted', () => {
+    expect(droopSag(0, 0, 0)).toBe(0);
+  });
+
+  it('sag increases monotonically as vitality falls', () => {
+    const healthy = droopSag(0.5, 0.5, 0.8);
+    const sick = droopSag(0.5, 0.5, 0.2);
+    expect(sick).toBeGreaterThan(healthy);
   });
 });

@@ -45,31 +45,63 @@ function phaseOf(id: string): number {
 /** Constant so activity can never leak into a sine frequency. See swayMatrix. */
 const BREATH_FREQ = 0.8;
 
-/** Seconds for the animation to catch up to a telemetry step. */
-const ACTIVITY_TAU = 1.0;
-const smoothed = new Map<string, { t: number; value: number }>();
+/** Seconds for an animated value to catch up to a telemetry step. */
+const SMOOTH_TAU = 1.0;
 
 /**
- * Eases a plant's activity toward its latest telemetry value instead of letting
+ * Eases a per-plant scalar toward its latest telemetry value instead of letting
  * it step.
  *
- * Telemetry arrives in discrete ticks. Activity drives sway amplitude, so a raw
- * step would jump every plant's lean at once, a synchronized twitch every tick
- * that reads as a jerk even though no frame is dropped. Both Branches and Foliage
- * call this per frame with the same id, target, and time; the first advances the
- * smoothing, the second reads the same value, so the two meshes never diverge.
+ * Telemetry arrives in discrete ticks. Both sway amplitude (activity) and droop
+ * (vitality) are driven by those values, so a raw step would jump every plant at
+ * once, a synchronized twitch every tick that reads as a jerk even though no
+ * frame is dropped. Branches and Foliage call these per frame with the same id,
+ * target, and time; the first advances the smoothing, the second reads the same
+ * value, so the two meshes never diverge.
  */
-export function smoothActivity(id: string, target: number, t: number): number {
-  let s = smoothed.get(id);
+function ease(
+  store: Map<string, { t: number; value: number }>,
+  id: string,
+  target: number,
+  t: number,
+): number {
+  let s = store.get(id);
   if (!s) {
     s = { t, value: target };
-    smoothed.set(id, s);
+    store.set(id, s);
   } else if (t > s.t) {
     const dt = Math.min(t - s.t, 0.1);
-    s.value += (target - s.value) * (1 - Math.exp(-dt / ACTIVITY_TAU));
+    s.value += (target - s.value) * (1 - Math.exp(-dt / SMOOTH_TAU));
     s.t = t;
   }
   return s.value;
+}
+
+const activityStore = new Map<string, { t: number; value: number }>();
+const vitalityStore = new Map<string, { t: number; value: number }>();
+
+export const smoothActivity = (id: string, target: number, t: number): number =>
+  ease(activityStore, id, target, t);
+
+export const smoothVitality = (id: string, target: number, t: number): number =>
+  ease(vitalityStore, id, target, t);
+
+/**
+ * How far a point sags under wilt, from its local position and the plant's
+ * vitality. Sag grows with horizontal distance from the trunk, so the trunk
+ * stays planted and outer branches droop, the classic wilt read. A pure function
+ * of position, so connected endpoints (shared coordinates) sag identically and
+ * branches never come apart.
+ *
+ * Vitality, not signalHealth: a thriving weed should stand tall (upright is the
+ * alarm), a dying one should droop, regardless of polarity. Colour carries the
+ * polarity inversion; shape carries raw vigour.
+ */
+const DROOP_STRENGTH = 0.9;
+
+export function droopSag(x: number, z: number, vitality: number): number {
+  const v = vitality < 0 ? 0 : vitality > 1 ? 1 : vitality;
+  return DROOP_STRENGTH * (1 - v) * Math.hypot(x, z);
 }
 
 const euler = new THREE.Euler();

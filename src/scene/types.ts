@@ -13,4 +13,9 @@ export interface PlacedPlant {
   position: Vec3;
   geometry: PlantGeometry;
   tint: Tint;
+  /**
+   * Cursor-aware vitality for this frame, driving render-time droop. Kept
+   * separate from node.vitality so wilt scrubs with time like the geometry does.
+   */
+  vitality: number;
 }
