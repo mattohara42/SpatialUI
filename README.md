@@ -54,11 +54,13 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 
 ```
 src/
-  ecosystem/   Node/edge/state contracts, graph helpers, history, layout, staleness
+  ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
+               staleness, scrub window rules
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, nothing derived)
-  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes, Sky, sway
+  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
+               Sky, SunScrub, plus the pure sway and daylight modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -75,12 +77,29 @@ across a bucket is a cache hit, not a rebuild.
   rather than snapping — see the comments in `src/scene/sway.ts`.
 - Vitality **droop**: sick plants wilt toward the ground (clamped to the soil).
 - Staleness desaturation; "what changed since I last looked" summary.
-- Daylight look: blue sky, warm sun, green ground, dusk was an earlier pass.
-- Respects `prefers-reduced-motion`.
+- **Time scrub as the sun crossing the sky.** Drag the sun (or the moon, after
+  dark) and history moves with it: the whole look — key light, fill, fog, sky
+  gradient, stars — is a function of the hour under the cursor, so scrubbing
+  reads as time passing rather than as values changing. A full turn is a day, so
+  the mapping is one to one with the sun's real rate.
+- Respects `prefers-reduced-motion`. The sky has no motion of its own; it moves
+  only when the user scrubs.
+
+### Reaching the sun
+
+Dragging the sun is the gesture the concept is about, and on desktop it is only
+half reachable: the camera orbits a target at knee height and is clamped at the
+horizon, so sky above roughly 25 degrees cannot be pointed at with a mouse, and
+the sun is up there for most of the day. Swing the camera toward a low sun and
+you can take hold of the disc directly. Otherwise **shift-drag anywhere** does
+the same thing, and the sun still visibly moves under the drag. Arrow keys step
+an hour (shift, six), escape returns to live.
+
+In a headset you look up and grab it, which is the interaction the shift-drag is
+standing in for.
 
 ## What's next
 
-The design docs track the open work. Near-term candidates: the "sun across the
-sky" time-scrub gesture (the sun and shadows are already driven by one vector),
-a signal-gust transient, finishing the staleness visual state, and real adapters
-behind the translation layer.
+The design docs track the open work. Near-term candidates: longer spans as
+seasons (the day is done, the year is not), a signal-gust transient, finishing
+the staleness visual state, and real adapters behind the translation layer.

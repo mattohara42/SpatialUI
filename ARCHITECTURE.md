@@ -16,6 +16,10 @@ src/
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
                      edge validation, topology keys.
     graph.test.ts
+    scrub.ts         What counts as a legal cursor: the window, the clamp, and
+                     when a scrub lands back on live. Knows nothing about the
+                     sky, so the store can use it without importing a renderer.
+    scrub.test.ts
   lsystem/           Pure procedural geometry. No React, no three.js.
     types.ts         Vec3, Grammar, TurtleParams, PlantGeometry.
     random.ts        Seeded PRNG so a node id always grows the same plant.
@@ -30,6 +34,10 @@ src/
   state/             Zustand store. Holds EcosystemState, nothing derived.
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
+    daylight.ts      Timestamp to sun direction and full palette, and the
+                     inverse used by the drag. Pure, no three.js.
+    daylight.test.ts
+    SunScrub.tsx     The gesture: grabbing the sun or the moon to move time.
   xr/                Planned, not yet created. Session setup, hand rays, and
                      world-anchored HUDs will live here. Named now so nothing
                      gets built in a way that blocks it.
@@ -39,7 +47,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-49 tests across four files, `tsc --noEmit` clean, `vite build` succeeds.
+95 tests across seven files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -118,6 +126,22 @@ hit rate and scrubbing costs less than a frame.
    static mesh, so a strength wobble costs nothing.
 6. Desktop browser is the first target. XR is not wired, but no HUD or control
    is head-locked and `src/xr/` exists to keep that honest.
+7. The sun travels a tilted great circle rather than an almanac position. A real
+   solar position needs a latitude and a date and would buy nothing: what has to
+   be true is that it rises on one side, crosses high, sets on the other, and
+   that the shadows agree with the disc. A plane circle does that and stays
+   invertible, which is what the drag needs — the gesture is the inverse of the
+   path, so the path has to be a shape a direction can be projected back onto.
+8. Time reaches the sky quantized to thirty seconds. The sun crosses a full
+   circle in a day, so that is a hundredth of a degree: invisible mid-drag, and
+   it keeps a two second telemetry tick from rebuilding the lighting for a sun
+   that has not measurably moved.
+9. The sky dome is a raw `ShaderMaterial`, which means it gets none of the
+   fragment includes the built-in materials generate. It needs
+   `#include <colorspace_fragment>` explicitly: colours arrive in the renderer's
+   linear working space and the framebuffer wants sRGB, and without the
+   conversion every colour renders far darker than it reads. That is worth
+   knowing before adding a second custom shader.
 
 ## Collection
 

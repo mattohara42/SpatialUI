@@ -56,9 +56,33 @@ for the tabletop being the default.
 Scrubbing is the sun moving across the sky. Longer spans are seasons. No slider,
 no scrub bar, nothing borrowed from a video player.
 
-The mechanism already exists: `state.cursor` and `vitalsAt`. What remains is the
-gesture and the lighting model. This is the interaction most likely to make the
-concept feel inevitable rather than skinned, and it is worth spending effort on.
+The day is built. `scene/daylight.ts` turns a timestamp into a sun direction and
+a full palette, and dragging the sun inverts that: the pointer ray is projected
+back onto the sun's own path to get an hour, and the angle travelled becomes
+elapsed time at a circle per day. The slider is gone.
+
+Three things it settled that were not obvious on paper:
+
+**The mapping has to be honest, and honest is slow.** A full turn is a day, so
+a screen-width drag is about four hours and reaching the far end of the window
+takes ten of them. Rescaling the drag would fix that and would also make the sun
+move at a rate that is not the sun's, which is the entire thing the gesture is
+trading on. Coarse movement belongs to a different gesture — seasons — not to a
+faster version of this one.
+
+**Night has to stay readable.** A garden nobody can read is a garden nobody
+checks, so the moon takes the key light when the sun is down rather than the
+scene simply going dark, and shape and droop survive in silhouette. Colour does
+not, which is another reason colour is not load-bearing.
+
+**The sun is often unreachable.** With the camera clamped at the horizon, most
+of the day the sun is somewhere a mouse cannot point. Shift-drag anywhere is the
+desktop stand-in, and it is a stand-in: the gesture assumes you can look up,
+which is true in a headset and false on a desk. Worth remembering before this is
+judged on a monitor.
+
+What remains is seasons, and whether a cursor that lands in the dark should say
+so more loudly than by being dark.
 
 ## Five things we know are unresolved
 
