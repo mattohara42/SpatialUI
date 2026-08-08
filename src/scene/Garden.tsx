@@ -4,6 +4,7 @@ import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
 import { Produce } from './Produce';
+import { Trellis } from './Trellis';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
 import { Sky } from './Sky';
@@ -145,6 +146,12 @@ export function Garden() {
     [edges, activeGardenId],
   );
 
+  // Beds that need a trellis standing behind their vines.
+  const vineyardBeds = useMemo(
+    () => layout.beds.filter((b) => nodes[b.nodeId]?.plantingType === 'vineyard'),
+    [layout, nodes],
+  );
+
   const plants = useMemo<PlacedPlant[]>(() => {
     if (!activeGardenId) return [];
     const now = cursor ?? revision;
@@ -185,7 +192,7 @@ export function Garden() {
           bloomTint: bloomTintFor(node.id, stale),
           produceTint:
             node.polarity !== 'suppress' && bearsProduce(planting)
-              ? produceTintFor(node.id, stale)
+              ? produceTintFor(node.id, stale, planting)
               : undefined,
         },
       ];
@@ -265,6 +272,7 @@ export function Garden() {
 
       <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
         <Beds beds={layout.beds} />
+        <Trellis beds={vineyardBeds} />
         <Branches plants={plants} />
         <Foliage plants={plants} />
         <Produce plants={plants} />

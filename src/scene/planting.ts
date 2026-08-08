@@ -26,11 +26,9 @@ export const PLANTING_FORMS: Record<PlantingType, PresetName[]> = {
   thicket: ['shrub'],
   'flower-border': ['flower'],
   'wildflower-meadow': ['wildflower'],
-
-  // planned — fallback forms until each grows its own geometry
   'vegetable-rows': ['bushy'],
-  vineyard: ['willow'],
-  topiary: ['bushy'],
+  vineyard: ['vine'],
+  topiary: ['topiary'],
 };
 
 /** The archetype for one plant in a planting, chosen deterministically by id. */
@@ -47,14 +45,16 @@ export function formFor(planting: PlantingType, nodeId: string): PresetName {
  * will reuse when they land.
  */
 export function bearsProduce(planting: PlantingType): boolean {
-  return planting === 'vegetable-rows';
+  return planting === 'vegetable-rows' || planting === 'vineyard';
 }
 
 /**
  * Produce colour. Like petals, decorative and varietal, seeded from the id and
- * never a health signal; staleness greys it. A spread of kitchen-garden colours.
+ * never a health signal; staleness greys it. Vegetables wear a spread of
+ * kitchen-garden colours; a vineyard wears grape colours, so the same produce
+ * layer reads as a tomato patch or a hanging bunch depending on the planting.
  */
-const PRODUCE_PALETTE = [
+const VEGETABLE_PALETTE = [
   '#d1462f', // tomato
   '#e2892f', // squash
   '#7f9e3b', // green pepper
@@ -63,9 +63,21 @@ const PRODUCE_PALETTE = [
   '#c8383a', // chilli
 ];
 
-export function produceTintFor(nodeId: string, stale: number): string {
+const GRAPE_PALETTE = [
+  '#5b3a72', // black grape
+  '#71487f', // purple
+  '#9aa84b', // green grape
+  '#4a3163', // deep purple
+];
+
+export function produceTintFor(
+  nodeId: string,
+  stale: number,
+  planting: PlantingType,
+): string {
   if (stale > 1) return '#8f8b83';
-  return PRODUCE_PALETTE[hashString(nodeId + '#fruit') % PRODUCE_PALETTE.length];
+  const palette = planting === 'vineyard' ? GRAPE_PALETTE : VEGETABLE_PALETTE;
+  return palette[hashString(nodeId + '#fruit') % palette.length];
 }
 
 /** Stable non-negative hash of a string, for the deterministic form pick. */

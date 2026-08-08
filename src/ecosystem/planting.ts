@@ -119,14 +119,17 @@ export const PLANTINGS: Record<PlantingType, PlantingSpec> = {
   vineyard: {
     label: 'Vineyard',
     invasive: false,
-    live: false,
-    arrangement: { columns: 0, spacing: 1.2, rowSpacing: 1.8, jitter: 0.05, heightScale: 0.8 },
+    live: true,
+    // A single row of vines, so the cordons line up along the trellis. Low: a
+    // vine is a waist-high cordon on a wire, not a tree.
+    arrangement: { columns: 0, spacing: 1.5, rowSpacing: 1.8, jitter: 0.04, heightScale: 0.68 },
   },
   topiary: {
     label: 'Topiary',
     invasive: false,
-    live: false,
-    arrangement: { columns: 3, spacing: 1.7, rowSpacing: 1.7, jitter: 0.04, heightScale: 0.8 },
+    live: true,
+    // Spaced specimens on a neat grid, barely jittered — topiary is deliberate.
+    arrangement: { columns: 3, spacing: 1.8, rowSpacing: 1.8, jitter: 0.03, heightScale: 0.72 },
   },
 };
 

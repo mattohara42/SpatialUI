@@ -122,8 +122,8 @@ const GARDENS: GardenSpec[] = [
     directed: false,
     beds: [
       { label: 'semis', planting: 'orchard' },
-      { label: 'energy', planting: 'conifer-stand' },
-      { label: 'financials', planting: 'grove' },
+      { label: 'energy', planting: 'topiary' },
+      { label: 'financials', planting: 'vineyard' },
     ],
     plants: ['core', 'satellite', 'hedge', 'income'],
     blights: [

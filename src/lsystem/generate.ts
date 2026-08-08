@@ -1,8 +1,19 @@
 import { expand } from './grammar';
 import { PRESETS, foliageFor, type PresetName } from './presets';
-import { rngFromSeed } from './random';
-import { interpret } from './turtle';
+import { rngFromSeed, type Rng } from './random';
+import { interpret, type RawGeometry } from './turtle';
+import { generateTopiary, generateVine } from './bespoke';
 import type { Bounds, Grammar, PlantGeometry, TurtleParams, Vec3 } from './types';
+
+/**
+ * Forms built by hand rather than by rewriting a grammar. A vine trained on a
+ * wire and a topiary clipped to a solid are not self-similar, so they get a
+ * bespoke generator that still emits the standard geometry (see lsystem/bespoke).
+ */
+const BESPOKE: Partial<Record<PresetName, (rng: Rng, params: TurtleParams) => RawGeometry>> = {
+  vine: generateVine,
+  topiary: generateTopiary,
+};
 
 export interface GeneratePlantInput {
   /** Node id. Same seed always yields the same plant. */
@@ -62,8 +73,9 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
   // grammar with no preset falls back to a single leaf per J. Because both
   // cluster and scale derive purely from the preset, the geometry cache keyed on
   // preset (see generatePlantMemo) stays correct with nothing new to add.
-  const base = input.grammar ?? PRESETS[input.preset ?? 'broadleaf'];
-  const foliage = input.grammar ? foliageFor(undefined) : foliageFor(input.preset ?? 'broadleaf');
+  const preset = input.preset ?? 'broadleaf';
+  const base = input.grammar ?? PRESETS[preset];
+  const foliage = input.grammar ? foliageFor(undefined) : foliageFor(preset);
   const grammar: Grammar = {
     ...base,
     iterations: Math.max(
@@ -88,8 +100,13 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
     leafSpread: foliage.spread,
   };
 
-  const { symbols, truncated } = expand(grammar, rng);
-  const geometry = interpret(symbols, params, rng);
+  // A bespoke form skips the grammar entirely; everything downstream (scaling,
+  // caching, rendering) is identical because it emits the same geometry.
+  const bespoke = input.grammar ? undefined : BESPOKE[preset];
+  const { symbols, truncated } = bespoke
+    ? { symbols: '', truncated: false }
+    : expand(grammar, rng);
+  const geometry = bespoke ? bespoke(rng, params) : interpret(symbols, params, rng);
 
   // Scaling happens in place over the typed arrays. Nothing is copied and no
   // intermediate objects are built.
