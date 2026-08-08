@@ -17,7 +17,8 @@ import {
   type TeamRecord,
 } from '../adapters/nfl';
 import { findInvalidEdges } from '../ecosystem/graph';
-import { sampleAt } from '../ecosystem/history';
+import { historyExtent, sampleAt } from '../ecosystem/history';
+import { SEASON_WINDOW_MS, windowFor } from '../ecosystem/scrub';
 import { isStale, staleness } from '../ecosystem/staleness';
 import { PLANTINGS } from '../ecosystem/planting';
 import { layoutGarden } from '../ecosystem/layout';
@@ -374,6 +375,69 @@ describe('history', () => {
       const b = sampleAt(league.history[plant.id], NOW - 2 * HOUR)!;
       expect(a.vitality).toBeCloseTo(b.vitality, 6);
     }
+  });
+});
+
+describe('the season archive', () => {
+  it('keeps a daily series for every club alongside the hourly one', () => {
+    for (const plant of plants) {
+      const coarse = league.archive[plant.id];
+      expect(coarse).toBeDefined();
+      expect(coarse.stepMs).toBe(24 * HOUR);
+      expect(sampleAt(coarse, NOW)).not.toBeNull();
+    }
+  });
+
+  it('reaches back to the start of the season and stops there', () => {
+    const first = Math.min(...snapshot.games.map((g) => g.kickoffAt));
+    for (const plant of plants.slice(0, 6)) {
+      const extent = historyExtent(league.archive[plant.id])!;
+      expect(extent.from).toBeGreaterThanOrEqual(first - DAY);
+      // Nothing before week one: an unplayed season is not history.
+      expect(sampleAt(league.archive[plant.id], first - 30 * DAY)).toBeNull();
+    }
+  });
+
+  it('walks a club through its own season rather than repeating today', () => {
+    const moved = plants.filter((plant) => {
+      const now = sampleAt(league.archive[plant.id], NOW)!;
+      const then = sampleAt(league.archive[plant.id], NOW - 60 * DAY);
+      return then !== null && Math.abs(now.vitality - then.vitality) > 0.02;
+    });
+    expect(moved.length).toBeGreaterThan(20);
+  });
+
+  it('opens the window the scrub is allowed to use', () => {
+    const window = windowFor(league.archive[plants[0].id], NOW);
+    expect(window).toBeGreaterThan(50 * DAY);
+    expect(window).toBeLessThanOrEqual(SEASON_WINDOW_MS);
+  });
+
+  it('agrees with the hourly tier where the two overlap', () => {
+    // Both grains are the same function of the same games, so a day the two
+    // both hold cannot disagree about the league.
+    for (const plant of plants.slice(0, 8)) {
+      const fine = sampleAt(league.history[plant.id], NOW)!;
+      const coarse = sampleAt(league.archive[plant.id], NOW)!;
+      expect(coarse.vitality).toBeCloseTo(fine.vitality, 5);
+    }
+  });
+
+  it('weights a small sample down, so week two is not the top of the axis', () => {
+    const unbeaten: TeamRecord = {
+      ...recordOf([]),
+      played: 2,
+      wins: 2,
+      winPct: 1,
+      pointDiffPerGame: 20,
+    };
+    const proven: TeamRecord = { ...unbeaten, played: 14, wins: 14 };
+    const fit = { available: 1, active: [], startersOut: 0, worst: null };
+
+    expect(vitalityOf(unbeaten, fit)).toBeLessThan(vitalityOf(proven, fit));
+    expect(vitalityOf(unbeaten, fit)).toBeLessThan(0.95);
+    // Still clearly a good team, just not a proven one.
+    expect(vitalityOf(unbeaten, fit)).toBeGreaterThan(0.75);
   });
 });
 

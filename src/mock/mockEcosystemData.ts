@@ -8,6 +8,8 @@ import type {
   Polarity,
 } from '../ecosystem/types';
 import {
+  DAY_MS,
+  DEFAULT_ARCHIVE_CAPACITY,
   HOUR_MS,
   createHistory,
   record,
@@ -31,6 +33,8 @@ export interface MockOptions {
   edgeDensity?: number;
   /** Hours of backfilled history per plant. */
   historyHours?: number;
+  /** Days of backfilled coarse history per plant, for the season scrub. */
+  archiveDays?: number;
 }
 
 interface BedSpec {
@@ -178,12 +182,14 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
     blightRate = 0.18,
     edgeDensity = 0.8,
     historyHours = 168,
+    archiveDays = DEFAULT_ARCHIVE_CAPACITY,
   } = options;
 
   const rng = mulberry32(seed);
   const nodes: Record<string, EcosystemNode> = {};
   const edges: Record<string, EcosystemEdge> = {};
   const history: Record<string, VitalsHistory> = {};
+  const archive: Record<string, VitalsHistory> = {};
   const now = Date.now();
 
   for (const garden of GARDENS) {
@@ -259,7 +265,24 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
         };
         // History stops when the adapter did, so scrubbing back through a silent
         // plant shows the gap rather than a series that quietly kept going.
-        history[id] = backfillHistory(nodes[id], historyHours, reportedAt, rng);
+        history[id] = backfillHistory(
+          nodes[id],
+          HOUR_MS,
+          historyHours,
+          reportedAt,
+          rng,
+        );
+        // And a season of it at a day a slot, so the mock gardens answer the
+        // season scrub too. Without this they would fall through to live and
+        // show today's garden while the sky said November — silence looking
+        // like health, one layer up.
+        archive[id] = backfillHistory(
+          nodes[id],
+          DAY_MS,
+          archiveDays,
+          reportedAt,
+          rng,
+        );
         plantIds.push(id);
       }
 
@@ -292,6 +315,7 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
     nodes,
     edges,
     history,
+    archive,
     activeGardenId: GARDENS[0].id,
     cursor: null,
     revision: now,
@@ -349,25 +373,33 @@ export function tickMockEcosystem(
 /**
  * Walks backwards from the node's present vitals, so the series ends exactly at
  * what the scene is showing now.
+ *
+ * The step is a parameter so the same walk fills both grains — hourly for the
+ * week, daily for the season. A day's drift is wider than an hour's, because a
+ * service that moved 5% in an hour has moved further than that by the same time
+ * tomorrow, and a season of hour-sized steps would be a flat line with a
+ * tremor.
  */
 function backfillHistory(
   node: EcosystemNode,
-  hours: number,
+  stepMs: number,
+  steps: number,
   now: number,
   rng: Rng,
 ): VitalsHistory {
-  const buffer = createHistory(HOUR_MS, Math.max(1, hours));
+  const buffer = createHistory(stepMs, Math.max(1, steps));
+  const drift = stepMs >= DAY_MS ? 0.16 : 0.05;
   let vitality = node.vitality;
   let activity = node.activity;
 
-  for (let h = 0; h < hours; h++) {
-    const at = now - h * HOUR_MS;
-    const delta = (rng() * 2 - 1) * 0.05;
+  for (let h = 0; h < steps; h++) {
+    const at = now - h * stepMs;
+    const delta = (rng() * 2 - 1) * drift;
     record(buffer, at, {
       vitality,
       activity,
       maturity: node.maturity,
-      trend: clamp(-delta / 0.05, -1, 1),
+      trend: clamp(-delta / drift, -1, 1),
     });
     vitality = clamp01(vitality - delta);
     activity = clamp01(activity + (rng() * 2 - 1) * 0.12);

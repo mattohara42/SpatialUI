@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Garden } from './scene/Garden';
 import { useEcosystem, markVisited } from './state/ecosystemStore';
-import { HOUR_MS } from './ecosystem/history';
+import { DAY_MS, HOUR_MS } from './ecosystem/history';
 import { scrubBy } from './ecosystem/scrub';
 
 /**
@@ -39,19 +39,25 @@ export default function App() {
 
   const nudge = useCallback(
     (deltaMs: number) => {
-      setCursor(scrubBy(useEcosystem.getState().cursor, deltaMs, Date.now()));
+      const state = useEcosystem.getState();
+      setCursor(scrubBy(state.cursor, deltaMs, Date.now(), state.scrubWindowMs));
     },
     [setCursor],
   );
 
-  // The same scrub the sun gives, one hour at a time. Held in the window rather
-  // than on a focused element: there is nothing to focus in a scene made of one
-  // canvas, and the alternative is a control the gesture was meant to replace.
+  // The same scrubs the sun gives, by the step: left and right for hours, up and
+  // down for days, which is the keyboard's version of dragging across the arc
+  // rather than along it. Held in the window rather than on a focused element:
+  // there is nothing to focus in a scene made of one canvas, and the alternative
+  // is a control the gesture was meant to replace.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const step = event.shiftKey ? 6 * HOUR_MS : HOUR_MS;
-      if (event.key === 'ArrowLeft') nudge(-step);
-      else if (event.key === 'ArrowRight') nudge(step);
+      const hours = event.shiftKey ? 6 * HOUR_MS : HOUR_MS;
+      const days = event.shiftKey ? 7 * DAY_MS : DAY_MS;
+      if (event.key === 'ArrowLeft') nudge(-hours);
+      else if (event.key === 'ArrowRight') nudge(hours);
+      else if (event.key === 'ArrowDown') nudge(-days);
+      else if (event.key === 'ArrowUp') nudge(days);
       else if (event.key === 'Escape' || event.key === 'Home') setCursor(null);
       else return;
       event.preventDefault();
@@ -106,21 +112,31 @@ export default function App() {
         <div style={{ opacity: 0.65, marginTop: 8, fontSize: 11 }}>
           {cursor === null
             ? 'live'
-            : `${new Date(cursor).toLocaleString()} · ${hoursBack(cursor)}h back`}
+            : `${new Date(cursor).toLocaleString()} · ${timeBack(cursor)} back`}
           {changes.length > 0 && ` · ${changes.length} changed since last visit`}
         </div>
 
         <div style={{ opacity: 0.4, marginTop: 4, fontSize: 11 }}>
-          drag the sun · shift-drag anywhere · ← → by the hour · esc for now
+          drag the sun along its arc for hours, across it for seasons
+        </div>
+        <div style={{ opacity: 0.4, marginTop: 2, fontSize: 11 }}>
+          shift-drag anywhere · ← → hours · ↑ ↓ days · esc for now
         </div>
       </div>
     </div>
   );
 }
 
-/** Whole hours between a cursor and now, for the readout. */
-function hoursBack(cursor: number): number {
-  return Math.max(0, Math.round((Date.now() - cursor) / HOUR_MS));
+/**
+ * How far back the cursor sits, in whichever unit is legible there. Hours stop
+ * being readable at about two days, which is exactly where the season scrub
+ * takes over.
+ */
+function timeBack(cursor: number): string {
+  const elapsed = Math.max(0, Date.now() - cursor);
+  if (elapsed < 2 * DAY_MS) return `${Math.round(elapsed / HOUR_MS)}h`;
+  const days = Math.round(elapsed / DAY_MS);
+  return days < 14 ? `${days}d` : `${Math.round(days / 7)} weeks`;
 }
 
 const panel: React.CSSProperties = {

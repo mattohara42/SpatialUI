@@ -3,9 +3,13 @@ import {
   DAY_MS,
   EAST,
   NOON,
+  SEASON_TILT,
   angleDelta,
+  dayLengthFor,
   daylightAt,
   daylightFor,
+  declinationAt,
+  declinationOf,
   hourAngleAt,
   hourAngleOf,
   mixHex,
@@ -33,8 +37,11 @@ describe('the sun path', () => {
   });
 
   it('rises on the left and sets on the right, so dragging right is later', () => {
-    const dawn = sunDirectionAt(at(6));
-    const dusk = sunDirectionAt(at(18));
+    // Six and eighteen are dawn and dusk at an equinox only. In June the sun is
+    // well up by six, which is the season doing its job, so the horizon claim is
+    // made at declination zero and the direction claim is made all year.
+    const dawn = sunDirectionFor(hourAngleAt(at(6)));
+    const dusk = sunDirectionFor(hourAngleAt(at(18)));
 
     expect(dawn[0]).toBeCloseTo(-1, 6);
     expect(dawn[1]).toBeCloseTo(0, 6);
@@ -42,7 +49,8 @@ describe('the sun path', () => {
     expect(dusk[1]).toBeCloseTo(0, 6);
 
     // The property the gesture rests on: x rises monotonically through the day,
-    // so a rightward drag can never mean going back in time.
+    // so a rightward drag can never mean going back in time. A declination
+    // scales x by a positive cosine and so cannot break it.
     for (let hour = 7; hour <= 17; hour++) {
       expect(sunDirectionAt(at(hour))[0]).toBeGreaterThan(
         sunDirectionAt(at(hour - 1))[0],
@@ -51,10 +59,19 @@ describe('the sun path', () => {
   });
 
   it('stands highest at noon and lowest at midnight', () => {
+    // Held as an ordering, which is true in every season. The absolute heights
+    // are a fact about the date: at an equinox noon reaches sin(58°) and
+    // midnight drops as far the other way, and in June both are lifted.
     expect(sunDirectionAt(at(12))[1]).toBeGreaterThan(0.8);
-    expect(sunDirectionAt(at(0))[1]).toBeLessThan(-0.8);
+    expect(sunDirectionAt(at(0))[1]).toBeLessThan(-0.5);
     expect(sunDirectionAt(at(9))[1]).toBeLessThan(sunDirectionAt(at(11))[1]);
     expect(sunDirectionAt(at(15))[1]).toBeLessThan(sunDirectionAt(at(13))[1]);
+
+    expect(sunDirectionFor(0)[1]).toBeCloseTo(Math.sin((58 * Math.PI) / 180), 6);
+    expect(sunDirectionFor(Math.PI)[1]).toBeCloseTo(
+      -Math.sin((58 * Math.PI) / 180),
+      6,
+    );
   });
 
   it('is above the horizon by day and below it by night', () => {
@@ -216,6 +233,87 @@ describe('daylight palette', () => {
     for (const value of [d.zenith, d.horizon, d.sunColor, d.fogColor, d.skyColor, d.groundColor]) {
       expect(value).toMatch(/^#[0-9a-f]{6}$/);
     }
+  });
+});
+
+describe('the seasons', () => {
+  const june = new Date(2024, 5, 21, 12).getTime();
+  const december = new Date(2024, 11, 21, 12).getTime();
+  const march = new Date(2024, 2, 20, 12).getTime();
+
+  it('tilts the arc to the solstices and flattens it at the equinox', () => {
+    expect(declinationAt(june)).toBeCloseTo(SEASON_TILT, 2);
+    expect(declinationAt(december)).toBeCloseTo(-SEASON_TILT, 2);
+    expect(Math.abs(declinationAt(march))).toBeLessThan(0.06);
+  });
+
+  it('makes the summer day long and the winter day short, which is the whole point', () => {
+    // At this latitude — 32°, which the peak altitude fixed — a real almanac
+    // gives about fourteen hours in June and ten in December.
+    expect(dayLengthFor(SEASON_TILT)).toBeGreaterThan(13.5);
+    expect(dayLengthFor(SEASON_TILT)).toBeLessThan(14.5);
+    expect(dayLengthFor(-SEASON_TILT)).toBeGreaterThan(9.5);
+    expect(dayLengthFor(-SEASON_TILT)).toBeLessThan(10.5);
+    expect(dayLengthFor(0)).toBeCloseTo(12, 6);
+  });
+
+  it('stands the midsummer sun higher at noon than the midwinter one', () => {
+    expect(sunDirectionFor(0, SEASON_TILT)[1]).toBeGreaterThan(
+      sunDirectionFor(0, -SEASON_TILT)[1],
+    );
+    // And it is still up at six in the evening in June, and down in December.
+    expect(sunDirectionFor(Math.PI / 2, SEASON_TILT)[1]).toBeGreaterThan(0);
+    expect(sunDirectionFor(Math.PI / 2, -SEASON_TILT)[1]).toBeLessThan(0);
+  });
+
+  it('keeps the sun on the unit sphere at every declination', () => {
+    for (let d = -SEASON_TILT; d <= SEASON_TILT; d += 0.05) {
+      for (let h = -Math.PI; h < Math.PI; h += 0.3) {
+        expect(length(sunDirectionFor(h, d))).toBeCloseTo(1, 6);
+      }
+    }
+  });
+
+  it('leaves the hour untouched by the season, so the two gestures cannot collide', () => {
+    // The property the whole two-axis drag rests on: tilting the arc changes
+    // where the sun is, never what time the sun says it is.
+    for (let h = -3; h < 3; h += 0.25) {
+      for (const d of [-SEASON_TILT, -0.1, 0, 0.2, SEASON_TILT]) {
+        expect(hourAngleOf(sunDirectionFor(h, d))).toBeCloseTo(h, 6);
+      }
+    }
+  });
+
+  it('reads a declination back off a direction, so the season drag can aim', () => {
+    for (const d of [-SEASON_TILT, -0.2, 0, 0.15, SEASON_TILT]) {
+      for (const h of [-2, -0.5, 0, 1.4]) {
+        expect(declinationOf(sunDirectionFor(h, d))).toBeCloseTo(d, 6);
+      }
+    }
+  });
+
+  it('is unbothered by an unnormalized ray, which is what a pointer gives', () => {
+    const d = sunDirectionFor(0.7, 0.3);
+    const long: Vec3 = [d[0] * 37, d[1] * 37, d[2] * 37];
+    expect(declinationOf(long)).toBeCloseTo(0.3, 6);
+  });
+
+  it('carries the declination into the palette, so a winter afternoon is dimmer', () => {
+    // Three in the afternoon: high summer still has full sun, midwinter is
+    // already sliding toward dusk. Nothing in the palette knows about seasons —
+    // it keys off the sun's height, and the season moved the sun.
+    const hour = hourAngleAt(new Date(2024, 0, 1, 15).getTime());
+    expect(daylightFor(hour, SEASON_TILT).sunIntensity).toBeGreaterThan(
+      daylightFor(hour, -SEASON_TILT).sunIntensity,
+    );
+    expect(daylightFor(hour, -SEASON_TILT).stars).toBeGreaterThanOrEqual(
+      daylightFor(hour, SEASON_TILT).stars,
+    );
+  });
+
+  it('defaults to the equinox, so every existing caller is unchanged', () => {
+    expect(sunDirectionFor(1.1)).toEqual(sunDirectionFor(1.1, 0));
+    expect(daylightFor(1.1).declination).toBe(0);
   });
 });
 

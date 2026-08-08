@@ -14,6 +14,11 @@ allocation is a design decision rather than an implementation detail.
 Current allocation, to be judged against a real scene rather than defended on
 paper:
 
+Time is not on this list and must never join it. The hour and the season read in
+the light — the sun's position, the length of the day, the palette — and never in
+a plant. A garden that shed its leaves in November would be spending the wilt
+channel, which is the one reading that has to stay unambiguous.
+
 | Signal | Channel | Reads at |
 | --- | --- | --- |
 | vitality | droop, splay, leaf density, taper | across the room |
@@ -250,20 +255,57 @@ desktop stand-in, and it is a stand-in: the gesture assumes you can look up,
 which is true in a headset and false on a desk. Worth remembering before this is
 judged on a monitor.
 
-What remains is seasons, and whether a cursor that lands in the dark should say
-so more loudly than by being dark.
+Seasons are now built too, and the league is what forced them: a football season
+is eighteen weeks and the sun's window was two days, so the whole gesture reached
+exactly one weekend out of eighteen.
 
-The league has made seasons the next thing rather than a someday thing. A
-football season is eighteen weeks and the sun's window is two days, so dragging
-the sun reaches exactly one weekend of it — which is a genuinely good reading,
-since crossing Sunday unwinds the results and the injuries with them, but it is
-one weekend out of eighteen. The synthetic snapshot currently anchors its latest
-kickoff 26 hours back so that weekend is always there to find; a live feed would
-not, and most of the week the window would hold no game at all. The data is
-already addressable at any point in the season (every derivation takes a
-timestamp), so what is missing is only the gesture — and it must not be a faster
-sun, because a sun moving at a rate that is not the sun's gives up the whole
-reason the gesture works.
+**The season is the same object's other axis.** Along the arc is the day. Across
+it is the year — because that is what a season physically *is*, the daily circle
+riding higher or lower, which is the reason summer days are long. So there is no
+second control to learn and nothing borrowed from a video player: you grab the
+same sun, and which way you pull it decides whether you are moving hours or
+months. The two cannot interfere, and that is arithmetic rather than luck: the
+hour is measured in the plane of the arc and the declination perpendicular to it,
+so each inverse is blind to the other.
+
+**The rate is honest again, and that is what makes the two gestures feel
+different rather than merely be different.** A full turn along the arc is a day.
+A full sweep across it — every bit of vertical room the sky has, midwinter low to
+midsummer high — is half a year. Neither number was chosen to feel good; both are
+how long the real sun takes.
+
+Three things this settled that were not obvious on paper:
+
+**Which way is back depends on the date, so the gesture has to ask.** After
+midsummer the arc sinks as time runs forward, so pulling the sun *up* is pulling
+time *back*; in spring the same pull means later. A fixed convention would have
+been wrong half the year. The drag reads the answer off the calendar at the
+moment of the grab and holds it, so that dragging through a solstice — where the
+answer flips — does not reverse under the hand. The sun still visibly stops
+climbing and turns back there, which is exactly what a solstice is.
+
+**Long history is a second grain, not a longer buffer.** Hourly for a year is
+350MB at two thousand nodes; daily for a season is 2.9KB a node. But the real
+argument is not storage, it is that the grains match different questions: inside
+a day you want the hour a thing broke, across a season you want the week it
+started sliding. The scene learned to read the coarse tier through one extra
+argument to `vitalsAt`, and no component that draws a plant changed at all —
+which is the second time that single indirection has paid for itself.
+
+**Seasons changed the data, not the plants.** It is tempting to make the garden
+*look* seasonal — autumn colour, bare winter branches — and it must not. Bare
+branches already mean a dying plant and grey already means a dead feed; a garden
+that shed its leaves every November would be saying "everything is broken" in the
+one vocabulary that has to stay unambiguous. The season therefore reads in the
+*light* only: the arc's height, the length of the day, the colour of the hour.
+That is the horizon rule applied to time — it may be beautiful, it may not look
+like it is telling you something about a plant.
+
+Two honest limits. Within the twelve weeks a real season of data actually covers,
+the sky's own seasonal cue is a whisper — three summer months at this latitude
+change the day by twenty minutes — so what carries the reading over that span is
+the garden itself and the readout, with the light as reinforcement. And a cursor
+that lands in the dark still only says so by being dark.
 
 ## Five things we know are unresolved
 

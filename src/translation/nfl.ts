@@ -18,6 +18,8 @@ import {
   divisionLabel,
 } from '../adapters/nfl';
 import {
+  DAY_MS as HISTORY_DAY_MS,
+  DEFAULT_ARCHIVE_CAPACITY,
   HOUR_MS,
   createHistory,
   record as recordVitals,
@@ -137,7 +139,10 @@ export interface NflTranslationOptions {
 export interface TranslatedEcosystem {
   nodes: Record<string, EcosystemNode>;
   edges: Record<string, EcosystemEdge>;
+  /** Hourly for a week. */
   history: Record<string, VitalsHistory>;
+  /** Daily for the season — what the season scrub reads. */
+  archive: Record<string, VitalsHistory>;
 }
 
 /** Everything the league says about one club at one moment. */
@@ -160,6 +165,7 @@ export function translateNflSnapshot(
   const nodes: Record<string, EcosystemNode> = {};
   const edges: Record<string, EcosystemEdge> = {};
   const history: Record<string, VitalsHistory> = {};
+  const archive: Record<string, VitalsHistory> = {};
 
   nodes[NFL_GARDEN_ID] = {
     id: NFL_GARDEN_ID,
@@ -245,7 +251,18 @@ export function translateNflSnapshot(
         raw: rawFor(team, reading, snapshot, asOf),
       };
 
-      history[id] = backfill(team, games, injuries, asOf, historyHours);
+      history[id] = backfill(team, games, injuries, asOf, HOUR_MS, historyHours);
+      // The season at a day a slot. Same function, same memo, coarser step:
+      // reaching four months back costs one more call, because the derivations
+      // never cared how far back they were asked about.
+      archive[id] = backfill(
+        team,
+        games,
+        injuries,
+        asOf,
+        HISTORY_DAY_MS,
+        DEFAULT_ARCHIVE_CAPACITY,
+      );
     }
 
     // Rivalries: every pair inside a division, drawn as root grafts. Undirected
@@ -271,7 +288,7 @@ export function translateNflSnapshot(
   }
 
   rollUpContainers(nodes);
-  return { nodes, edges, history };
+  return { nodes, edges, history, archive };
 }
 
 /** `nfl/team/kc`, stable across restarts, so a club always grows the same plant. */
@@ -341,18 +358,36 @@ export function readTeam(
  * starters, which is as bad as an injury report realistically gets.
  */
 export function vitalityOf(record: TeamRecord, availability: Availability): number {
-  const form = record.winPct;
   // ±14 points a game is the practical span of a season's differential; beyond
   // it the club is historically good or historically bad and the axis has
   // nothing left to say.
-  const margin = clamp01(0.5 + record.pointDiffPerGame / 28);
+  const form = shrink(record.winPct, record.played);
+  const margin = shrink(clamp01(0.5 + record.pointDiffPerGame / 28), record.played);
   const healthy = clamp01((availability.available - 0.72) / 0.28);
 
-  // A club that has not played yet has no form and no margin, and averaging in
-  // two zeroes would show opening week as a field of dying plants.
-  if (record.played === 0) return calibrate(0.55 + 0.2 * (healthy - 0.5));
-
   return calibrate(0.45 * form + 0.3 * margin + 0.25 * healthy);
+}
+
+/**
+ * Weight the evidence by how much of it there is.
+ *
+ * A club that is 2-0 is not twice the club that is 12-1, and before the season
+ * scrub existed nobody could see the difference: the live view is always deep
+ * into a season, so the small-sample end of the axis was never on screen.
+ * Walking a season back showed an undefeated club in week two standing at the
+ * absolute top of the scale, which is a claim the data cannot support.
+ *
+ * Three notional games at .500, so a record has to survive contact with a few
+ * more weeks before it reaches the ends of the axis. It converges quickly — by
+ * midseason the correction is a rounding error — and it removes the special case
+ * that used to handle nought games, because a club that has not played is simply
+ * one whose evidence is all prior.
+ *
+ * Availability deliberately gets no such treatment. An injury is known the
+ * moment it happens; there is no sample size to wait for.
+ */
+function shrink(value: number, played: number, prior = 3): number {
+  return (value * played + 0.5 * prior) / (played + prior);
 }
 
 /**
@@ -559,31 +594,41 @@ function rawFor(
 }
 
 /**
- * A week of hourly vitals, produced by asking the same question at each hour.
+ * Vitals over time, produced by asking the same question at each step.
  *
  * The scrub then shows what the league actually looked like: cross Sunday
  * evening going backwards and the results unwind — a club that won stands
  * shorter, an injury sustained in the fourth quarter is gone, and the division
- * bed reads as the table did on Saturday.
+ * bed reads as the table did on Saturday. Step out to a day a slot and the same
+ * walk covers the season: the club that is 10-3 now was 4-4 in October, and the
+ * plant was smaller.
  *
  * Two things make this cheap. A club's vitals only move when a game goes final
  * or an injury is reported, so a reading is keyed on how many of each have
  * happened; and the injuries are sorted by onset, so "how many are active" is
- * exactly which ones are. A week of samples collapses to two or three
- * computations per club.
+ * exactly which ones are. A week of hourly samples collapses to two or three
+ * computations per club, and a season of daily ones to about twenty.
  */
 function backfill(
   team: NflTeamSeason,
   games: TeamGame[],
   injuries: Injury[],
   asOf: number,
-  hours: number,
+  stepMs: number,
+  steps: number,
 ): VitalsHistory {
-  const buffer = createHistory(HOUR_MS, Math.max(1, hours));
+  const buffer = createHistory(stepMs, Math.max(1, steps));
   const cache = new Map<string, Vitals>();
+  // Nothing is recorded before the season started. A club with no games has no
+  // record and no differential, so every slot before week one would hold the
+  // same opening-day number for all thirty-two — a flat line that looks like
+  // data, which is the one thing the scrub window is written to keep off the
+  // end of. Left unwritten, it instead bounds how far back the cursor may go.
+  const seasonStart = games.length > 0 ? games[0].finalAt : asOf;
 
-  for (let h = hours - 1; h >= 0; h--) {
-    const at = asOf - h * HOUR_MS;
+  for (let h = steps - 1; h >= 0; h--) {
+    const at = asOf - h * stepMs;
+    if (at < seasonStart) continue;
     const played = countBefore(games.map((g) => g.finalAt), at);
     const hurt = countBefore(injuries.map((i) => i.since), at);
     const key = `${played}:${hurt}`;

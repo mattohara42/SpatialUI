@@ -97,7 +97,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-279 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
+307 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -173,12 +173,37 @@ you are looking at is old.
 
 ## Time and history
 
-State is a snapshot of now plus a ring buffer of vitals per node, keyed by
-absolute hour so gaps stay explicit rather than silently shifting older samples
-forward. The scene must read vitals through `vitalsAt(node, history, cursor)`
-rather than off the node. That single indirection is why scrubbing, comparison,
-and playback are changes to one function instead of changes to every component
-that touches a plant.
+State is a snapshot of now plus ring buffers of vitals per node, keyed by
+absolute slot so gaps stay explicit rather than silently shifting older samples
+forward. The scene must read vitals through
+`vitalsAt(node, history, cursor, archive)` rather than off the node. That single
+indirection is why scrubbing, comparison, and playback are changes to one
+function instead of changes to every component that touches a plant.
+
+History is kept at **two grains**, in two collections:
+
+```
+history   hourly, 168 slots     a week      3.4KB per node
+archive   daily,  140 slots     20 weeks    2.9KB per node
+```
+
+The split is the downsampling the storage note below always said this would need,
+but the reason to prefer it over one long fine buffer is not storage: the grains
+answer different questions. Inside a day you want the hour a thing broke; across
+a season you want the week it started sliding. `vitalsAt` asks the fine grain
+first, falls through to the coarse one when the cursor is older than the week
+kept in detail, and falls back to live when neither holds it — never
+interpolating a past nobody recorded.
+
+A node may be absent from the archive. An adapter that cannot backfill months has
+nothing to put there, and `windowFor` then keeps that garden's scrub at the two
+day window rather than letting the cursor run out past the data.
+
+Two gestures move the cursor and they are the same object: the sun's arc. Along
+it is the day at a turn per day; across it — the arc's own height, which is what
+a season physically is — is the year at half a year per full sweep. See
+`scene/daylight.ts` for why the two cannot interfere, and DESIGN.md for what the
+gesture settled.
 
 Measured on the mock ecosystem:
 
@@ -222,12 +247,17 @@ hit rate and scrubbing costs less than a frame.
    static mesh, so a strength wobble costs nothing.
 6. Desktop browser is the first target. XR is not wired, but no HUD or control
    is head-locked and `src/xr/` exists to keep that honest.
-7. The sun travels a tilted great circle rather than an almanac position. A real
-   solar position needs a latitude and a date and would buy nothing: what has to
-   be true is that it rises on one side, crosses high, sets on the other, and
-   that the shadows agree with the disc. A plane circle does that and stays
-   invertible, which is what the drag needs — the gesture is the inverse of the
-   path, so the path has to be a shape a direction can be projected back onto.
+7. The sun travels a tilted circle with a declination. This was a plane great
+   circle, on the reasoning that an almanac position "needs a latitude and a date
+   and would buy nothing" — right about the latitude, wrong about the date. Tilt
+   the daily circle by the sun's declination and the seasons arrive with no new
+   machinery: the arc rides high in summer and low in winter, and since every
+   palette and light already keys off the sun's height, the days get shorter on
+   their own. The latitude then falls out rather than being chosen — a 58° noon
+   sun at equinox is 32° north, whose winter day is ten hours against summer's
+   fourteen. Both the hour and the declination stay invertible from a direction,
+   which is what the two drag gestures need, and they are measured on
+   perpendicular axes so neither gesture can disturb the other.
 8. Time reaches the sky quantized to thirty seconds. The sun crosses a full
    circle in a day, so that is a hundredth of a degree: invisible mid-drag, and
    it keeps a two second telemetry tick from rebuilding the lighting for a sun
@@ -295,6 +325,19 @@ hit rate and scrubbing costs less than a frame.
     adapter has real kickoff times and this problem inverts: most of the week
     there is no game inside the window at all, which is an argument for seasons
     as a second, coarser scrub rather than for faking the clock.
+
+16. The season scrub's window is bounded by what was actually archived, not by
+    the archive's capacity. The NFL's dailies start at week one, so the cursor
+    stops at the season's start rather than running back into a stretch where
+    every club is identical because none had played — a flat line that looks like
+    data is the one thing a scrub window exists to keep off the end of.
+
+17. A drag latches its axis on the first movement that clearly means one or the
+    other, and keeps it. Deciding per frame would let a diagonal drag switch
+    between hours and months halfway through, which is unaimable. The season
+    drag's *direction* is latched at the grab for the same reason: whether
+    pulling the sun up means earlier or later depends on which side of a solstice
+    the cursor is on, and dragging across one must not reverse under the hand.
 
 ## Collection
 

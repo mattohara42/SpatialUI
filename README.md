@@ -100,6 +100,14 @@ not a rebuild.
   and injuries are seeded fiction standing in for a live feed, and the snapshot
   says so in its own provenance field. Roster entries are depth-chart slots
   (`QB1`, `LT`), never named players.
+- **Seasons: the sun's other axis.** Dragging the sun *along* its arc scrubs
+  hours at a turn per day. Dragging it *across* the arc scrubs the year — because
+  that is what a season physically is, the daily circle riding higher or lower,
+  which is why summer days are long. A full sweep of the arc's height is half a
+  year, so both gestures move at the sun's own rate and neither is a faster
+  version of the other. History is kept at two grains to match (hourly for a
+  week, daily for twenty), so the league's whole season is walkable: scrub back
+  eleven weeks and the clubs stand at the records they had in May.
 - Procedural plants driven by health; garden switching; time scrub (history).
 - **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
   hedge, conifer stand, flower border, wildflower meadow, vegetable patch,
@@ -153,7 +161,9 @@ not a rebuild.
   dark) and history moves with it: the whole look — key light, fill, fog, sky
   gradient, stars — is a function of the hour under the cursor, so scrubbing
   reads as time passing rather than as values changing. A full turn is a day, so
-  the mapping is one to one with the sun's real rate.
+  the mapping is one to one with the sun's real rate. Drag it *across* its arc
+  instead and you move the year at the same kind of rate; the season reads in the
+  light and never in a plant, because bare branches already mean something else.
 - Respects `prefers-reduced-motion`. The sky has no motion of its own; it moves
   only when the user scrubs.
 
@@ -164,18 +174,19 @@ half reachable: the camera orbits a target at knee height and is clamped at the
 horizon, so sky above roughly 25 degrees cannot be pointed at with a mouse, and
 the sun is up there for most of the day. Swing the camera toward a low sun and
 you can take hold of the disc directly. Otherwise **shift-drag anywhere** does
-the same thing, and the sun still visibly moves under the drag. Arrow keys step
-an hour (shift, six), escape returns to live.
+the same thing, and the sun still visibly moves under the drag. Left and right
+arrows step an hour (shift, six); up and down step a day (shift, a week); escape
+returns to live. A drag commits to hours or to seasons on its first movement and
+holds it, so a diagonal never means both.
 
 In a headset you look up and grab it, which is the interaction the shift-drag is
 standing in for.
 
 ## What's next
 
-The design docs track the open work. Near-term candidates: longer spans as
-seasons — which the league now makes urgent, since a season is eighteen weeks
-and the sun's scrub window is two days; a live NFL adapter behind the same
-`NflSource` interface (this environment has no outbound network access to a
-sports API, which is why the season is generated); and an inspection HUD, since
-the league's `raw` payload already carries a full stat sheet nothing yet
-renders.
+The design docs track the open work. Near-term candidates: an inspection HUD,
+since the league's `raw` payload already carries a full stat sheet nothing yet
+renders; a live NFL adapter behind the same `NflSource` interface (this
+environment has no outbound network access to a sports API, which is why the
+season is generated); and a collector, since the archive tier can now hold months
+that nobody is yet recording.

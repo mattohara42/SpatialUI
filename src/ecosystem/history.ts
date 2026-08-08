@@ -33,9 +33,27 @@ export interface VitalsHistory {
 }
 
 export const HOUR_MS = 3_600_000;
+export const DAY_MS = 24 * HOUR_MS;
 
 /** Hourly for a week. 3.4KB per node. */
 export const DEFAULT_CAPACITY = 168;
+
+/**
+ * Daily for twenty weeks — the archive tier.
+ *
+ * History is kept at two grains rather than one long fine buffer, which is the
+ * downsampling the storage note always said this would need: hourly for a year
+ * is 350MB at two thousand nodes, and daily for a season is 2.9KB a node. The
+ * grains are not a compromise but a match to the questions. Inside a day you
+ * want the hour a thing broke; across a season you want the week it started
+ * sliding, and a hundred and sixty-eight hourly samples of that would be a
+ * needle nobody asked for.
+ *
+ * Twenty weeks because that is a sports season with room either side, and
+ * because it is the span the seasonal sun can actually show: the arc moves
+ * visibly over months and imperceptibly over days.
+ */
+export const DEFAULT_ARCHIVE_CAPACITY = 140;
 
 export function createHistory(
   stepMs: number = HOUR_MS,
@@ -102,14 +120,24 @@ export function sampleAt(
  * to add now and a rewrite later: every read already goes through one function,
  * so scrubbing, comparison, and playback are changes to what it returns rather
  * than changes to every component that touches a plant.
+ *
+ * Seasons proved that out. Reaching back months meant a second, coarser buffer,
+ * and the whole of teaching the scene to read it is the `archive` argument here:
+ * ask the fine grain first, fall back to the coarse one when the cursor is
+ * older than the week that is kept in detail, and fall back to live when
+ * neither has it. No component that draws a plant changed at all.
  */
 export function vitalsAt(
   node: EcosystemNode,
   history: VitalsHistory | undefined,
   cursor: number | null,
+  archive?: VitalsHistory,
 ): Vitals {
-  if (cursor === null || !history) return live(node);
-  return sampleAt(history, cursor) ?? live(node);
+  if (cursor === null) return live(node);
+  const fine = history ? sampleAt(history, cursor) : null;
+  if (fine) return fine;
+  const coarse = archive ? sampleAt(archive, cursor) : null;
+  return coarse ?? live(node);
 }
 
 function live(node: EcosystemNode): Vitals {

@@ -1,4 +1,4 @@
-import { HOUR_MS } from './history';
+import { DAY_MS, HOUR_MS, historyExtent, type VitalsHistory } from './history';
 
 /**
  * The rules a time cursor obeys, independent of the gesture that moves it.
@@ -14,6 +14,33 @@ import { HOUR_MS } from './history';
  * the scrub never runs off the end of recorded history into a flat line.
  */
 export const SCRUB_WINDOW_MS = 47 * HOUR_MS;
+
+/**
+ * How far back the season gesture may go: the reach of the coarse archive.
+ *
+ * The day window above is a property of the fine buffer and this is the same
+ * rule applied to the other one — a scrub must never run past what was
+ * recorded, because the far side of that edge is a flat line that looks like
+ * data. The two gestures differ in *rate*, not in what is legal: the sun's
+ * daily circle simply cannot reach four months, so the season drag is what
+ * makes this window usable rather than a separate set of rules.
+ */
+export const SEASON_WINDOW_MS = 133 * DAY_MS;
+
+/**
+ * The window a garden actually supports, given what it has archived. A garden
+ * with no archive keeps the two day window; one with a season of dailies gets
+ * as much of the season as it really holds, never more.
+ */
+export function windowFor(
+  archive: VitalsHistory | undefined,
+  now: number,
+): number {
+  if (!archive) return SCRUB_WINDOW_MS;
+  const extent = historyExtent(archive);
+  if (!extent) return SCRUB_WINDOW_MS;
+  return Math.max(SCRUB_WINDOW_MS, Math.min(SEASON_WINDOW_MS, now - extent.from));
+}
 
 /**
  * Landing this close to the present means live rather than a timestamp that

@@ -1,7 +1,7 @@
 import type { Vec3 } from '../lsystem/types';
 
 /**
- * Time of day, as one vector and one palette.
+ * Time of day and time of year, as one vector and one palette.
  *
  * Scrubbing is the sun moving across the sky, so the sun's position cannot be a
  * constant that lighting is tuned against: it is a function of the time under
@@ -9,11 +9,20 @@ import type { Vec3 } from '../lsystem/types';
  * sky gradient, stars — falls out of it. That is what makes scrubbing read as
  * time passing rather than as values changing.
  *
- * The path is a great circle rather than an almanac. A real solar position
- * needs a latitude and a date, and would buy nothing here: what has to be true
- * is that the sun rises on one side, crosses high at noon, sets on the other,
- * and that the shadows agree with the disc you can see. A tilted circle does
- * all of that and stays invertible, which is what the drag gesture needs.
+ * The path was a great circle and is now a circle with a declination, which is
+ * the one change that turns a day into a year. The reasoning that said a real
+ * solar position "would buy nothing" was right about latitude and wrong about
+ * the date: tilt the daily circle by the sun's declination and the season
+ * arrives with no new machinery at all — the arc rides high in summer and low in
+ * winter, and because everything already keys off the sun's height above the
+ * horizon, **the days get shorter on their own**. Nothing here had to learn what
+ * a season is.
+ *
+ * That also settles the latitude question by accident. A noon altitude of 58° at
+ * equinox is latitude 32°, so this is now a real sky over a real parallel rather
+ * than a stylized one, and its winter days come out about ten hours long against
+ * summer's fourteen. Both the hour and the declination stay invertible from a
+ * direction, which is what the two drag gestures need.
  *
  * No three.js import, deliberately. This is the arithmetic behind the look, and
  * keeping it out of the renderer is what lets it be tested at a millisecond.
@@ -21,13 +30,29 @@ import type { Vec3 } from '../lsystem/types';
 
 const TAU = Math.PI * 2;
 
-/** Solar altitude at noon. Chosen to look right, not to match a latitude. */
+/**
+ * Solar altitude at noon at the equinoxes. Chosen to look right; it also fixes
+ * the latitude at 90° − 58° = 32°, which is what the seasonal day length is then
+ * computed for.
+ */
 const PEAK_ALTITUDE = (58 * Math.PI) / 180;
 
 const SIN_PEAK = Math.sin(PEAK_ALTITUDE);
 const COS_PEAK = Math.cos(PEAK_ALTITUDE);
 
 export const DAY_MS = 86_400_000;
+export const YEAR_MS = 365.25 * DAY_MS;
+
+/** Earth's axial tilt: how far the sun's arc swings either side of the equinox. */
+export const SEASON_TILT = (23.44 * Math.PI) / 180;
+
+/**
+ * Day of the year the sun stands highest, in the northern hemisphere. The year
+ * angle is measured from here, so the solstices are where the arc stops climbing
+ * and turns back — which is the one thing about a solstice everybody knows, and
+ * it is visible in the gesture.
+ */
+const SUMMER_SOLSTICE_DAY = 172;
 
 /**
  * The two ends of the sun's path, as an orthonormal basis.
@@ -45,12 +70,29 @@ export const DAY_MS = 86_400_000;
 export const EAST: Vec3 = [-1, 0, 0];
 export const NOON: Vec3 = [0, SIN_PEAK, -COS_PEAK];
 
+/**
+ * The axis the daily circle turns about — the celestial pole, perpendicular to
+ * both ends of the path.
+ *
+ * This is the third direction the old two-vector basis never needed, and it is
+ * the whole of the seasons: a declination is a tilt of the day's circle toward
+ * this axis. Because it is perpendicular to the plane the hour angle is measured
+ * in, tilting toward it cannot disturb the hour — which is what lets the two
+ * gestures share one object without interfering.
+ */
+export const POLE: Vec3 = [0, COS_PEAK, SIN_PEAK];
+
 /** Colour of moonlight and of the moon itself. Cool, and never quite white. */
 export const MOON_COLOR = '#cfd9f2';
 
 export interface Daylight {
   /** 0 at local noon, ±π at midnight, increasing through the day. */
   hourAngle: number;
+  /**
+   * The sun's declination, ±`SEASON_TILT`. Positive is summer: the arc rides
+   * high and the day is long.
+   */
+  declination: number;
   sunDirection: Vec3;
   /** Directly opposite the sun, which is where a full moon sits. */
   moonDirection: Vec3;
@@ -90,15 +132,65 @@ export function hourAngleAt(timestamp: number): number {
   return (seconds / 86_400) * TAU - Math.PI;
 }
 
-/** Where the sun sits at a given hour angle. Unit length. */
-export function sunDirectionFor(hourAngle: number): Vec3 {
+/**
+ * How far round the year a timestamp sits, in radians from the summer solstice.
+ * The declination is the cosine of it, so this is the angle the season gesture
+ * moves and the declination is what you see it do.
+ */
+export function yearAngleAt(timestamp: number): number {
+  const date = new Date(timestamp);
+  const start = new Date(date.getFullYear(), 0, 0).getTime();
+  const dayOfYear = (date.getTime() - start) / DAY_MS;
+  return ((dayOfYear - SUMMER_SOLSTICE_DAY) / 365.25) * TAU;
+}
+
+/** The sun's declination at a moment: `+TILT` at midsummer, `−TILT` at midwinter. */
+export function declinationAt(timestamp: number): number {
+  return SEASON_TILT * Math.cos(yearAngleAt(timestamp));
+}
+
+/** The declination a year angle stands at. The inverse is deliberately absent:
+ *  a declination maps to two dates a year, which is why the gesture tracks the
+ *  angle it has travelled rather than reading a date off the sun's height. */
+export function declinationFor(yearAngle: number): number {
+  return SEASON_TILT * Math.cos(yearAngle);
+}
+
+/**
+ * Where the sun sits at a given hour angle and declination. Unit length.
+ *
+ * The daily circle is spun about the pole: at declination zero this is the old
+ * great circle exactly, and a tilt lifts the whole arc toward the pole without
+ * touching the axis the hour is measured on.
+ */
+export function sunDirectionFor(hourAngle: number, declination = 0): Vec3 {
   const s = Math.sin(hourAngle);
   const c = Math.cos(hourAngle);
-  return [s, c * SIN_PEAK, -c * COS_PEAK];
+  const cd = Math.cos(declination);
+  const sd = Math.sin(declination);
+  return [
+    cd * s,
+    cd * c * SIN_PEAK + sd * POLE[1],
+    -cd * c * COS_PEAK + sd * POLE[2],
+  ];
 }
 
 export function sunDirectionAt(timestamp: number): Vec3 {
-  return sunDirectionFor(hourAngleAt(timestamp));
+  return sunDirectionFor(hourAngleAt(timestamp), declinationAt(timestamp));
+}
+
+/**
+ * Hours of daylight at a declination — the part of the circle that clears the
+ * horizon. Not read by the renderer, which gets it for free from the sun's
+ * height; it exists so the seasons can be asserted in a test as hours rather
+ * than as a vector nobody can picture.
+ */
+export function dayLengthFor(declination: number): number {
+  // sunUp > 0 ⟺ cos(h) > −tan(declination) / tan(peak).
+  const ratio = -Math.tan(declination) / (SIN_PEAK / COS_PEAK);
+  if (ratio <= -1) return 24;
+  if (ratio >= 1) return 0;
+  return (Math.acos(ratio) / Math.PI) * 24;
 }
 
 /**
@@ -114,6 +206,22 @@ export function hourAngleOf(direction: Vec3): number {
   const sin = x; // the component along the path's rise-to-set axis
   const cos = y * NOON[1] + z * NOON[2];
   return Math.atan2(sin, cos);
+}
+
+/**
+ * The other inverse: how far out of the day's plane the sky is being pointed.
+ *
+ * Both components of a tilted direction scale by the same cosine, so `atan2`
+ * above is untouched by declination and this reads the part it discards. That
+ * orthogonality is the reason one object can carry two gestures: dragging along
+ * the arc cannot change the season, and dragging across it cannot change the
+ * hour.
+ */
+export function declinationOf(direction: Vec3): number {
+  const [x, y, z] = direction;
+  const length = Math.hypot(x, y, z) || 1;
+  const alongPole = (y * POLE[1] + z * POLE[2]) / length;
+  return Math.asin(clamp(alongPole, -1, 1));
 }
 
 /** Signed shortest way round from one angle to another, in (-π, π]. */
@@ -240,8 +348,8 @@ const STOPS: Stop[] = [
   },
 ];
 
-export function daylightFor(hourAngle: number): Daylight {
-  const sunDirection = sunDirectionFor(hourAngle);
+export function daylightFor(hourAngle: number, declination = 0): Daylight {
+  const sunDirection = sunDirectionFor(hourAngle, declination);
   const sunUp = sunDirection[1];
 
   let a = STOPS[0];
@@ -258,6 +366,7 @@ export function daylightFor(hourAngle: number): Daylight {
 
   return {
     hourAngle,
+    declination,
     sunDirection,
     moonDirection: [-sunDirection[0], -sunDirection[1], -sunDirection[2]],
     sunUp,
@@ -277,7 +386,7 @@ export function daylightFor(hourAngle: number): Daylight {
 }
 
 export function daylightAt(timestamp: number): Daylight {
-  return daylightFor(hourAngleAt(timestamp));
+  return daylightFor(hourAngleAt(timestamp), declinationAt(timestamp));
 }
 
 /** Linear interpolate two `#rrggbb` colours. */
@@ -306,4 +415,8 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 
 function clamp01(n: number): number {
   return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return n < lo ? lo : n > hi ? hi : n;
 }
