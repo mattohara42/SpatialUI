@@ -118,7 +118,7 @@ every declared planting is live.
 
 ## What is decoration, and why decoration is allowed
 
-Two recent additions carry no signal at all, and that is the point of them.
+Three recent additions carry no signal at all, and that is the point of them.
 
 Individual variety within a bed — whether a plant grows as a broadleaf or a
 bushy crown in an orchard — is chosen by a hash of the node id, not by any
@@ -134,6 +134,23 @@ spends a channel. It earns its place by giving the scene depth and a sense of
 place, which is what makes the garden feel like somewhere rather than a plot
 floating in fog. The rule it must keep is the rule colour keeps: it may be
 beautiful, but it may never look like it is telling you something.
+
+Texture is the third, and it is decoration with a rule attached. Every surface
+was one flat colour — one green for the ground, one brown for a bed, one value
+across every leaf on a plant — which is what made the scene read as a diagram of
+a garden rather than a garden. Grain fixes that at two scales: a generated map
+*within* a surface (turf, soil, bark) and a small stable jitter *between*
+instances, so a canopy breaks into leaves and a bunch of grapes into berries.
+
+The rule is that **grain modulates luminance and never hue**. The maps are
+achromatic by construction and the jitter is a scalar multiply, so both darken
+and lighten a colour that was already tuned and neither can move it around the
+wheel. That is what keeps this outside the channel budget entirely: colour here
+is a redundant encoding on purpose, and a texture that tinted as well as
+textured would quietly start carrying signal — a mottled leaf would look like a
+sick one, a lighter berry like a riper one. Small enough to be felt rather than
+seen is the same guardrail from the other direction: at the amplitudes used, no
+reader could mistake one bright leaf for a statement about that leaf.
 
 ## The moment of use
 
@@ -196,9 +213,24 @@ stillness is what makes silence legible. `swayMatrix` takes a motion factor that
 the scene drops to zero past the staleness threshold, so branches, leaves, and
 fruit freeze together. `isStale` in `ecosystem/staleness.ts` derives the state
 from `updatedAt`; the threshold is per-garden, because an hourly notes scrape and
-a fifteen second Prometheus scrape mean very different things by late. What is
-still owed is the dust — a particulate cue so a frozen plant reads as neglected
-up close, not just at the silhouette.
+a fifteen second Prometheus scrape mean very different things by late.
+
+The dust is now there too, which completes the state. Grey and stillness are
+silhouette cues: they work across the room, which is the reading the product is
+built around, but a grey motionless plant seen from the bed is just a plant you
+have not looked at hard enough. A slow fall of pale specks around the lower part
+of the plant is what makes neglect legible on approach, and it is deliberately
+the inverse of the mote field that carries activity — motes rise, glow, and
+thicken with busyness; dust falls, dulls, and thickens with silence.
+
+Thickness is the part that earns its place rather than restating the silhouette.
+Grey is binary and stillness is binary, so a node ten minutes past its threshold
+and one three days past look identical; the density ramp (`scene/dust.ts`) is the
+only cue that carries *how long*. It starts at zero exactly at the threshold, so
+it can never contradict the other two, and reaches full thickness at three times
+late. The mock now runs one plant per garden with a dead adapter, because a
+failure state nothing in the demo data can reach is a failure state nobody will
+look at.
 
 **What changed since I last looked** is a different question from what things
 look like now, and it is closer to what the product actually promises. A service

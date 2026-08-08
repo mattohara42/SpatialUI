@@ -113,17 +113,50 @@ describe('vitalsAt', () => {
 });
 
 describe('mock history', () => {
-  it('backfills every plant and ends at the present value', () => {
+  it('backfills every plant, ending at the value each last reported', () => {
     const state = generateMockEcosystem({ historyHours: 48 });
     const plants = Object.values(state.nodes).filter((n) => n.kind === 'plant');
     expect(plants.length).toBeGreaterThan(0);
     for (const plant of plants) {
       const buffer = state.history[plant.id];
       expect(buffer).toBeDefined();
-      expect(sampleAt(buffer, state.revision)?.vitality).toBeCloseTo(
+      expect(sampleAt(buffer, plant.updatedAt)?.vitality).toBeCloseTo(
         plant.vitality,
         5,
       );
+    }
+  });
+
+  it('leaves a gap where a silent plant stopped reporting', () => {
+    // The mock gives each garden one plant with a dead adapter, so the scene has
+    // something to draw its staleness state on. Its history has to stop when it
+    // did: a series that quietly kept going would make the silence invisible to
+    // a scrub, which is the same failure the staleness cue exists to prevent.
+    const state = generateMockEcosystem({ historyHours: 48 });
+    const silent = Object.values(state.nodes).filter(
+      (n) => n.kind === 'plant' && n.updatedAt < state.revision,
+    );
+    expect(silent.length).toBeGreaterThan(0);
+
+    for (const plant of silent) {
+      expect(sampleAt(state.history[plant.id], plant.updatedAt)).not.toBeNull();
+      expect(sampleAt(state.history[plant.id], state.revision)).toBeNull();
+    }
+  });
+
+  it('leaves a silent plant behind as the rest of the garden ticks', () => {
+    const state = generateMockEcosystem({ historyHours: 48 });
+    const before = Object.values(state.nodes).filter(
+      (n) => n.kind === 'plant' && n.updatedAt < state.revision,
+    );
+    const next = tickMockEcosystem(state, 0.04, mulberry32(9));
+
+    for (const plant of before) {
+      // Same timestamp, same vitality: a dead adapter reports nothing, so the
+      // node ages while everything around it refreshes.
+      expect(next.nodes[plant.id].updatedAt).toBe(plant.updatedAt);
+      expect(next.nodes[plant.id].vitality).toBe(plant.vitality);
+      expect(next.revision).toBeGreaterThan(plant.updatedAt);
     }
   });
 

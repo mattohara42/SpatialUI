@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
 import type { LeafKind } from '../lsystem/presets';
+import { grain } from './textures';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -25,6 +26,14 @@ interface LeafShape {
   roughness: number;
 }
 
+/**
+ * How far a single leaf may stray from its plant's colour. Petals get less: a
+ * flower head is a deliberate, composed thing, and mottling it reads as a sick
+ * bloom rather than as a full one.
+ */
+const LEAF_GRAIN = 0.15;
+const PETAL_GRAIN = 0.07;
+
 const SHAPES: Record<LeafKind, LeafShape> = {
   broad: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [1.0, 0.4, 0.85], roughness: 0.7 },
   blade: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.45, 1.25, 0.2], roughness: 0.65 },
@@ -42,6 +51,12 @@ const SHAPES: Record<LeafKind, LeafShape> = {
  * drifts off the twig that spawned it. Leaf count already carries health: the
  * generator drops foliage in proportion to vitality rather than shrinking it, so
  * a sick plant is cheaper to draw as well as visibly thinner.
+ *
+ * Every leaf on a plant is handed the same colour, which is what made a canopy
+ * read as one solid green object; each instance now takes a small stable
+ * luminance jitter (see `grain`) so individual leaves catch the light
+ * differently. It is decoration and must stay decoration — luminance only, and
+ * small enough that nobody could mistake a bright leaf for a signal.
  *
  * Splitting by kind keeps the one-draw-call-per-mesh property while letting a
  * conifer wear needles and a hardwood wear broad leaves: an InstancedMesh has a
@@ -84,13 +99,15 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
     const instanced = mesh.current;
     if (!instanced || count === 0) return;
     const colour = new THREE.Color();
+    const amount = kind === 'bloom' ? PETAL_GRAIN : LEAF_GRAIN;
     let i = 0;
     for (const plant of plants) {
       // Petals wear the plant's varietal bloom colour, which is decorative and
       // seeded, not the health tint; a flower's health reads through how many
       // petals it still carries, never through their hue.
-      colour.set(kind === 'bloom' ? plant.bloomTint : plant.tint.foliage);
+      const base = kind === 'bloom' ? plant.bloomTint : plant.tint.foliage;
       for (let l = 0; l < plant.geometry.leafCount; l++) {
+        colour.set(base).multiplyScalar(grain(plant.node.id, l, amount));
         instanced.setColorAt(i++, colour);
       }
     }

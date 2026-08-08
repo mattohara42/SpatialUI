@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import { grain } from './textures';
 
 /**
  * Produce — fruit and vegetables hanging on the plants that bear them.
@@ -29,6 +30,12 @@ interface ProduceStyle {
   every: number;
   scale: number;
 }
+/** How far one fruit may stray from its plant's produce colour. Enough that a
+ *  bunch of grapes reads as individual berries rather than as a single moulded
+ *  object; not enough to look like some of them are ripe and some are not,
+ *  which would be colour carrying a signal it must not carry. */
+const PRODUCE_GRAIN = 0.12;
+
 const VEGETABLE_STYLE: ProduceStyle = { every: 5, scale: 2.2 };
 const GRAPE_STYLE: ProduceStyle = { every: 2, scale: 1.05 };
 
@@ -65,9 +72,13 @@ export function Produce({ plants }: { plants: PlacedPlant[] }) {
     const colour = new THREE.Color();
     let i = 0;
     for (const plant of fruiting) {
-      colour.set(plant.produceTint!);
       const n = fruitCount(plant);
-      for (let f = 0; f < n; f++) instanced.setColorAt(i++, colour);
+      for (let f = 0; f < n; f++) {
+        colour.set(plant.produceTint!).multiplyScalar(
+          grain(plant.node.id, f, PRODUCE_GRAIN),
+        );
+        instanced.setColorAt(i++, colour);
+      }
     }
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
   }, [fruiting, count]);
