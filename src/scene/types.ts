@@ -1,5 +1,6 @@
 import type { EcosystemNode } from '../ecosystem/types';
 import type { PlantGeometry, Vec3 } from '../lsystem/types';
+import type { LeafKind } from '../lsystem/presets';
 
 /** Colours resolved from health and staleness, decided once per plant. */
 export interface Tint {
@@ -13,6 +14,8 @@ export interface PlacedPlant {
   position: Vec3;
   geometry: PlantGeometry;
   tint: Tint;
+  /** Which leaf shape this plant wears, from its archetype. */
+  leafKind: LeafKind;
   /**
    * Cursor-aware vitality for this frame, driving render-time droop. Kept
    * separate from node.vitality so wilt scrubs with time like the geometry does.

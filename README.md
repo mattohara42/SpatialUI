@@ -54,33 +54,63 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 
 ```
 src/
-  ecosystem/   Node/edge/state contracts, graph helpers, history, layout, staleness
+  ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
+               staleness, scrub window rules
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, nothing derived)
-  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes, Sky, sway
+  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
+               Sky, SunScrub, Horizon, plus the pure sway and daylight modules
   mock/        Mock ecosystem + drift tick
 ```
 
-Rendering aggregates every branch and leaf across all plants into one
-`InstancedMesh` each, for one draw call regardless of plant count. Geometry is
-memoized on quantized vitals, so a telemetry tick that doesn't move a plant
-across a bucket is a cache hit, not a rebuild.
+Rendering aggregates every branch across all plants into one `InstancedMesh`,
+and every leaf into one mesh per leaf shape (at most four), for a handful of
+draw calls regardless of plant count. Geometry is memoized on quantized vitals,
+so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
+not a rebuild.
 
 ## What's built
 
 - Procedural plants driven by health; garden switching; time scrub (history).
+- **Five plant archetypes** — broadleaf, bushy, willow, conifer spire, and the
+  weed shrub — each with its own branching grammar and leaf shape (broad, blade,
+  needle, round). Ordinary plants pick a tree archetype by a hash of the node id,
+  so a bed shows varied individuals; weeds and the db conifer are chosen by
+  meaning, keeping the polarity read intact. Leaves grow in fanned clusters, so a
+  healthy plant reads as a full canopy and a sick one sheds to bare twigs.
+- **A landscape behind the garden** — layered hills, distant mountains, and a
+  conifer tree line receding into fog. Static and signal-free by design; it is
+  lit and fogged by the same rig as the garden, so it tracks the day/night scrub
+  for free and never competes with the plants for attention.
 - Ambient motion: per-plant sway + breathing, drifting motes. Any value that
   updates on a telemetry tick (activity, vitality) is smoothed so it eases in
   rather than snapping — see the comments in `src/scene/sway.ts`.
 - Vitality **droop**: sick plants wilt toward the ground (clamped to the soil).
 - Staleness desaturation; "what changed since I last looked" summary.
-- Daylight look: blue sky, warm sun, green ground, dusk was an earlier pass.
-- Respects `prefers-reduced-motion`.
+- **Time scrub as the sun crossing the sky.** Drag the sun (or the moon, after
+  dark) and history moves with it: the whole look — key light, fill, fog, sky
+  gradient, stars — is a function of the hour under the cursor, so scrubbing
+  reads as time passing rather than as values changing. A full turn is a day, so
+  the mapping is one to one with the sun's real rate.
+- Respects `prefers-reduced-motion`. The sky has no motion of its own; it moves
+  only when the user scrubs.
+
+### Reaching the sun
+
+Dragging the sun is the gesture the concept is about, and on desktop it is only
+half reachable: the camera orbits a target at knee height and is clamped at the
+horizon, so sky above roughly 25 degrees cannot be pointed at with a mouse, and
+the sun is up there for most of the day. Swing the camera toward a low sun and
+you can take hold of the disc directly. Otherwise **shift-drag anywhere** does
+the same thing, and the sun still visibly moves under the drag. Arrow keys step
+an hour (shift, six), escape returns to live.
+
+In a headset you look up and grab it, which is the interaction the shift-drag is
+standing in for.
 
 ## What's next
 
-The design docs track the open work. Near-term candidates: the "sun across the
-sky" time-scrub gesture (the sun and shadows are already driven by one vector),
-a signal-gust transient, finishing the staleness visual state, and real adapters
-behind the translation layer.
+The design docs track the open work. Near-term candidates: longer spans as
+seasons (the day is done, the year is not), a signal-gust transient, finishing
+the staleness visual state, and real adapters behind the translation layer.

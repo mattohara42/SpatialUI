@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Garden } from './scene/Garden';
 import { useEcosystem, markVisited } from './state/ecosystemStore';
 import { HOUR_MS } from './ecosystem/history';
+import { scrubBy } from './ecosystem/scrub';
 
 /**
  * Deliberately plain chrome. This exists to look at the garden, not to be the
- * interface. Every control here is a placeholder for a spatial one: the time
- * slider becomes the sun crossing the sky, and the garden buttons become
- * walking somewhere else.
+ * interface, and the garden buttons are a placeholder for walking somewhere
+ * else.
+ *
+ * Time is no longer among them. Scrubbing is dragging the sun across the sky
+ * (see scene/SunScrub.tsx), so what is left here is a readout of where the
+ * cursor stands and a keyboard path to the same thing, because a gesture that
+ * needs a pointing device is not a control everyone has.
  */
 export default function App() {
   const nodes = useEcosystem((s) => s.nodes);
@@ -16,11 +21,9 @@ export default function App() {
   const enterGarden = useEcosystem((s) => s.enterGarden);
   const cursor = useEcosystem((s) => s.cursor);
   const setCursor = useEcosystem((s) => s.setCursor);
-  const revision = useEcosystem((s) => s.revision);
   const tick = useEcosystem((s) => s.tick);
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
 
-  const [hoursBack, setHoursBack] = useState(0);
   const [live, setLive] = useState(true);
 
   const gardens = useMemo(
@@ -34,12 +37,28 @@ export default function App() {
     return () => clearInterval(id);
   }, [live, tick]);
 
+  const nudge = useCallback(
+    (deltaMs: number) => {
+      setCursor(scrubBy(useEcosystem.getState().cursor, deltaMs, Date.now()));
+    },
+    [setCursor],
+  );
+
+  // The same scrub the sun gives, one hour at a time. Held in the window rather
+  // than on a focused element: there is nothing to focus in a scene made of one
+  // canvas, and the alternative is a control the gesture was meant to replace.
   useEffect(() => {
-    setCursor(hoursBack === 0 ? null : revision - hoursBack * HOUR_MS);
-    // revision deliberately excluded: re-anchoring the cursor on every tick
-    // would drag the view forward while the user is holding it still.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hoursBack, setCursor]);
+    const onKey = (event: KeyboardEvent) => {
+      const step = event.shiftKey ? 6 * HOUR_MS : HOUR_MS;
+      if (event.key === 'ArrowLeft') nudge(-step);
+      else if (event.key === 'ArrowRight') nudge(step);
+      else if (event.key === 'Escape' || event.key === 'Home') setCursor(null);
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [nudge, setCursor]);
 
   const changes = changesSinceLastVisit();
 
@@ -61,7 +80,6 @@ export default function App() {
               onClick={() => {
                 if (activeGardenId) markVisited(activeGardenId);
                 enterGarden(garden.id);
-                setHoursBack(0);
               }}
               style={{
                 ...button,
@@ -74,20 +92,6 @@ export default function App() {
         </div>
 
         <label style={row}>
-          <span style={{ width: 70 }}>
-            {hoursBack === 0 ? 'now' : `-${hoursBack}h`}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={47}
-            value={hoursBack}
-            onChange={(e) => setHoursBack(Number(e.target.value))}
-            style={{ flex: 1 }}
-          />
-        </label>
-
-        <label style={row}>
           <input
             type="checkbox"
             checked={live}
@@ -97,12 +101,23 @@ export default function App() {
         </label>
 
         <div style={{ opacity: 0.65, marginTop: 8, fontSize: 11 }}>
-          {cursor === null ? 'live' : new Date(cursor).toLocaleString()}
+          {cursor === null
+            ? 'live'
+            : `${new Date(cursor).toLocaleString()} · ${hoursBack(cursor)}h back`}
           {changes.length > 0 && ` · ${changes.length} changed since last visit`}
+        </div>
+
+        <div style={{ opacity: 0.4, marginTop: 4, fontSize: 11 }}>
+          drag the sun · shift-drag anywhere · ← → by the hour · esc for now
         </div>
       </div>
     </div>
   );
+}
+
+/** Whole hours between a cursor and now, for the readout. */
+function hoursBack(cursor: number): number {
+  return Math.max(0, Math.round((Date.now() - cursor) / HOUR_MS));
 }
 
 const panel: React.CSSProperties = {

@@ -3,24 +3,79 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import type { LeafKind } from '../lsystem/presets';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
 /**
- * Every leaf in the garden in one InstancedMesh, same reasoning as Branches.
+ * How each leaf kind is drawn: a base geometry and a scale aspect applied to the
+ * generator's per-leaf scale. The aspect is [across, along, thickness] where
+ * "along" runs down the branch heading, since the instance is oriented by
+ * mapping local +Y onto the leaf direction. This is the whole leaf-shape
+ * vocabulary in one table.
+ *
+ *   broad   flat wide blade, the default hardwood leaf
+ *   blade   long narrow leaf, for the willow's drooping whips
+ *   needle  thin and long, a conifer needle drawn as a spike
+ *   round   compact and full, dense small leaves on a weed
+ */
+interface LeafShape {
+  geometry: () => THREE.BufferGeometry;
+  aspect: [number, number, number];
+  roughness: number;
+}
+
+const SHAPES: Record<LeafKind, LeafShape> = {
+  broad: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [1.0, 0.4, 0.85], roughness: 0.7 },
+  blade: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.45, 1.25, 0.2], roughness: 0.65 },
+  needle: { geometry: () => new THREE.ConeGeometry(1, 1, 5), aspect: [0.16, 1.35, 0.16], roughness: 0.6 },
+  round: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [0.85, 0.8, 0.85], roughness: 0.8 },
+};
+
+/**
+ * Every leaf in the garden, one InstancedMesh per leaf shape.
  *
  * Leaves sway with the same per-plant matrix the branches use, so a leaf never
  * drifts off the twig that spawned it. Leaf count already carries health: the
  * generator drops foliage in proportion to vitality rather than shrinking it, so
  * a sick plant is cheaper to draw as well as visibly thinner.
+ *
+ * Splitting by kind keeps the one-draw-call-per-mesh property while letting a
+ * conifer wear needles and a hardwood wear broad leaves: an InstancedMesh has a
+ * single geometry, so distinct shapes have to be distinct meshes. A garden uses
+ * at most four, so this is four draw calls, not one per plant.
  */
 export function Foliage({ plants }: { plants: PlacedPlant[] }) {
+  const groups = useMemo(() => {
+    const byKind = new Map<LeafKind, PlacedPlant[]>();
+    for (const plant of plants) {
+      const list = byKind.get(plant.leafKind);
+      if (list) list.push(plant);
+      else byKind.set(plant.leafKind, [plant]);
+    }
+    return byKind;
+  }, [plants]);
+
+  return (
+    <>
+      {[...groups].map(([kind, kindPlants]) => (
+        <LeafLayer key={kind} kind={kind} plants={kindPlants} />
+      ))}
+    </>
+  );
+}
+
+function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
+  const shape = SHAPES[kind];
 
   const count = useMemo(
     () => plants.reduce((sum, p) => sum + p.geometry.leafCount, 0),
     [plants],
   );
+
+  const geometry = useMemo(() => shape.geometry(), [shape]);
+  useLayoutEffect(() => () => geometry.dispose(), [geometry]);
 
   useLayoutEffect(() => {
     const instanced = mesh.current;
@@ -50,20 +105,21 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
     if (!instanced || count === 0) return;
     const { dummy, sway, direction } = scratch;
     const t = clock.elapsedTime;
+    const [ax, ay, az] = shape.aspect;
 
     let i = 0;
     for (const plant of plants) {
-      const { geometry, position, node } = plant;
+      const { geometry: geo, position, node } = plant;
       swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t);
       const vit = smoothVitality(node.id, plant.vitality, t);
 
-      for (let l = 0; l < geometry.leafCount; l++) {
+      for (let l = 0; l < geo.leafCount; l++) {
         const l3 = l * 3;
         dummy.position
           .set(
-            geometry.leafPosition[l3],
-            geometry.leafPosition[l3 + 1],
-            geometry.leafPosition[l3 + 2],
+            geo.leafPosition[l3],
+            geo.leafPosition[l3 + 1],
+            geo.leafPosition[l3 + 2],
           )
           .applyMatrix4(sway);
         dummy.position.y -= droopSag(dummy.position.x, dummy.position.z, vit);
@@ -74,16 +130,16 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
 
         direction
           .set(
-            geometry.leafDirection[l3],
-            geometry.leafDirection[l3 + 1],
-            geometry.leafDirection[l3 + 2],
+            geo.leafDirection[l3],
+            geo.leafDirection[l3 + 1],
+            geo.leafDirection[l3 + 2],
           )
           .applyMatrix4(sway)
           .normalize();
         dummy.quaternion.setFromUnitVectors(UP, direction);
 
-        const scale = geometry.leafScale[l];
-        dummy.scale.set(scale, scale * 0.4, scale);
+        const scale = geo.leafScale[l];
+        dummy.scale.set(scale * ax, scale * ay, scale * az);
         dummy.updateMatrix();
         instanced.setMatrixAt(i++, dummy.matrix);
       }
@@ -98,12 +154,11 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
   return (
     <instancedMesh
       ref={mesh}
-      args={[undefined, undefined, count]}
+      args={[geometry, undefined, count]}
       frustumCulled={false}
       castShadow
     >
-      <octahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial roughness={0.7} flatShading />
+      <meshStandardMaterial roughness={shape.roughness} flatShading />
     </instancedMesh>
   );
 }
