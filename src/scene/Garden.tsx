@@ -132,27 +132,27 @@ export function Garden() {
   return (
     <>
       {/*
-       * Intimate dusk mood, ported from the look-dev prototype. Three lights:
-       * a warm key that casts the shadows, a cool rim from behind for silhouette
-       * separation against the dark, and a low warm hemisphere fill so shadowed
-       * sides never go fully black. Fog gives depth and, at garden scale, doubles
-       * as a soft distance cue. Density is deliberately gentle; tune to taste.
+       * Daylight. A bright warm sun casts the shadows; a hemisphere light does
+       * the sky's job, blue from above and warm-green bounce from the grass
+       * below, so shadowed sides stay lit and read as daytime. A gentle cool
+       * fill on the camera side keeps the backlit faces from going flat. Fog is
+       * a pale blue haze, so distance reads as aerial perspective.
        */}
       {/* Fog colour matches the sky horizon so plants fade into it, not a seam. */}
-      <fogExp2 attach="fog" args={['#241812', 0.03]} />
+      <fogExp2 attach="fog" args={['#c3d8ec', 0.02]} />
       <Sky sunDirection={SUN_DIR} />
 
-      <hemisphereLight args={['#4a4030', '#0a0806', 0.75]} />
+      <hemisphereLight args={['#cfe0f2', '#5f6d3c', 1.15]} />
       <directionalLight
         position={SUN_DIR}
-        intensity={2.1}
-        color="#ffd9ad"
+        intensity={2.6}
+        color="#fff3df"
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
       {/* Cool fill on the camera side, so the backlit plants keep readable
-          faces against the warm sun instead of going to silhouette. */}
-      <directionalLight position={[4, 4, 8]} intensity={1.0} color="#a8c4ff" />
+          faces against the bright sun instead of going flat. */}
+      <directionalLight position={[4, 4, 8]} intensity={0.5} color="#bcd2ec" />
 
       <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
         <Beds beds={layout.beds} />
@@ -163,7 +163,7 @@ export function Garden() {
       </group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[60, 60]} />
-        <meshStandardMaterial color="#0d0b09" roughness={1} />
+        <meshStandardMaterial color="#5c6e3a" roughness={1} />
       </mesh>
       <OrbitControls target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.05} />
     </>

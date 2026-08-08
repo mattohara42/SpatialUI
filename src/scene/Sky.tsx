@@ -33,10 +33,10 @@ const FRAG = `
   void main() {
     vec3 d = normalize(vDir);
     float h = clamp(d.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 col = mix(uHorizon, uZenith, smoothstep(0.32, 0.88, h));
+    vec3 col = mix(uHorizon, uZenith, smoothstep(0.0, 0.85, h));
     float s = max(dot(d, normalize(uSunDir)), 0.0);
-    col += uSun * pow(s, 2.5) * 0.7;    // broad warm glow
-    col += uSun * pow(s, 40.0) * 1.4;   // tight halo at the disc
+    col += uSun * pow(s, 8.0) * 0.35;   // soft warm glow around the sun
+    col += uSun * pow(s, 50.0) * 1.1;   // tight halo at the disc
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -49,9 +49,9 @@ export function Sky({ sunDirection }: { sunDirection: Vec3 }) {
 
   const uniforms = useMemo(
     () => ({
-      uZenith: { value: new THREE.Color('#0b0a12') },
-      uHorizon: { value: new THREE.Color('#5a2f16') },
-      uSun: { value: new THREE.Color('#ffc078') },
+      uZenith: { value: new THREE.Color('#2f74d6') },
+      uHorizon: { value: new THREE.Color('#cfe0f0') },
+      uSun: { value: new THREE.Color('#fff3d6') },
       uSunDir: { value: dir },
     }),
     [dir],

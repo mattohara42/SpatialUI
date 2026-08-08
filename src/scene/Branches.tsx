@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
-import { droopSag, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -83,6 +83,7 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
         start.x += position[0];
         start.y += position[1];
         start.z += position[2];
+        if (start.y < GROUND_Y) start.y = GROUND_Y;
         end
           .set(
             geometry.segmentEnd[s3],
@@ -94,6 +95,7 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
         end.x += position[0];
         end.y += position[1];
         end.z += position[2];
+        if (end.y < GROUND_Y) end.y = GROUND_Y;
 
         direction.subVectors(end, start);
         const length = direction.length() || 1e-6;

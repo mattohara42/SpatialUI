@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
-import { droopSag, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -70,6 +70,7 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
         dummy.position.x += position[0];
         dummy.position.y += position[1];
         dummy.position.z += position[2];
+        if (dummy.position.y < GROUND_Y) dummy.position.y = GROUND_Y;
 
         direction
           .set(

@@ -102,6 +102,10 @@ export const smoothVitality = (id: string, target: number, t: number): number =>
  */
 const DROOP_STRENGTH = 0.9;
 
+/** Soil surface. Drooped points clamp here so branches rest on the ground
+ *  instead of sinking through it. Beds' top face sits at y=0 (see Beds.tsx). */
+export const GROUND_Y = 0;
+
 export function droopSag(x: number, z: number, vitality: number): number {
   const v = vitality < 0 ? 0 : vitality > 1 ? 1 : vitality;
   return DROOP_STRENGTH * (1 - v) * Math.hypot(x, z);
