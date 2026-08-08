@@ -74,15 +74,20 @@ not a rebuild.
 
 - Procedural plants driven by health; garden switching; time scrub (history).
 - **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
-  hedge, conifer stand, flower border, wildflower meadow, vegetable patch, or
-  (for suppress gardens) an invasive thicket — laid out its own way (roomy rows,
-  a single low line, a jittered clump, a scattered meadow, tidy low rows) and
-  filled with the plant forms that belong to it. A bed reads as a composed unit
-  instead of a random thicket. It's a container property, never a health signal,
-  so it spends no part of the reading budget; health still reads through droop,
-  density, and colour within each form. Vegetables bear **produce** — fruit on a
-  subset of the plant's leaf points, so a laden plant is healthy and a bare one
-  is not. Vineyards and topiary are declared and planned. See DESIGN.md.
+  hedge, conifer stand, flower border, wildflower meadow, vegetable patch,
+  vineyard, topiary, or (for suppress gardens) an invasive thicket — laid out its
+  own way and filled with the plant forms that belong to it. A bed reads as a
+  composed unit instead of a random thicket. It's a container property, never a
+  health signal, so it spends no part of the reading budget; health still reads
+  through droop, density, and colour within each form.
+- **Produce and structure.** Vegetables and vineyards bear **produce** — fruit on
+  a subset of the plant's leaf points, so a laden plant is healthy and a bare one
+  is not. The **vineyard** trains its vines on a **trellis** (posts and wires)
+  with grapes hanging from the shoots; **topiary** clips foliage to a sphere,
+  cone, cube, or spiral, where neglect reads as shagginess rather than death.
+  Vines and topiary are not L-systems — they're built by hand in
+  `lsystem/bespoke.ts` but emit the same geometry, so they render, sway, and
+  cache like every other plant. Every declared planting is now live.
 - **Plant forms** — broadleaf, bushy, willow, conifer spire, the weed shrub, and
   the flower/wildflower — each with its own branching grammar and leaf shape:
   broad, blade, needle, round, or a **bloom** (a stem topped with a head of

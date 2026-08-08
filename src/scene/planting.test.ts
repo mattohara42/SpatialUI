@@ -21,16 +21,23 @@ describe('formFor', () => {
 });
 
 describe('produce', () => {
-  it('is borne only by the vegetable planting', () => {
+  it('is borne by vegetables and vineyards, and nothing else', () => {
     for (const type of ALL) {
-      expect(bearsProduce(type)).toBe(type === 'vegetable-rows');
+      const bears = type === 'vegetable-rows' || type === 'vineyard';
+      expect(bearsProduce(type)).toBe(bears);
     }
   });
 
   it('gives a stable varietal colour that greys when stale', () => {
-    const fresh = produceTintFor('vault/projects/api-1', 0);
+    const fresh = produceTintFor('vault/projects/api-1', 0, 'vegetable-rows');
     expect(fresh).toMatch(/^#[0-9a-f]{6}$/);
-    expect(produceTintFor('vault/projects/api-1', 0)).toBe(fresh);
-    expect(produceTintFor('vault/projects/api-1', 2)).toBe('#8f8b83');
+    expect(produceTintFor('vault/projects/api-1', 0, 'vegetable-rows')).toBe(fresh);
+    expect(produceTintFor('vault/projects/api-1', 2, 'vegetable-rows')).toBe('#8f8b83');
+  });
+
+  it('wears grape colours in a vineyard, garden colours in a patch', () => {
+    const grape = produceTintFor('portfolio/financials/core-1', 0, 'vineyard');
+    const veg = produceTintFor('portfolio/financials/core-1', 0, 'vegetable-rows');
+    expect(grape).not.toBe(veg);
   });
 });

@@ -97,12 +97,24 @@ like petals. This is the first piece of the *completion* vocabulary the design
 deferred until the scene existed; the vineyard's grapes and a fruiting orchard
 will reuse the same seam.
 
-Still planned, each with its own geometry: the vineyard (a trellis with a trained
-vine — a structure, not a tree) and topiary (geometric shapes, where neglect
-reads as shagginess rather than as death). Every planted type must earn a
-wilt-state distinct from staleness, so a struggling service never looks like a
-dead adapter — the guardrail the whole idea rests on, and the one the flowers
-were the first to honour.
+Last, the two forms that are not trees at all. A vine is trained along a wire and
+a topiary is clipped into a solid; neither is self-similar, so neither is an
+L-system. They are built by hand instead (`lsystem/bespoke.ts`) — but they emit
+the very same geometry the grammar does, so they sway, droop, colour, and cache
+exactly like everything else, and the only new thing is the shape. The
+**vineyard** stands its vines in a row on a **trellis** (posts and catch-wires,
+static structure like the horizon) with the cordon trained along the wire and
+grapes — produce, reusing the vegetables' seam with a grape palette — hanging
+from the fruiting shoots. **Topiary** clips foliage to a sphere, cone, cube, or
+spiral chosen per plant; here health inverts, because a tended topiary is crisp
+and full and *neglect* is what makes it patchy and sends stray shoots poking
+through the clipped surface. So its wilt-state is shagginess — again nothing like
+the grey of staleness or the bareness of a tree.
+
+Every planted type earns a wilt-state distinct from staleness — bare stem, no
+fruit, shagginess — so a struggling service never looks like a dead adapter. That
+guardrail, the one the whole idea rests on, now holds across the full vocabulary:
+every declared planting is live.
 
 ## What is decoration, and why decoration is allowed
 

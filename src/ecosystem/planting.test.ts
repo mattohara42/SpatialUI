@@ -24,20 +24,8 @@ describe('planting specs', () => {
     }
   });
 
-  it('marks exactly the plantings that have geometry live', () => {
-    const live = ALL.filter(isLivePlanting).sort();
-    expect(live).toEqual(
-      [
-        'conifer-stand',
-        'flower-border',
-        'grove',
-        'hedge',
-        'orchard',
-        'thicket',
-        'vegetable-rows',
-        'wildflower-meadow',
-      ].sort(),
-    );
+  it('has every planting live now that the vineyard and topiary have landed', () => {
+    expect(ALL.every(isLivePlanting)).toBe(true);
   });
 
   it('flags only the weed planting invasive', () => {

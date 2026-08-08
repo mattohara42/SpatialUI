@@ -11,7 +11,10 @@ export type PresetName =
   | 'shrub'
   | 'spire'
   | 'flower'
-  | 'wildflower';
+  | 'wildflower'
+  // Bespoke forms — built by hand in lsystem/bespoke.ts, not by a grammar.
+  | 'vine'
+  | 'topiary';
 
 /**
  * The tree-like archetypes, in the order the scene rotates through them to give
@@ -56,6 +59,10 @@ export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   // Blooms are big relative to the short stem and pack tightly into a head.
   flower: { kind: 'bloom', cluster: 6, scale: 2.6, spread: 0.28 },
   wildflower: { kind: 'bloom', cluster: 4, scale: 2.3, spread: 0.34 },
+  // Bespoke forms place their own leaves, so cluster and spread go unused; only
+  // kind and scale reach them.
+  vine: { kind: 'broad', cluster: 1, scale: 1.1, spread: 0 },
+  topiary: { kind: 'round', cluster: 1, scale: 0.7, spread: 0 },
 };
 
 /** Foliage for a plant with no preset (a raw hand-written grammar). */
@@ -169,4 +176,10 @@ export const PRESETS: Record<PresetName, Grammar> = {
     rules: {},
     iterations: 1,
   },
+
+  // The bespoke forms are generated in lsystem/bespoke.ts, not from a grammar.
+  // These placeholders keep the preset table total; the generator supersedes
+  // them before expansion is ever reached.
+  vine: { axiom: 'F', rules: {}, iterations: 1 },
+  topiary: { axiom: 'F', rules: {}, iterations: 1 },
 };

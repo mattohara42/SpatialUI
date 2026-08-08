@@ -33,7 +33,12 @@ src/
     presets.ts       Grammar archetypes (broadleaf, bushy, willow, shrub, spire,
                      and the flower/wildflower blooms) plus the foliage table:
                      leaf kind, cluster, scale.
-    generate.ts      Public entry. Maps vitality and growthScale to geometry.
+    bespoke.ts       Forms that are not self-similar and so are not grammars: the
+                     trained vine and the clipped topiary, built by hand into the
+                     same geometry the turtle emits.
+    bespoke.test.ts
+    generate.ts      Public entry. Maps vitality and growthScale to geometry;
+                     dispatches bespoke presets, else runs the L-system.
     generate.test.ts
     foliage.test.ts  Leaf clusters, the foliage table, and every preset.
   hooks/
@@ -49,6 +54,8 @@ src/
     Foliage.tsx      One InstancedMesh per leaf shape; groups plants by kind.
     Produce.tsx      Fruit on plants that bear it, drawn on a subset of their
                      leaf points. One instanced mesh; empty when no vegetables.
+    Trellis.tsx      Static posts and wires for vineyard beds. Signal-free, like
+                     the horizon; the vines are trained to it.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
@@ -61,7 +68,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-122 tests across ten files, `tsc --noEmit` clean, `vite build` succeeds.
+136 tests across eleven files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -181,6 +188,15 @@ hit rate and scrubbing costs less than a frame.
     plus fog turn far ridges into pale flat silhouettes (aerial perspective) with
     no extra work. Carrying no signal is what lets it be visually busy without
     competing with the plants, which are the only thing meant to be read.
+12. Not every plant is an L-system. Forms that are not self-similar — a vine
+    trained to a wire, a topiary clipped to a solid — are built by hand in
+    `bespoke.ts` and emit the same `RawGeometry`, so everything downstream
+    (scaling, the vitality cache, sway, droop, colour, produce) is unchanged.
+    One trap when writing one: leaf world size is `leafScale × growthScale /
+    unitHeight`, so a form built short in unit space gets oversized leaves after
+    height normalization. Build a bespoke form in a unit height comparable to the
+    tree presets and let a low planting height scale make it short in the world,
+    rather than authoring tiny unit coordinates.
 
 ## Collection
 
