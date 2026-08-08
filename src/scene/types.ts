@@ -17,6 +17,19 @@ export interface PlacedPlant {
   /** Which leaf shape this plant wears, from its archetype. */
   leafKind: LeafKind;
   /**
+   * The colour petals wear, for bloom-kind plants. Decorative and seeded, never
+   * a health signal; greyed only when the plant is stale. Ignored by non-bloom
+   * plants, which colour their leaves from `tint.foliage`.
+   */
+  bloomTint: string;
+  /**
+   * Set when this plant bears produce (a vegetable, later a vine or fruit tree).
+   * The colour is decorative and varietal; produce is drawn on a subset of the
+   * plant's leaf points, so its amount follows leaf count and thins with health.
+   * Undefined means no produce.
+   */
+  produceTint?: string;
+  /**
    * Cursor-aware vitality for this frame, driving render-time droop. Kept
    * separate from node.vitality so wilt scrubs with time like the geometry does.
    */

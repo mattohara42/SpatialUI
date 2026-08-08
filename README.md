@@ -55,7 +55,7 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 ```
 src/
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
-               staleness, scrub window rules
+               staleness, scrub window rules, planting types
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, nothing derived)
@@ -73,12 +73,25 @@ not a rebuild.
 ## What's built
 
 - Procedural plants driven by health; garden switching; time scrub (history).
-- **Five plant archetypes** — broadleaf, bushy, willow, conifer spire, and the
-  weed shrub — each with its own branching grammar and leaf shape (broad, blade,
-  needle, round). Ordinary plants pick a tree archetype by a hash of the node id,
-  so a bed shows varied individuals; weeds and the db conifer are chosen by
-  meaning, keeping the polarity read intact. Leaves grow in fanned clusters, so a
-  healthy plant reads as a full canopy and a sick one sheds to bare twigs.
+- **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
+  hedge, conifer stand, flower border, wildflower meadow, vegetable patch, or
+  (for suppress gardens) an invasive thicket — laid out its own way (roomy rows,
+  a single low line, a jittered clump, a scattered meadow, tidy low rows) and
+  filled with the plant forms that belong to it. A bed reads as a composed unit
+  instead of a random thicket. It's a container property, never a health signal,
+  so it spends no part of the reading budget; health still reads through droop,
+  density, and colour within each form. Vegetables bear **produce** — fruit on a
+  subset of the plant's leaf points, so a laden plant is healthy and a bare one
+  is not. Vineyards and topiary are declared and planned. See DESIGN.md.
+- **Plant forms** — broadleaf, bushy, willow, conifer spire, the weed shrub, and
+  the flower/wildflower — each with its own branching grammar and leaf shape:
+  broad, blade, needle, round, or a **bloom** (a stem topped with a head of
+  petals). Within a bed, ordinary plants vary by a hash of the node id, so a
+  planting looks grown; a suppress-polarity node is a weed wherever it grows,
+  keeping the polarity read intact. Leaves and petals grow in fanned clusters, so
+  a healthy plant reads as a full canopy — or a full bloom — and a sick one sheds
+  to bare twigs or a bare stem. Petal colour is decorative and varietal, never a
+  health signal.
 - **A landscape behind the garden** — layered hills, distant mountains, and a
   conifer tree line receding into fog. Static and signal-free by design; it is
   lit and fogged by the same rig as the garden, so it tracks the day/night scrub

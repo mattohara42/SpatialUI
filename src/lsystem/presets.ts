@@ -4,7 +4,14 @@ import type { Grammar } from './types';
  * Archetypes, not domains. Any adapter can pick any archetype; the mapping from
  * domain to archetype lives in the translation layer where it belongs.
  */
-export type PresetName = 'broadleaf' | 'bushy' | 'willow' | 'shrub' | 'spire';
+export type PresetName =
+  | 'broadleaf'
+  | 'bushy'
+  | 'willow'
+  | 'shrub'
+  | 'spire'
+  | 'flower'
+  | 'wildflower';
 
 /**
  * The tree-like archetypes, in the order the scene rotates through them to give
@@ -19,7 +26,7 @@ export const TREE_PRESETS: PresetName[] = ['broadleaf', 'bushy', 'willow'];
  * render choice keyed off the archetype, so it lives here as data the scene
  * reads rather than as a field on every leaf.
  */
-export type LeafKind = 'broad' | 'blade' | 'needle' | 'round';
+export type LeafKind = 'broad' | 'blade' | 'needle' | 'round' | 'bloom';
 
 export interface FoliageStyle {
   kind: LeafKind;
@@ -45,7 +52,10 @@ export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   bushy: { kind: 'broad', cluster: 3, scale: 1.0, spread: 0.7 },
   willow: { kind: 'blade', cluster: 3, scale: 1.15, spread: 0.72 },
   shrub: { kind: 'round', cluster: 2, scale: 0.7, spread: 0.5 },
-  spire: { kind: 'needle', cluster: 3, scale: 0.9, spread: 0.4 },
+  spire: { kind: 'needle', cluster: 5, scale: 1.0, spread: 0.45 },
+  // Blooms are big relative to the short stem and pack tightly into a head.
+  flower: { kind: 'bloom', cluster: 6, scale: 2.6, spread: 0.28 },
+  wildflower: { kind: 'bloom', cluster: 4, scale: 2.3, spread: 0.34 },
 };
 
 /** Foliage for a plant with no preset (a raw hand-written grammar). */
@@ -136,5 +146,27 @@ export const PRESETS: Record<PresetName, Grammar> = {
       A: 'F[&FJ]/////[&FJ]/////[&FJ]/////FA',
     },
     iterations: 9,
+  },
+
+  /**
+   * A single flower: a short stem topped with a head. The bloom markers (J) all
+   * sit near the top on short splayed stalks, so the foliage renderer's leaf
+   * cluster turns each into a burst of petals and the whole reads as one head.
+   * No recursion — a flower is not a fractal — so this is a fixed string and
+   * height comes from growthScale, not from iterating. Health thins the petals
+   * the same way it thins leaves, so a struggling flower stops blooming rather
+   * than turning into a dead twig.
+   */
+  flower: {
+    axiom: 'FFF[^FJ][+FJ][-FJ][\\FJ][/FJ]FJ',
+    rules: {},
+    iterations: 1,
+  },
+
+  /** A taller, looser, sparser bloom for a scattered meadow. */
+  wildflower: {
+    axiom: 'FFFF[+FJ][-FJ][^FJ]FJ',
+    rules: {},
+    iterations: 1,
   },
 };

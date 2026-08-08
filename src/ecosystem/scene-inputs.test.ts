@@ -135,14 +135,28 @@ describe('layoutGarden', () => {
     expect(again).toEqual(layout);
   });
 
-  it('scales plant height with maturity', () => {
+  it('scales plant height with maturity within a bed', () => {
+    // Height now folds in the planting's own height scale, so a mature hedge
+    // plant can stand shorter than a young conifer. The maturity relationship
+    // therefore holds within a bed, where the scale is constant, not across the
+    // whole garden.
     const nodes = nodesInGarden(state, gardenId);
-    const tallest = layout.plants.reduce((a, b) =>
-      a.growthScale > b.growthScale ? a : b,
-    );
-    const oldest = nodes
-      .filter((n) => n.kind === 'plant')
-      .reduce((a, b) => (a.maturity > b.maturity ? a : b));
-    expect(tallest.nodeId).toBe(oldest.id);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const beds = nodes.filter((n) => n.kind === 'bed');
+
+    for (const bed of beds) {
+      const placements = layout.plants.filter(
+        (p) => byId.get(p.nodeId)?.parentId === bed.id,
+      );
+      if (placements.length < 2) continue;
+
+      const tallest = placements.reduce((a, b) =>
+        a.growthScale > b.growthScale ? a : b,
+      );
+      const oldest = placements.reduce((a, b) =>
+        (byId.get(a.nodeId)!.maturity > byId.get(b.nodeId)!.maturity ? a : b),
+      );
+      expect(tallest.nodeId).toBe(oldest.nodeId);
+    }
   });
 });

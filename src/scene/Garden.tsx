@@ -3,6 +3,7 @@ import { OrbitControls } from '@react-three/drei';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
+import { Produce } from './Produce';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
 import { Sky } from './Sky';
@@ -17,7 +18,9 @@ import { vitalsAt } from '../ecosystem/history';
 import { staleness, staleThresholdFor } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
-import { TREE_PRESETS, leafKindFor, type PresetName } from '../lsystem/presets';
+import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets';
+import { plantingOf } from '../ecosystem/planting';
+import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
 
 /**
@@ -48,32 +51,20 @@ function scaled(direction: Vec3, distance: number): Vec3 {
 }
 
 /**
- * Archetype means kind of thing, never health. Shape is learnable and constant;
- * letting it move with health would put it in competition with the channels that
+ * The form a plant wears. Shape is learnable and constant, never a health
+ * signal; letting it move with health would compete with the channels that
  * already carry health.
  *
- * The load-bearing read is polarity: weeds are shrubs, because a dense low mound
- * reads as infestation rather than as a specimen, and a thriving one is alarming
- * on sight. Everything else is a tree, and which tree is picked by a hash of the
- * node id, so a bed shows varied individuals the way a real planting does —
- * without the choice ever encoding health or drifting from one tick to the next.
- * The db conifer stays a deliberate exception, chosen by meaning rather than by
- * the hash, so it keeps reading as the odd one out.
+ * A plant takes its bed's planting — an orchard tree, a hedge shrub, a conifer —
+ * and picks one form from that planting's palette by a hash of its id, so a bed
+ * shows varied individuals without the choice encoding anything. Polarity still
+ * overrides everything: a suppress-polarity node is a weed wherever it grows,
+ * because a thriving weed being alarming on sight is the one load-bearing shape
+ * read, and it must survive whatever the bed is planted with.
  */
-function archetypeFor(node: EcosystemNode): PresetName {
+function archetypeFor(node: EcosystemNode, bed: EcosystemNode | undefined): PresetName {
   if (node.polarity === 'suppress') return 'shrub';
-  if (node.domain === 'devops' && node.label.includes('db')) return 'spire';
-  return TREE_PRESETS[hashString(node.id) % TREE_PRESETS.length];
-}
-
-/** Stable non-negative hash of a string, for deterministic archetype choice. */
-function hashString(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
+  return formFor(plantingOf(bed ?? {}), node.id);
 }
 
 /**
@@ -82,16 +73,54 @@ function hashString(id: string): number {
  * health signal, so it interpolates continuously rather than stepping between
  * thresholds: a stepped tint change would be its own visible jerk every tick.
  */
-function tintFor(health: number, stale: number): Tint {
+function tintFor(health: number, stale: number, kind: LeafKind): Tint {
   if (stale > 1) {
     // Silence is its own state and should be faintly unsettling rather than
     // merely neutral: grey, dusty, no signal at all.
     return { bark: '#6b6660', foliage: '#8f8b83' };
   }
+  // A flowering plant has a green stem, not bark, so it reads as a herb rather
+  // than a tiny tree. The petals themselves are coloured separately (bloomTint).
+  const bark =
+    kind === 'bloom'
+      ? mixHex('#4a5a34', '#6a8248', health)
+      : mixHex('#5a4a3a', '#6b563d', health);
   return {
-    bark: mixHex('#5a4a3a', '#6b563d', health),
+    bark,
     foliage: mixHex('#96683a', '#7ea34e', health),
   };
+}
+
+/**
+ * A flower's petal colour. Decorative and seeded from the node id, never a
+ * health signal — health reads through how many petals survive, not their hue —
+ * so the palette is simply a spread of garden colours. Staleness is the one
+ * exception that greys it, because a silent flower must not look like a bright
+ * one.
+ */
+const BLOOM_PALETTE = [
+  '#e8657f', // pink
+  '#f2b705', // gold
+  '#f4f0ea', // white
+  '#b072d0', // violet
+  '#ef6a3a', // orange
+  '#e24b6a', // rose
+  '#6fa8dc', // cornflower
+];
+
+function bloomTintFor(seed: string, stale: number): string {
+  if (stale > 1) return '#9a968d';
+  return BLOOM_PALETTE[hashString(seed) % BLOOM_PALETTE.length];
+}
+
+/** Stable non-negative hash of a string, for the varietal bloom colour. */
+function hashString(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 export function Garden() {
@@ -132,7 +161,9 @@ export function Garden() {
 
       // Memoized on the quantized vitals, so a tick that does not step a plant
       // across a vitality bucket reuses geometry instead of rebuilding it.
-      const preset = archetypeFor(node);
+      const bed = node.parentId ? nodes[node.parentId] : undefined;
+      const planting = plantingOf(bed ?? {});
+      const preset = archetypeFor(node, bed);
       const geometry = generatePlantMemo({
         seed: node.id,
         vitality: vitals.vitality,
@@ -141,14 +172,21 @@ export function Garden() {
         preset,
       });
 
+      const leafKind = leafKindFor(preset);
+
       return [
         {
           node,
           position: placement.position,
           geometry,
-          tint: tintFor(signalHealth({ ...node, ...vitals }), stale),
+          tint: tintFor(signalHealth({ ...node, ...vitals }), stale, leafKind),
           vitality: vitals.vitality,
-          leafKind: leafKindFor(preset),
+          leafKind,
+          bloomTint: bloomTintFor(node.id, stale),
+          produceTint:
+            node.polarity !== 'suppress' && bearsProduce(planting)
+              ? produceTintFor(node.id, stale)
+              : undefined,
         },
       ];
     });
@@ -229,6 +267,7 @@ export function Garden() {
         <Beds beds={layout.beds} />
         <Branches plants={plants} />
         <Foliage plants={plants} />
+        <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
         {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
       </group>
