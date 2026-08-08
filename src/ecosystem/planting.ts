@@ -112,8 +112,9 @@ export const PLANTINGS: Record<PlantingType, PlantingSpec> = {
   'vegetable-rows': {
     label: 'Vegetable rows',
     invasive: false,
-    live: false,
-    arrangement: { columns: 0, spacing: 0.7, rowSpacing: 0.9, jitter: 0.1, heightScale: 0.6 },
+    live: true,
+    // Tidy low rows: a patch, not a single line, so the rows read as rows.
+    arrangement: { columns: 3, spacing: 0.8, rowSpacing: 0.85, jitter: 0.08, heightScale: 0.6 },
   },
   vineyard: {
     label: 'Vineyard',

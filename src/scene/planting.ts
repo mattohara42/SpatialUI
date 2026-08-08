@@ -39,6 +39,35 @@ export function formFor(planting: PlantingType, nodeId: string): PresetName {
   return palette[hashString(nodeId) % palette.length];
 }
 
+/**
+ * Which plantings bear produce. Fruit is drawn as a scene-side decoration on a
+ * subset of a plant's leaf points, so it costs the pure geometry nothing and its
+ * amount follows leaf count — a struggling plant carries less, the same wilt read
+ * the leaves already give. This is the seam the vineyard and a fruiting orchard
+ * will reuse when they land.
+ */
+export function bearsProduce(planting: PlantingType): boolean {
+  return planting === 'vegetable-rows';
+}
+
+/**
+ * Produce colour. Like petals, decorative and varietal, seeded from the id and
+ * never a health signal; staleness greys it. A spread of kitchen-garden colours.
+ */
+const PRODUCE_PALETTE = [
+  '#d1462f', // tomato
+  '#e2892f', // squash
+  '#7f9e3b', // green pepper
+  '#7d4a8f', // aubergine
+  '#e0b32e', // yellow
+  '#c8383a', // chilli
+];
+
+export function produceTintFor(nodeId: string, stale: number): string {
+  if (stale > 1) return '#8f8b83';
+  return PRODUCE_PALETTE[hashString(nodeId + '#fruit') % PRODUCE_PALETTE.length];
+}
+
 /** Stable non-negative hash of a string, for the deterministic form pick. */
 function hashString(id: string): number {
   let h = 2166136261;

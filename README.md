@@ -74,14 +74,15 @@ not a rebuild.
 
 - Procedural plants driven by health; garden switching; time scrub (history).
 - **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
-  hedge, conifer stand, flower border, wildflower meadow, or (for suppress
-  gardens) an invasive thicket — laid out its own way (roomy rows, a single low
-  line, a jittered clump, a scattered meadow) and filled with the plant forms
-  that belong to it. A bed reads as a composed unit instead of a random thicket.
-  It's a container property, never a health signal, so it spends no part of the
-  reading budget; health still reads through droop, density, and colour within
-  each form. Vegetable rows, vineyards, and topiary are declared and planned —
-  each lands with its own geometry. See DESIGN.md.
+  hedge, conifer stand, flower border, wildflower meadow, vegetable patch, or
+  (for suppress gardens) an invasive thicket — laid out its own way (roomy rows,
+  a single low line, a jittered clump, a scattered meadow, tidy low rows) and
+  filled with the plant forms that belong to it. A bed reads as a composed unit
+  instead of a random thicket. It's a container property, never a health signal,
+  so it spends no part of the reading budget; health still reads through droop,
+  density, and colour within each form. Vegetables bear **produce** — fruit on a
+  subset of the plant's leaf points, so a laden plant is healthy and a bare one
+  is not. Vineyards and topiary are declared and planned. See DESIGN.md.
 - **Plant forms** — broadleaf, bushy, willow, conifer spire, the weed shrub, and
   the flower/wildflower — each with its own branching grammar and leaf shape:
   broad, blade, needle, round, or a **bloom** (a stem topped with a head of

@@ -84,7 +84,7 @@ const GARDENS: GardenSpec[] = [
     directed: true,
     beds: [
       { label: 'research', planting: 'wildflower-meadow' },
-      { label: 'projects', planting: 'orchard' },
+      { label: 'projects', planting: 'vegetable-rows' },
       { label: 'reading', planting: 'flower-border' },
     ],
     plants: ['spatial-ui', 'l-systems', 'shaders', 'hand-tracking', 'archive'],

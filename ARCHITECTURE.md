@@ -47,6 +47,8 @@ src/
     daylight.test.ts
     SunScrub.tsx     The gesture: grabbing the sun or the moon to move time.
     Foliage.tsx      One InstancedMesh per leaf shape; groups plants by kind.
+    Produce.tsx      Fruit on plants that bear it, drawn on a subset of their
+                     leaf points. One instanced mesh; empty when no vegetables.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
@@ -59,7 +61,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-118 tests across nine files, `tsc --noEmit` clean, `vite build` succeeds.
+122 tests across ten files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts

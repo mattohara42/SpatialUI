@@ -34,6 +34,7 @@ describe('planting specs', () => {
         'hedge',
         'orchard',
         'thicket',
+        'vegetable-rows',
         'wildflower-meadow',
       ].sort(),
     );

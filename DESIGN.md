@@ -89,12 +89,20 @@ rule: it is decorative and varietal, seeded per plant, and it means nothing, so
 health never rides on hue. A flower border stands them in a tidy row; a
 wildflower meadow scatters them.
 
-Still planned, each with its own geometry: vegetable rows (low rows and produce),
-the vineyard (a trellis with a trained vine — a structure, not a tree), and
-topiary (geometric shapes, where neglect reads as shagginess rather than as
-death). Every planted type must earn a wilt-state distinct from staleness, so a
-struggling service never looks like a dead adapter — the guardrail the whole idea
-rests on, and the one the flowers were the first to honour.
+Then vegetables, which bring **produce**: fruit drawn on a subset of a plant's
+leaf points, so it reuses the geometry with nothing new and its amount follows
+the leaf count — a thriving vegetable is laden, a struggling one bears nothing,
+the same wilt read the leaves give. Produce colour is varietal and decorative
+like petals. This is the first piece of the *completion* vocabulary the design
+deferred until the scene existed; the vineyard's grapes and a fruiting orchard
+will reuse the same seam.
+
+Still planned, each with its own geometry: the vineyard (a trellis with a trained
+vine — a structure, not a tree) and topiary (geometric shapes, where neglect
+reads as shagginess rather than as death). Every planted type must earn a
+wilt-state distinct from staleness, so a struggling service never looks like a
+dead adapter — the guardrail the whole idea rests on, and the one the flowers
+were the first to honour.
 
 ## What is decoration, and why decoration is allowed
 

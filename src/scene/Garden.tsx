@@ -3,6 +3,7 @@ import { OrbitControls } from '@react-three/drei';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
+import { Produce } from './Produce';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
 import { Sky } from './Sky';
@@ -19,7 +20,7 @@ import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
 import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets';
 import { plantingOf } from '../ecosystem/planting';
-import { formFor } from './planting';
+import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
 
 /**
@@ -161,6 +162,7 @@ export function Garden() {
       // Memoized on the quantized vitals, so a tick that does not step a plant
       // across a vitality bucket reuses geometry instead of rebuilding it.
       const bed = node.parentId ? nodes[node.parentId] : undefined;
+      const planting = plantingOf(bed ?? {});
       const preset = archetypeFor(node, bed);
       const geometry = generatePlantMemo({
         seed: node.id,
@@ -181,6 +183,10 @@ export function Garden() {
           vitality: vitals.vitality,
           leafKind,
           bloomTint: bloomTintFor(node.id, stale),
+          produceTint:
+            node.polarity !== 'suppress' && bearsProduce(planting)
+              ? produceTintFor(node.id, stale)
+              : undefined,
         },
       ];
     });
@@ -261,6 +267,7 @@ export function Garden() {
         <Beds beds={layout.beds} />
         <Branches plants={plants} />
         <Foliage plants={plants} />
+        <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
         {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
       </group>
