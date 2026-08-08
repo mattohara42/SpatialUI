@@ -105,7 +105,9 @@ not a rebuild.
   updates on a telemetry tick (activity, vitality) is smoothed so it eases in
   rather than snapping — see the comments in `src/scene/sway.ts`.
 - Vitality **droop**: sick plants wilt toward the ground (clamped to the soil).
-- Staleness desaturation; "what changed since I last looked" summary.
+- Staleness is grey **and still** — a stale plant stops swaying, so silence
+  (a dead adapter) never passes for a thriving plant. Plus "what changed since I
+  last looked" summary.
 - **Time scrub as the sun crossing the sky.** Drag the sun (or the moon, after
   dark) and history moves with it: the whole look — key light, fill, fog, sky
   gradient, stars — is a function of the hour under the cursor, so scrubbing

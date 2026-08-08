@@ -67,7 +67,10 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
     let i = 0;
     for (const plant of plants) {
       const { geometry, position, node } = plant;
-      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t);
+      // A stale plant stops moving. Frozen where it stands, it stops passing for
+      // a healthy one still swaying in the breeze.
+      const motion = plant.stale > 1 ? 0 : 1;
+      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t, motion);
       const vit = smoothVitality(node.id, plant.vitality, t);
 
       for (let s = 0; s < geometry.segmentCount; s++) {

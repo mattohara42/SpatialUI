@@ -194,6 +194,8 @@ export function Garden() {
             node.polarity !== 'suppress' && bearsProduce(planting)
               ? produceTintFor(node.id, stale, planting)
               : undefined,
+          grape: planting === 'vineyard',
+          stale,
         },
       ];
     });

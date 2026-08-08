@@ -116,7 +116,8 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
     let i = 0;
     for (const plant of plants) {
       const { geometry: geo, position, node } = plant;
-      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t);
+      const motion = plant.stale > 1 ? 0 : 1;
+      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t, motion);
       const vit = smoothVitality(node.id, plant.vitality, t);
 
       for (let l = 0; l < geo.leafCount; l++) {

@@ -118,6 +118,14 @@ const scale = new THREE.Vector3();
  * Rigid lean + breathing about the plant base. Activity rides on top of a
  * nonzero ambient floor, so a dormant plant still breathes rather than freezing.
  *
+ * `motion` scales the whole thing and is how staleness reads as *stillness*. A
+ * stale plant is not just greyer — it stops moving, because silence looking like
+ * health is the failure the whole metaphor risks, and a plant that has gone grey
+ * but still sways in the breeze still looks alive. At motion 0 the matrix is the
+ * identity, so a stale plant is frozen where it stands while its live neighbours
+ * carry on. Everything that draws a plant passes the same value, so branches,
+ * leaves, and fruit freeze together.
+ *
  * Pure: the caller passes a pre-smoothed activity (see smoothActivity), so a
  * telemetry step eases in rather than snapping the amplitude.
  */
@@ -126,16 +134,18 @@ export function swayMatrix(
   id: string,
   activity: number,
   t: number,
+  motion = 1,
 ): void {
   const phase = phaseOf(id);
   const ts = t * SWAY_SPEED;
-  const amp = (0.015 + activity * 0.05) * MOTION; // radians of lean
+  const amp = (0.015 + activity * 0.05) * MOTION * motion; // radians of lean
   const ax = osc(ts, phase) * amp;
   const az = osc(ts * 0.93, phase + 1.3) * amp;
   // Frequencies must never depend on activity either: the argument of a sine is
   // t times the frequency, so a step would jump the phase by t * delta-frequency,
   // a snap that grows with elapsed time. Activity touches amplitude only.
-  const breath = Math.sin(ts * BREATH_FREQ + phase) * (0.004 + activity * 0.006) * MOTION;
+  const breath =
+    Math.sin(ts * BREATH_FREQ + phase) * (0.004 + activity * 0.006) * MOTION * motion;
 
   euler.set(ax, 0, az, 'ZXY');
   out.makeRotationFromEuler(euler);

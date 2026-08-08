@@ -189,10 +189,16 @@ so more loudly than by being dark.
 **Silence looks like health.** An adapter that dies leaves a green, thriving
 plant standing there, and a garden is reassuring enough that people will believe
 it. This is the classic monitoring failure and the metaphor makes it worse
-rather than better. Staleness therefore gets its own visual state, and it should
-be faintly unsettling: grey, dusty, no motion. `isStale` in `ecosystem/staleness.ts`
-derives it from `updatedAt`. The threshold is per-garden, because an hourly notes
-scrape and a fifteen second Prometheus scrape mean very different things by late.
+rather than better. Staleness therefore gets its own visual state: grey, and —
+now that motion is a channel — **still**. A stale plant stops swaying, because a
+plant that has merely greyed but still moves in the breeze still reads as alive;
+stillness is what makes silence legible. `swayMatrix` takes a motion factor that
+the scene drops to zero past the staleness threshold, so branches, leaves, and
+fruit freeze together. `isStale` in `ecosystem/staleness.ts` derives the state
+from `updatedAt`; the threshold is per-garden, because an hourly notes scrape and
+a fifteen second Prometheus scrape mean very different things by late. What is
+still owed is the dust — a particulate cue so a frozen plant reads as neglected
+up close, not just at the silhouette.
 
 **What changed since I last looked** is a different question from what things
 look like now, and it is closer to what the product actually promises. A service

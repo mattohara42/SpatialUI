@@ -139,7 +139,7 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
     seed = 1337,
     bedsPerGarden = 3,
     plantsPerBed = 5,
-    blightRate = 0.25,
+    blightRate = 0.18,
     edgeDensity = 0.8,
     historyHours = 168,
   } = options;
@@ -195,7 +195,10 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
         const label = `${garden.plants[p % garden.plants.length]}-${p + 1}`;
         const id = `${bedId}/${label}`;
         const sick = rng() < blightRate;
-        const vitality = sick ? rng() * 0.5 : 0.6 + rng() * 0.4;
+        // A garden should read as mostly thriving with a few plants in trouble,
+        // not as a field of the dying. Healthy plants sit high; sick ones sit
+        // low but not flat, so they wilt rather than read as dead on arrival.
+        const vitality = sick ? 0.2 + rng() * 0.35 : 0.68 + rng() * 0.32;
 
         nodes[id] = {
           id,
