@@ -24,10 +24,18 @@ describe('planting specs', () => {
     }
   });
 
-  it('marks exactly the tree-family plantings live', () => {
+  it('marks exactly the plantings that have geometry live', () => {
     const live = ALL.filter(isLivePlanting).sort();
     expect(live).toEqual(
-      ['conifer-stand', 'grove', 'hedge', 'orchard', 'thicket'].sort(),
+      [
+        'conifer-stand',
+        'flower-border',
+        'grove',
+        'hedge',
+        'orchard',
+        'thicket',
+        'wildflower-meadow',
+      ].sort(),
     );
   });
 

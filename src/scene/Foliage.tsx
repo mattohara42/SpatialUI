@@ -30,6 +30,9 @@ const SHAPES: Record<LeafKind, LeafShape> = {
   blade: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.45, 1.25, 0.2], roughness: 0.65 },
   needle: { geometry: () => new THREE.ConeGeometry(1, 1, 5), aspect: [0.16, 1.35, 0.16], roughness: 0.6 },
   round: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [0.85, 0.8, 0.85], roughness: 0.8 },
+  // A petal: rounded and slightly cupped, brighter than a leaf. A cluster of
+  // these fanned around a stem tip reads as a flower head.
+  bloom: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [1.0, 0.55, 1.0], roughness: 0.45 },
 };
 
 /**
@@ -83,13 +86,16 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
     const colour = new THREE.Color();
     let i = 0;
     for (const plant of plants) {
-      colour.set(plant.tint.foliage);
+      // Petals wear the plant's varietal bloom colour, which is decorative and
+      // seeded, not the health tint; a flower's health reads through how many
+      // petals it still carries, never through their hue.
+      colour.set(kind === 'bloom' ? plant.bloomTint : plant.tint.foliage);
       for (let l = 0; l < plant.geometry.leafCount; l++) {
         instanced.setColorAt(i++, colour);
       }
     }
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
-  }, [plants, count]);
+  }, [plants, count, kind]);
 
   const scratch = useMemo(
     () => ({

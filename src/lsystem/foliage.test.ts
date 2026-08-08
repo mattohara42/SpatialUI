@@ -95,11 +95,17 @@ describe('foliage styles', () => {
   });
 
   it('lists only tree archetypes in the variety rotation', () => {
-    // Weeds and the db conifer are chosen by meaning, never by the rotation, so
-    // a bed of ordinary plants never accidentally sprouts a weed or a spire.
-    expect(TREE_PRESETS).not.toContain('shrub');
-    expect(TREE_PRESETS).not.toContain('spire');
+    // Weeds, the conifer, and the flowers are chosen by planting, never by the
+    // rotation, so an ordinary bed never accidentally sprouts one.
+    for (const off of ['shrub', 'spire', 'flower', 'wildflower'] as const) {
+      expect(TREE_PRESETS).not.toContain(off);
+    }
     for (const preset of TREE_PRESETS) expect(ALL).toContain(preset);
+  });
+
+  it('draws flowers with petals, not leaves', () => {
+    expect(leafKindFor('flower')).toBe('bloom');
+    expect(leafKindFor('wildflower')).toBe('bloom');
   });
 });
 

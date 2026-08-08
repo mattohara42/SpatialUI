@@ -95,19 +95,20 @@ export const PLANTINGS: Record<PlantingType, PlantingSpec> = {
     arrangement: { columns: 3, spacing: 1.1, rowSpacing: 1.1, jitter: 0.45, heightScale: 0.9 },
   },
 
-  // --- planned ---------------------------------------------------------------
   'flower-border': {
     label: 'Flower border',
     invasive: false,
-    live: false,
+    live: true,
     arrangement: { columns: 0, spacing: 0.5, rowSpacing: 0.6, jitter: 0.15, heightScale: 0.5 },
   },
   'wildflower-meadow': {
     label: 'Wildflower meadow',
     invasive: false,
-    live: false,
-    arrangement: { columns: 4, spacing: 0.6, rowSpacing: 0.6, jitter: 0.5, heightScale: 0.55 },
+    live: true,
+    arrangement: { columns: 4, spacing: 0.55, rowSpacing: 0.6, jitter: 0.5, heightScale: 0.55 },
   },
+
+  // --- planned ---------------------------------------------------------------
   'vegetable-rows': {
     label: 'Vegetable rows',
     invasive: false,

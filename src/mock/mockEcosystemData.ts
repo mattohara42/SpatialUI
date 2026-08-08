@@ -83,9 +83,9 @@ const GARDENS: GardenSpec[] = [
     edgeKind: 'links',
     directed: true,
     beds: [
-      { label: 'research', planting: 'grove' },
+      { label: 'research', planting: 'wildflower-meadow' },
       { label: 'projects', planting: 'orchard' },
-      { label: 'reading', planting: 'hedge' },
+      { label: 'reading', planting: 'flower-border' },
     ],
     plants: ['spatial-ui', 'l-systems', 'shaders', 'hand-tracking', 'archive'],
     blights: [

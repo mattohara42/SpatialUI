@@ -24,10 +24,10 @@ export const PLANTING_FORMS: Record<PlantingType, PresetName[]> = {
   hedge: ['bushy'],
   'conifer-stand': ['spire'],
   thicket: ['shrub'],
+  'flower-border': ['flower'],
+  'wildflower-meadow': ['wildflower'],
 
   // planned — fallback forms until each grows its own geometry
-  'flower-border': ['bushy'],
-  'wildflower-meadow': ['bushy'],
   'vegetable-rows': ['bushy'],
   vineyard: ['willow'],
   topiary: ['bushy'],

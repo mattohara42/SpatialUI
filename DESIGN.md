@@ -77,12 +77,24 @@ was waiting for the scene to exist.
 The work lands in phases. Live now: the plantings that are arrangements of the
 existing L-system forms — orchard, grove, hedge, conifer stand, and the weed
 thicket — each laid out in its own way (rows, a single low line, a jittered
-clump). Planned, each with its own geometry: flower borders and wildflower
-meadows (a bloom primitive), vegetable rows (low rows and produce), the vineyard
-(a trellis with a trained vine — a structure, not a tree), and topiary
-(geometric shapes, where neglect reads as shagginess rather than as death). Each
-planted type must earn a wilt-state distinct from staleness, so a struggling
-service never looks like a dead adapter — the guardrail the whole idea rests on.
+clump).
+
+Then the flowers, the first form that is not a tree: a **bloom** primitive, a
+short green stem topped with a head of petals. The head is a leaf cluster of a
+petal shape, so it costs the renderer nothing new, and it makes the flower's
+health read the way it should — a thriving flower is full of petals, a
+struggling one stops blooming and stands as a bare stem, which is a wilt-state
+nothing like the grey of staleness. Petal colour is the test case for the colour
+rule: it is decorative and varietal, seeded per plant, and it means nothing, so
+health never rides on hue. A flower border stands them in a tidy row; a
+wildflower meadow scatters them.
+
+Still planned, each with its own geometry: vegetable rows (low rows and produce),
+the vineyard (a trellis with a trained vine — a structure, not a tree), and
+topiary (geometric shapes, where neglect reads as shagginess rather than as
+death). Every planted type must earn a wilt-state distinct from staleness, so a
+struggling service never looks like a dead adapter — the guardrail the whole idea
+rests on, and the one the flowers were the first to honour.
 
 ## What is decoration, and why decoration is allowed
 

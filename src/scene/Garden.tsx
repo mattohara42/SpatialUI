@@ -17,7 +17,7 @@ import { vitalsAt } from '../ecosystem/history';
 import { staleness, staleThresholdFor } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
-import { leafKindFor, type PresetName } from '../lsystem/presets';
+import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets';
 import { plantingOf } from '../ecosystem/planting';
 import { formFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
@@ -72,16 +72,54 @@ function archetypeFor(node: EcosystemNode, bed: EcosystemNode | undefined): Pres
  * health signal, so it interpolates continuously rather than stepping between
  * thresholds: a stepped tint change would be its own visible jerk every tick.
  */
-function tintFor(health: number, stale: number): Tint {
+function tintFor(health: number, stale: number, kind: LeafKind): Tint {
   if (stale > 1) {
     // Silence is its own state and should be faintly unsettling rather than
     // merely neutral: grey, dusty, no signal at all.
     return { bark: '#6b6660', foliage: '#8f8b83' };
   }
+  // A flowering plant has a green stem, not bark, so it reads as a herb rather
+  // than a tiny tree. The petals themselves are coloured separately (bloomTint).
+  const bark =
+    kind === 'bloom'
+      ? mixHex('#4a5a34', '#6a8248', health)
+      : mixHex('#5a4a3a', '#6b563d', health);
   return {
-    bark: mixHex('#5a4a3a', '#6b563d', health),
+    bark,
     foliage: mixHex('#96683a', '#7ea34e', health),
   };
+}
+
+/**
+ * A flower's petal colour. Decorative and seeded from the node id, never a
+ * health signal — health reads through how many petals survive, not their hue —
+ * so the palette is simply a spread of garden colours. Staleness is the one
+ * exception that greys it, because a silent flower must not look like a bright
+ * one.
+ */
+const BLOOM_PALETTE = [
+  '#e8657f', // pink
+  '#f2b705', // gold
+  '#f4f0ea', // white
+  '#b072d0', // violet
+  '#ef6a3a', // orange
+  '#e24b6a', // rose
+  '#6fa8dc', // cornflower
+];
+
+function bloomTintFor(seed: string, stale: number): string {
+  if (stale > 1) return '#9a968d';
+  return BLOOM_PALETTE[hashString(seed) % BLOOM_PALETTE.length];
+}
+
+/** Stable non-negative hash of a string, for the varietal bloom colour. */
+function hashString(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 export function Garden() {
@@ -132,14 +170,17 @@ export function Garden() {
         preset,
       });
 
+      const leafKind = leafKindFor(preset);
+
       return [
         {
           node,
           position: placement.position,
           geometry,
-          tint: tintFor(signalHealth({ ...node, ...vitals }), stale),
+          tint: tintFor(signalHealth({ ...node, ...vitals }), stale, leafKind),
           vitality: vitals.vitality,
-          leafKind: leafKindFor(preset),
+          leafKind,
+          bloomTint: bloomTintFor(node.id, stale),
         },
       ];
     });

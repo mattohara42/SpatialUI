@@ -30,8 +30,9 @@ src/
     grammar.ts       String rewriting with a symbol budget guard.
     turtle.ts        Symbols to flat typed arrays, written in one pass. Emits
                      leaves in fanned clusters per J marker.
-    presets.ts       Five grammar archetypes (broadleaf, bushy, willow, shrub,
-                     spire) plus the foliage table: leaf kind, cluster, scale.
+    presets.ts       Grammar archetypes (broadleaf, bushy, willow, shrub, spire,
+                     and the flower/wildflower blooms) plus the foliage table:
+                     leaf kind, cluster, scale.
     generate.ts      Public entry. Maps vitality and growthScale to geometry.
     generate.test.ts
     foliage.test.ts  Leaf clusters, the foliage table, and every preset.
@@ -58,7 +59,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-117 tests across nine files, `tsc --noEmit` clean, `vite build` succeeds.
+118 tests across nine files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -165,8 +166,9 @@ hit rate and scrubbing costs less than a frame.
    knowing before adding a second custom shader.
 10. Leaves render as one `InstancedMesh` per leaf shape, not one for the whole
     garden, because an instanced mesh has a single geometry and a conifer cannot
-    wear the same card as a hardwood. There are four kinds, so a garden costs at
-    most four leaf draw calls regardless of plant count. Branches stay a single
+    wear the same card as a hardwood. There are five kinds (broad, blade, needle,
+    round, and the flower's bloom), so a garden costs at most five leaf draw
+    calls regardless of plant count. Branches stay a single
     instanced mesh: they are all cylinders, and per-plant branch variety comes
     from the grammar, not from swapping geometry. Which leaf shape a plant wears
     is a render decision keyed on preset, kept off `PlantGeometry` so the scrub
