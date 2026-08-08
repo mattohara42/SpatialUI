@@ -1,4 +1,5 @@
 import type { VitalsHistory } from './history';
+import type { PlantingType } from './planting';
 
 /**
  * The normalized vocabulary every adapter must speak.
@@ -113,6 +114,13 @@ export interface EcosystemNode extends Vitals {
   domain: Domain;
   kind: NodeKind;
   polarity: Polarity;
+  /**
+   * What is planted here. Set on bed nodes; a plant takes its bed's planting at
+   * render time. A container property, not a health signal — it decides the form
+   * a plant wears (orchard tree, hedge, vine) the way polarity decides plant vs
+   * weed, and translation assigns it. Absent on gardens and plants.
+   */
+  plantingType?: PlantingType;
   /** Empty array means healthy. */
   blights: Blight[];
   /** Epoch ms of the last telemetry update. Drives staleness fading. */

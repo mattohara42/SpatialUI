@@ -35,18 +35,66 @@ splay, and leaf density, so a red and green palette, which is the worst possible
 pairing for the commonest colour blindness, is a redundant encoding rather than
 the encoding. Keep that property on purpose.
 
+## Beds are plantings
+
+A garden fixes what vitality *means*; a bed says what is *planted*. Until now
+beds were only spatial buckets, which is why a garden read as a random thicket
+of trees at mixed health — and why the infrastructure garden in particular
+looked dead, since it was deciduous trees mostly running low, and a bare tree is
+the bleakest possible sick-state and the one closest to the grey of staleness.
+
+The fix is to ground the scene in real gardening: an individual bed is a *kind*
+of planting — an orchard, a hedge, a conifer stand, a flower border, a vineyard,
+a topiary — and it is filled with the plant forms that belong to it. This is a
+genuine conceptual upgrade, not a skin: it gives the bed-grouping layer a
+meaning it never had, and it makes each bed legible as a unit.
+
+Three properties make it safe rather than a new way to overload the reading:
+
+**A planting is a property of the container, not of health.** It never moves
+with a metric. It sits in the same contextual slot as domain and archetype
+variety — learnable, constant, signal-free per node — so it spends none of the
+scarce health budget. Health still reads through droop, leaf density, and colour
+*within* whichever form the planting dictates. That boundary is the whole reason
+this is affordable.
+
+**Polarity still overrides everything.** A suppress-polarity node is a weed
+wherever it grows, whatever the bed is planted with, because a thriving weed
+being alarming on sight is the one load-bearing shape read and it must survive.
+Today whole gardens are single-polarity, so the suppress gardens are simply
+planted as thickets; the sharper "a weed among the vegetables" case waits on
+per-node polarity.
+
+**Colour stays decorative.** Flowers and fruit will tempt us to make bloom or
+ripeness colour mean something. It must not. Health reads through open versus
+wilted, full versus shed — through form — never through hue, the same rule
+colour has always kept here.
+
+This also finally gives the deferred *completion* vocabulary a home: vegetables
+and vineyards harvest, and fruit and deadwood are exactly the vocabulary that
+was waiting for the scene to exist.
+
+The work lands in phases. Live now: the plantings that are arrangements of the
+existing L-system forms — orchard, grove, hedge, conifer stand, and the weed
+thicket — each laid out in its own way (rows, a single low line, a jittered
+clump). Planned, each with its own geometry: flower borders and wildflower
+meadows (a bloom primitive), vegetable rows (low rows and produce), the vineyard
+(a trellis with a trained vine — a structure, not a tree), and topiary
+(geometric shapes, where neglect reads as shagginess rather than as death). Each
+planted type must earn a wilt-state distinct from staleness, so a struggling
+service never looks like a dead adapter — the guardrail the whole idea rests on.
+
 ## What is decoration, and why decoration is allowed
 
 Two recent additions carry no signal at all, and that is the point of them.
 
-Individual variety within an archetype — whether a plant grows as a broadleaf, a
-bushy crown, or a willow — is chosen by a hash of the node id, not by any metric.
-It exists so a bed looks like a planting rather than a stamped row, and it is
-free precisely because it means nothing: the reader learns to ignore *which*
-tree the way they ignore which blade of grass. The load-bearing shape read is
-still only polarity — weed versus plant — and that is held hard, so a thriving
-weed is still alarming and a variety pick never dilutes it. The db conifer is the
-one shape chosen by meaning, kept as a deliberate exception.
+Individual variety within a bed — whether a plant grows as a broadleaf or a
+bushy crown in an orchard — is chosen by a hash of the node id, not by any
+metric. It exists so a bed looks grown rather than stamped, and it is free
+precisely because it means nothing: the reader learns to ignore *which* tree the
+way they ignore which blade of grass. The load-bearing shape read is still only
+polarity — weed versus plant — and that is held hard, so a thriving weed is
+still alarming and a variety pick never dilutes it.
 
 The horizon — hills, mountains, a tree line — is decoration in the same sense.
 It is static and signal-free, so it never competes for the reader's attention or

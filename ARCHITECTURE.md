@@ -20,6 +20,10 @@ src/
                      when a scrub lands back on live. Knows nothing about the
                      sky, so the store can use it without importing a renderer.
     scrub.test.ts
+    planting.ts      What a bed is planted as: the PlantingType vocabulary and
+                     each type's spatial arrangement. Self-contained, imports
+                     nothing, so layout and the renderer share it cycle-free.
+    planting.test.ts
   lsystem/           Pure procedural geometry. No React, no three.js.
     types.ts         Vec3, Grammar, TurtleParams, PlantGeometry.
     random.ts        Seeded PRNG so a node id always grows the same plant.
@@ -43,6 +47,8 @@ src/
     SunScrub.tsx     The gesture: grabbing the sun or the moon to move time.
     Foliage.tsx      One InstancedMesh per leaf shape; groups plants by kind.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
+    planting.ts      The render half of the planting concept: which L-system
+                     forms each PlantingType is drawn with.
   xr/                Planned, not yet created. Session setup, hand rays, and
                      world-anchored HUDs will live here. Named now so nothing
                      gets built in a way that blocks it.
@@ -52,7 +58,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-108 tests across eight files, `tsc --noEmit` clean, `vite build` succeeds.
+117 tests across nine files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -67,6 +73,16 @@ for everything inside it. Only one garden is live at a time. Beds group plants
 inside a garden. This is what stops green meaning "low error rate" and "up 3%
 today" in the same field of view, and it bounds scene cost by the largest single
 garden rather than by everything the user tracks.
+
+A bed also carries a **planting type** — orchard, hedge, conifer stand, vineyard
+— set by translation on the bed node (`plantingType`). It is a container
+property, not a health signal: it decides the *form* a plant wears and how the
+bed is arranged, the way polarity decides plant versus weed, and it never moves
+with a metric. The concept splits across two layers to keep them clean:
+`ecosystem/planting.ts` owns the semantic vocabulary and each type's spatial
+arrangement (pure, read by `layout.ts`), and `scene/planting.ts` owns which
+L-system forms draw it (a render decision). `DESIGN.md` carries the reasoning
+and the roadmap for the plantings that still need their own geometry.
 
 Health normalizes onto four axes. `vitality` is the level, `activity` is how
 busy, `maturity` is how established, and `trend` is the signed delta, because a

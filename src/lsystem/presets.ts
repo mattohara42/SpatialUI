@@ -45,7 +45,7 @@ export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   bushy: { kind: 'broad', cluster: 3, scale: 1.0, spread: 0.7 },
   willow: { kind: 'blade', cluster: 3, scale: 1.15, spread: 0.72 },
   shrub: { kind: 'round', cluster: 2, scale: 0.7, spread: 0.5 },
-  spire: { kind: 'needle', cluster: 3, scale: 0.9, spread: 0.4 },
+  spire: { kind: 'needle', cluster: 5, scale: 1.0, spread: 0.45 },
 };
 
 /** Foliage for a plant with no preset (a raw hand-written grammar). */

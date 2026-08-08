@@ -13,6 +13,7 @@ import {
   record,
   type VitalsHistory,
 } from '../ecosystem/history';
+import type { PlantingType } from '../ecosystem/planting';
 import { mulberry32, type Rng } from '../lsystem/random';
 
 /**
@@ -32,6 +33,11 @@ export interface MockOptions {
   historyHours?: number;
 }
 
+interface BedSpec {
+  label: string;
+  planting: PlantingType;
+}
+
 interface GardenSpec {
   id: string;
   label: string;
@@ -39,7 +45,7 @@ interface GardenSpec {
   polarity: Polarity;
   edgeKind: EdgeKind;
   directed: boolean;
-  beds: string[];
+  beds: BedSpec[];
   plants: string[];
   blights: string[];
 }
@@ -57,7 +63,11 @@ const GARDENS: GardenSpec[] = [
     polarity: 'nurture',
     edgeKind: 'depends',
     directed: true,
-    beds: ['checkout', 'identity', 'ingest'],
+    beds: [
+      { label: 'checkout', planting: 'orchard' },
+      { label: 'identity', planting: 'conifer-stand' },
+      { label: 'ingest', planting: 'hedge' },
+    ],
     plants: ['api', 'worker', 'cache', 'gateway', 'scheduler', 'db-proxy'],
     blights: [
       'p99 latency above 800ms for 12 minutes',
@@ -72,7 +82,11 @@ const GARDENS: GardenSpec[] = [
     polarity: 'nurture',
     edgeKind: 'links',
     directed: true,
-    beds: ['research', 'projects', 'reading'],
+    beds: [
+      { label: 'research', planting: 'grove' },
+      { label: 'projects', planting: 'orchard' },
+      { label: 'reading', planting: 'hedge' },
+    ],
     plants: ['spatial-ui', 'l-systems', 'shaders', 'hand-tracking', 'archive'],
     blights: [
       '7 outbound links resolve to nothing',
@@ -87,7 +101,11 @@ const GARDENS: GardenSpec[] = [
     polarity: 'suppress',
     edgeKind: 'correlates',
     directed: false,
-    beds: ['perimeter', 'endpoints', 'identity-logs'],
+    beds: [
+      { label: 'perimeter', planting: 'thicket' },
+      { label: 'endpoints', planting: 'thicket' },
+      { label: 'identity-logs', planting: 'thicket' },
+    ],
     plants: ['auth-failures', 'egress', 'priv-escalation', 'scanners'],
     blights: [
       '340 failed logins from one ASN',
@@ -102,7 +120,11 @@ const GARDENS: GardenSpec[] = [
     polarity: 'nurture',
     edgeKind: 'correlates',
     directed: false,
-    beds: ['semis', 'energy', 'financials'],
+    beds: [
+      { label: 'semis', planting: 'orchard' },
+      { label: 'energy', planting: 'conifer-stand' },
+      { label: 'financials', planting: 'grove' },
+    ],
     plants: ['core', 'satellite', 'hedge', 'income'],
     blights: [
       'down 6.2% on the day',
@@ -148,7 +170,8 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
     const plantIds: string[] = [];
 
     for (let b = 0; b < Math.min(bedsPerGarden, garden.beds.length); b++) {
-      const bedLabel = garden.beds[b];
+      const bed = garden.beds[b];
+      const bedLabel = bed.label;
       const bedId = `${garden.id}/${bedLabel}`;
 
       nodes[bedId] = {
@@ -159,6 +182,7 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
         domain: garden.domain,
         kind: 'bed',
         polarity: garden.polarity,
+        plantingType: bed.planting,
         vitality: 1,
         activity: 0.3,
         maturity: 1,
