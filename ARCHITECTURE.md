@@ -4,13 +4,29 @@
 
 ```
 src/
-  adapters/          Planned, not yet created. Input sources, one folder per
-                     source, each returning raw domain records. Nothing here
-                     will know what a plant is.
-  translation/       Planned, not yet created. Raw records to EcosystemNode and
-                     EcosystemEdge. The only place domain knowledge and plant
-                     archetypes will meet, and where trend and polarity are
-                     decided.
+  adapters/          Input sources, one folder per source, each returning raw
+                     domain records. Nothing here knows what a plant is.
+    nfl/
+      types.ts       The feed contract: franchises, games holding two box
+                     scores each, depth-chart slots with age and service,
+                     injuries with an onset. Plus `NflSource`, the one method
+                     a live feed implements.
+      teams.ts       The thirty-two franchises, their alignment, founding
+                     years, and colours. Real, unlike the season.
+      roster.ts      The fifty-three slot depth chart and what each slot is
+                     worth, which is what makes an injury report weigh
+                     something instead of counting bodies.
+      season.ts      The synthetic source: a seeded season in feed shape.
+      season.test.ts
+      derive.ts      Standings, stat sheets, and roster availability, all as
+                     of an arbitrary timestamp. Converts NFL into NFL.
+      derive.test.ts
+  translation/       Raw records to EcosystemNode and EcosystemEdge. The only
+                     place domain knowledge and plant archetypes meet, and
+                     where trend and polarity are decided.
+    nfl.ts           The league as a garden: the four axes, injuries as
+                     blights, division rivalries as grafts, history backfill.
+    nfl.test.ts
   ecosystem/
     types.ts         Node, edge, and state contracts. Read by every layer.
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
@@ -74,12 +90,14 @@ src/
   mock/
     mockEcosystemData.ts  Four gardens, edges, and a drift tick. One plant per
                      garden has a dead adapter, so the staleness state is
-                     reachable without hand-editing data.
+                     reachable without hand-editing data. The tick moves only
+                     the gardens this module generated, so it can never drift
+                     a translated one.
 docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-191 tests across thirteen files, `tsc --noEmit` clean, `vite build` succeeds.
+279 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -116,6 +134,42 @@ Adding a source means writing a translator, not widening the node type.
 Edges live in their own collection, never on the node. A vitality tick then
 cannot invalidate edge geometry, and a topology change cannot rebuild plants.
 Both endpoints must sit in the same garden.
+
+The gardens are assembled in one place — `composeEcosystem` in the store — which
+is the only code that knows more than one source exists. Adding a source is a
+translator and a line there.
+
+## The first real source: the NFL
+
+The league exercises the layering end to end, and the shape it settled is worth
+stating because the next adapter should copy it.
+
+**The adapter stores events, not summaries.** A game holds both teams' box
+scores; a season stat is a sum over them. An injury holds an onset. Nothing in
+`adapters/nfl/` stores a standings table or a yards-per-game figure, because a
+feed that hands you totals has already thrown away when each number changed.
+
+**Every derivation takes an `asOf`.** `recordOf`, `statsOf`, and
+`availabilityAt` answer for any moment in the season, so the live view and the
+history are the same function called at different times and cannot disagree.
+Backfilling a week of hourly vitals is that function in a loop; because a club's
+numbers only move when a game goes final or an injury is reported, the loop is
+memoized on the count of each and collapses to two or three real computations
+per club. The whole league — thirty-two clubs, 48 edges, 168 hourly samples each
+— translates in about 25ms at module load.
+
+**A container level can be a row rather than a bed.** The model has exactly one
+grouping level between garden and plant, and the NFL has two (conference,
+division). Divisions are the beds; conference is expressed by ordering — bed ids
+are conference-prefixed and `layout.ts` sorts by id, so the AFC fills one row and
+the NFC the other. Nested beds would have bought a label and cost the layout its
+flat structure.
+
+**Staleness is per source, and it can be true rather than staged.** A club plays
+every seven days, so the league's threshold is seven days rather than the fifteen
+minute fallback, and the clubs that cross it are exactly the ones on a bye. The
+garden cannot distinguish a bye from a dead feed, and should not: both mean what
+you are looking at is old.
 
 ## Time and history
 
@@ -224,6 +278,24 @@ hit rate and scrubbing costs less than a frame.
     at any distance, and it carries no colour space — right for grain, wrong for
     any real albedo map, which is the same trap as assumption 9.
 
+14. Beds wrap into rows once there are more than four of them. A garden of eight
+    beds in one line is a thirty-five metre strip that cannot be stood in front
+    of, and the wrap keeps the footprint near square (the league is 20m by 8m).
+    Gardens with four beds or fewer are laid out exactly as before, so this
+    changed nothing about the mock gardens. The row a bed lands in is a function
+    of its sorted id, which is what lets a grouping above the bed be expressed
+    without adding a container level.
+
+15. The synthetic NFL season is anchored to load time, not to the calendar. Its
+    most recent kickoff is always 26 hours ago, which puts it inside the 47 hour
+    scrub window with room either side — otherwise the scrub would run out of
+    window before it reached a game and time travel in that garden would be a
+    flat line. The cost is that the season and week numbers will not agree with
+    the real calendar, which the snapshot's provenance says out loud. A live
+    adapter has real kickoff times and this problem inverts: most of the week
+    there is no game inside the window at all, which is an argument for seasons
+    as a second, coarser scrub rather than for faking the clock.
+
 ## Collection
 
 History is recorded, not just backfilled. That has a consequence worth stating
@@ -236,6 +308,13 @@ Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports
 results all answer range queries. Notes and task systems mostly cannot, and
 those are the ones that depend on the collector.
+
+The NFL adapter is the worked example and it goes further than backfill: because
+every derivation takes an `asOf`, the whole season is addressable, not just the
+window someone thought to record. A source built this way needs the collector
+only for the things it genuinely cannot reconstruct — which for a league is the
+injury report, since a feed publishes who is hurt now and not who was hurt in
+week four.
 
 The collector is also the right home for the pruning webhook. The confirmation
 affordance belongs in the headset, but the allowlist of what is prunable, the

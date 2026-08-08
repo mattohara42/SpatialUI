@@ -155,6 +155,21 @@ function isSilent(node: EcosystemNode): boolean {
   return (node.raw as { silent?: boolean } | undefined)?.silent === true;
 }
 
+/**
+ * Whether this module owns the node.
+ *
+ * The store composes the mock gardens with translated ones — the NFL league sits
+ * alongside them — and a drift tick that wandered into real data would invent
+ * results nobody played. Ownership is by garden rather than by a marker on the
+ * node, because beds and gardens carry no `raw` of their own and they roll up
+ * too.
+ */
+const MOCK_GARDEN_IDS = new Set(GARDENS.map((g) => g.id));
+
+function isMock(node: EcosystemNode): boolean {
+  return MOCK_GARDEN_IDS.has(node.gardenId);
+}
+
 export function generateMockEcosystem(options: MockOptions = {}): EcosystemState {
   const {
     seed = 1337,
@@ -240,7 +255,7 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
           trend: (rng() * 2 - 1) * 0.4,
           blights: sick ? [makeBlight(garden, vitality, rng, now)] : [],
           updatedAt: reportedAt,
-          raw: { note: 'mock node, no upstream source', silent },
+          raw: { note: 'mock node, no upstream source', mock: true, silent },
         };
         // History stops when the adapter did, so scrubbing back through a silent
         // plant shows the gap rather than a series that quietly kept going.
@@ -299,8 +314,9 @@ export function tickMockEcosystem(
   for (const [id, node] of Object.entries(state.nodes)) {
     // A silent node stays silent: its adapter is dead, so it neither drifts nor
     // refreshes its timestamp, and it goes on ageing while everything around it
-    // reports. That is the whole point of it.
-    if (node.kind !== 'plant' || isSilent(node)) {
+    // reports. That is the whole point of it. Nodes this module did not generate
+    // are left strictly alone.
+    if (node.kind !== 'plant' || !isMock(node) || isSilent(node)) {
       nodes[id] = node;
       continue;
     }
@@ -315,12 +331,14 @@ export function tickMockEcosystem(
   }
 
   for (const node of Object.values(nodes)) {
+    if (!isMock(node)) continue;
     if (node.kind === 'bed' || node.kind === 'garden') rollUp(nodes, node.id);
   }
 
   // Buffers are mutated in place. They are typed arrays outside React's concern,
   // and copying 168 slots per node per tick would be pure waste.
   for (const node of Object.values(nodes)) {
+    if (!isMock(node)) continue;
     const buffer = state.history[node.id];
     if (buffer) record(buffer, now, node);
   }

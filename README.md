@@ -1,8 +1,9 @@
 # Spatial Ecosystem
 
-System health as a living garden. Services, notes, tickers, threats — anything
-with a pulse — rendered as plants that thrive, wilt, and sway so you can read the
-state of a system at a glance instead of scanning a dashboard.
+System health as a living garden. Services, notes, tickers, threats, a football
+league — anything with a pulse — rendered as plants that thrive, wilt, and sway
+so you can read the state of a system at a glance instead of scanning a
+dashboard.
 
 A healthy thing stands tall and leafy; a struggling one wilts toward the ground;
 something you want gone grows as a weed, so a thriving one is alarming on sight.
@@ -24,9 +25,10 @@ npm run typecheck    # tsc --noEmit
 npm run build        # typecheck + production build
 ```
 
-The scene boots on mock data (`src/mock/`) — four gardens (Infrastructure,
-Vault, Threats, Portfolio), a live drift tick, and backfilled history — so it
-runs with no backend.
+The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
+built through the real adapter → translation pipeline — alongside four mock
+gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It
+runs with no backend: the league's season is generated (see below), not fetched.
 
 > **Dev note:** Vite HMR on this project often serves stale code (component
 > state, memoized shader uniforms). If an edit doesn't show, hard-reload the
@@ -54,11 +56,18 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 
 ```
 src/
+  adapters/    Input sources. `nfl/` is the first: feed-shaped records (games
+               with box scores, depth charts, injury reports) plus the
+               derivations that turn them into standings and stats as of any
+               moment. Knows nothing about plants.
+  translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
+               the garden, and the only place the mapping is decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
-  state/       Zustand store (holds state, nothing derived)
+  state/       Zustand store (holds state, nothing derived) and the composition
+               point where the gardens are assembled
   scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
                Sky, SunScrub, Horizon, plus the pure sway and daylight modules
   mock/        Mock ecosystem + drift tick
@@ -72,6 +81,25 @@ not a rebuild.
 
 ## What's built
 
+- **The NFL as the first real data source.** The league is the garden, the eight
+  divisions are the beds, and the thirty-two clubs are the plants. Vitality is
+  the record, the point differential, and how much of the roster is available;
+  activity is scoring pace and snaps; maturity is starter experience, roster age,
+  and how long the franchise has existed; trend is recent form against season
+  form. Injuries are blights, division rivals are root grafts, and a club on a
+  bye genuinely stops reporting — so it stands there grey, still, and dusty,
+  which is the staleness state reached honestly rather than by hand.
+
+  The adapter's records are feed-shaped — a schedule of games each holding two
+  box scores, a fifty-three slot depth chart with ages and years of service, an
+  injury report with onsets — and every standing, stat, and availability number
+  is *derived from them as of a timestamp*. That is what makes the whole season
+  scrubbable: drag the sun back past Sunday and the results unwind, an injury
+  from the fourth quarter is gone, and the division reads as the table did on
+  Saturday. Alignment, franchises, and founding years are real; results, rosters,
+  and injuries are seeded fiction standing in for a live feed, and the snapshot
+  says so in its own provenance field. Roster entries are depth-chart slots
+  (`QB1`, `LT`), never named players.
 - Procedural plants driven by health; garden switching; time scrub (history).
 - **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
   hedge, conifer stand, flower border, wildflower meadow, vegetable patch,
@@ -145,5 +173,9 @@ standing in for.
 ## What's next
 
 The design docs track the open work. Near-term candidates: longer spans as
-seasons (the day is done, the year is not), a signal-gust transient, and real
-adapters behind the translation layer.
+seasons — which the league now makes urgent, since a season is eighteen weeks
+and the sun's scrub window is two days; a live NFL adapter behind the same
+`NflSource` interface (this environment has no outbound network access to a
+sports API, which is why the season is generated); and an inspection HUD, since
+the league's `raw` payload already carries a full stat sheet nothing yet
+renders.

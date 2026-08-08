@@ -64,9 +64,12 @@ export default function App() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#14110e' }}>
+      {/* Far enough back to hold the widest garden. The league is eight beds in
+          two rows, about twenty metres across, and a camera framed for a three
+          bed garden cuts a conference off at both ends. Scroll to close in. */}
       <Canvas
         shadows
-        camera={{ position: [0, 3.2, 9], fov: 50 }}
+        camera={{ position: [0, 5.5, 15], fov: 50 }}
         gl={{ toneMappingExposure: 1.1 }}
       >
         <Garden />

@@ -116,6 +116,58 @@ fruit, shagginess — so a struggling service never looks like a dead adapter. T
 guardrail, the one the whole idea rests on, now holds across the full vocabulary:
 every declared planting is live.
 
+## The league: what a real source actually asks of the mapping
+
+The NFL is the first garden made of something that happened, and putting it in
+settled four things the mock data could never have raised.
+
+**The axes have to divide the domain, not restate it.** Vitality is the record,
+the point differential, and how much of the roster is available. Maturity is
+starter experience, roster age, and how long the franchise has existed. The rule
+that makes the garden readable is that these never cross: **injuries lower
+vitality and never touch maturity; age and experience raise maturity and never
+touch vitality.** An old roster is a big tree, not a healthy one. A hurt roster
+is a wilting tree, not a small one. Cross them and every ageing club looks sick
+and every young one looks like a seedling in trouble — the axes stop being four
+readings and become one blurred one. Trend is the same argument in time: a 4-9
+club that has won three straight is trending up while its vitality is still low,
+and if trend were just the derivative of vitality it would carry nothing the
+level did not already say.
+
+**Average is not half dead.** Half of any league is below .500 by construction.
+Mapping the composite straight onto vitality put half the garden into wilt every
+week — and wilt means *this is in trouble*, not *this is mid-table*. It is the
+same failure the infrastructure garden taught us, where deciduous trees at
+middling health read as bare twigs, which is the bleakest state the renderer
+owns. So the composite is calibrated once, in one line, with a monotonic curve:
+0 on the axis is a winless club with a wrecked roster, a place nobody actually
+stands, so average has to sit above the midpoint. The ordering is untouched —
+the table still reads top to bottom — but the garden stands up.
+
+This generalizes, and it belongs in the adapter contract the normalization
+section below asks for: **an axis endpoint is defined by the worst case that can
+really occur, not by the arithmetic floor.** Every translator will meet it.
+
+**A planting is signal-free per node but not per bed.** Plantings differ in how
+harshly they show ill health: a struggling tree sheds to bare twigs, a struggling
+topiary goes shaggy, a struggling vegetable simply bears less. The league has
+eight beds in two rows, one row per conference, and the first assignment gave the
+AFC all four tree plantings — which made a whole conference look worse than the
+other for no reason whatsoever. That is precisely the thing plantings promise not
+to be. Each conference now gets two of the tree forms and two of the soft ones.
+The rule the vocabulary needs: **a planting carries no signal about the plant, but
+an uneven distribution of plantings carries a signal about the group**, and beds
+are grouped now.
+
+**Silence can be a fact instead of a fixture.** The mock gardens each keep one
+plant with a dead adapter, because a failure state nothing in the demo can reach
+is one nobody will look at. The league does not need the fixture: a club on a bye
+genuinely has no new data, so with a seven day threshold the two clubs idle each
+week stand there grey, still, and dusty on their own. The garden cannot tell a
+bye from a dead feed, and should not — both mean what you are looking at is old.
+That is the strongest form the staleness argument has taken so far, because the
+data volunteered it.
+
 ## What is decoration, and why decoration is allowed
 
 Three recent additions carry no signal at all, and that is the point of them.
@@ -201,6 +253,18 @@ judged on a monitor.
 What remains is seasons, and whether a cursor that lands in the dark should say
 so more loudly than by being dark.
 
+The league has made seasons the next thing rather than a someday thing. A
+football season is eighteen weeks and the sun's window is two days, so dragging
+the sun reaches exactly one weekend of it — which is a genuinely good reading,
+since crossing Sunday unwinds the results and the injuries with them, but it is
+one weekend out of eighteen. The synthetic snapshot currently anchors its latest
+kickoff 26 hours back so that weekend is always there to find; a live feed would
+not, and most of the week the window would hold no game at all. The data is
+already addressable at any point in the season (every derivation takes a
+timestamp), so what is missing is only the gesture — and it must not be a faster
+sun, because a sun moving at a rate that is not the sun's gives up the whole
+reason the gesture works.
+
 ## Five things we know are unresolved
 
 **Silence looks like health.** An adapter that dies leaves a green, thriving
@@ -249,9 +313,20 @@ rather than quietly foreclose it.
 in another were computed by different translators against different scales, and
 separate environments keep those apart. Inside a single garden, two adapters can
 still disagree about what 0.6 means, and a bed will look wrong for reasons nobody
-can see. This belongs in the adapter contract, written before the first adapter
-exists: what the endpoints mean, what the midpoint means, and what evidence
-justifies a given mapping.
+can see. This belongs in the adapter contract: what the endpoints mean, what the
+midpoint means, and what evidence justifies a given mapping.
+
+The first adapter now exists and it has written the first two clauses of that
+contract. *What the endpoints mean:* an endpoint is the worst and best case that
+can really occur in the domain, not the arithmetic floor and ceiling of the
+inputs — which is why the league's mid-table sits at 0.65 rather than 0.5.
+*What the axes may not share:* if two axes can be moved by the same underlying
+fact, one of them has to give it up, or four readings collapse into one. Both
+are written out in the league section above, with the reasoning that produced
+them. The clause still missing is the hardest: what evidence justifies a
+weighting. The league's — 0.45 record, 0.30 differential, 0.25 availability — is
+argued rather than measured, and it will stay that way until somebody watches a
+garden and disagrees with it out loud.
 
 **Completion has no vocabulary.** Tasks and goals end, plants do not. Fruit and
 deadwood are the obvious answer. Deferred until the scene exists.

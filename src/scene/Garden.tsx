@@ -33,7 +33,8 @@ import { liftForTexture, surfaceTexture, turfPixels } from './textures';
  */
 const LIGHT_DISTANCE = 30;
 
-/** Half-width of the shadow frustum. The garden footprint is about 15m by 3m. */
+/** Half-width of the shadow frustum. The largest garden — the league, eight beds
+ *  in two rows — is about 20m by 8m, so ±12m covers it centred. */
 const SHADOW_EXTENT = 12;
 
 /** Edge length of the ground sheet, and metres of it per turf tile. Two metres
