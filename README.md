@@ -42,8 +42,9 @@ the **scene** subscribes. Nothing below the scene imports three.js; nothing abov
 translator, not widening the node type.
 
 Health normalizes onto four axes — `vitality`, `activity`, `maturity`, `trend` —
-plus `polarity` (is growth good news?). Plant shape is procedural L-system
-geometry, seeded off the node id so a node always grows the same plant, generated
+plus `polarity` (is growth good news?). Plant shape is mostly procedural L-system
+geometry — a couple of forms, the vine and the topiary, are built by hand — all
+seeded off the node id so a node always grows the same plant, and all generated
 in pure code with no React or three.js so it can move to a worker later.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the layer contracts, the time/history
@@ -56,16 +57,18 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 src/
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types
-  lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
+  lsystem/     Pure procedural geometry: grammar, turtle, presets, bespoke
+               (vine + topiary), generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, nothing derived)
-  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
-               Sky, SunScrub, Horizon, plus the pure sway and daylight modules
+  scene/       R3F components: Garden, Branches, Foliage, Produce, Grafts, Beds,
+               Motes, Sky, SunScrub, Trellis, Horizon, plus the pure sway and
+               daylight modules
   mock/        Mock ecosystem + drift tick
 ```
 
 Rendering aggregates every branch across all plants into one `InstancedMesh`,
-and every leaf into one mesh per leaf shape (at most four), for a handful of
+and every leaf into one mesh per leaf shape (at most five), for a handful of
 draw calls regardless of plant count. Geometry is memoized on quantized vitals,
 so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
 not a rebuild.
@@ -132,5 +135,7 @@ standing in for.
 ## What's next
 
 The design docs track the open work. Near-term candidates: longer spans as
-seasons (the day is done, the year is not), a signal-gust transient, finishing
-the staleness visual state, and real adapters behind the translation layer.
+seasons (the day is done, the year is not), the **dust** cue that finishes the
+staleness state (grey and still are in; the particulate is not), a signal-gust
+transient, deadwood for tasks and goals that end, and real adapters behind the
+translation layer.

@@ -18,7 +18,7 @@ paper:
 | --- | --- | --- |
 | vitality | droop, splay, leaf density, taper | across the room |
 | polarity | archetype: plant or weed | across the room |
-| staleness | desaturation, dust, no leaf motion | across the room |
+| staleness | desaturation, stillness, dust (owed) | across the room |
 | blight severity | pests and discoloration | a few metres |
 | trend | fresh growth or shedding | a few metres |
 | activity | animation rate, ambient audio | ambient, not read directly |
@@ -74,7 +74,8 @@ This also finally gives the deferred *completion* vocabulary a home: vegetables
 and vineyards harvest, and fruit and deadwood are exactly the vocabulary that
 was waiting for the scene to exist.
 
-The work lands in phases. Live now: the plantings that are arrangements of the
+The vocabulary was built in phases, and the walk through them is the clearest way
+to see what each form is for. First, the plantings that are arrangements of the
 existing L-system forms — orchard, grove, hedge, conifer stand, and the weed
 thicket — each laid out in its own way (rows, a single low line, a jittered
 clump).
@@ -118,7 +119,10 @@ every declared planting is live.
 
 ## What is decoration, and why decoration is allowed
 
-Two recent additions carry no signal at all, and that is the point of them.
+Much of what makes the scene feel like a garden carries no signal at all, and
+that is the point of it. Individual variety, the horizon, petal and produce
+colour — all deliberately mean nothing, which is exactly what lets them be as
+rich as they like without spending a channel.
 
 Individual variety within a bed — whether a plant grows as a broadleaf or a
 bushy crown in an orchard — is chosen by a hash of the node id, not by any
@@ -184,7 +188,11 @@ judged on a monitor.
 What remains is seasons, and whether a cursor that lands in the dark should say
 so more loudly than by being dark.
 
-## Five things we know are unresolved
+## Five concerns, and where they now stand
+
+Two of these have since been built and two have not; the fifth is half-answered.
+They are kept together because they were named together, and because the built
+ones still record why they were built the way they were.
 
 **Silence looks like health.** An adapter that dies leaves a green, thriving
 plant standing there, and a garden is reassuring enough that people will believe
@@ -221,8 +229,12 @@ can see. This belongs in the adapter contract, written before the first adapter
 exists: what the endpoints mean, what the midpoint means, and what evidence
 justifies a given mapping.
 
-**Completion has no vocabulary.** Tasks and goals end, plants do not. Fruit and
-deadwood are the obvious answer. Deferred until the scene exists.
+**Completion is half-answered.** Tasks and goals end, plants do not; fruit and
+deadwood were the obvious answer, and the scene now exists. Fruit is built — the
+produce that hangs on vegetables and vineyards, ready for any fruiting form to
+reuse. Deadwood is not: a task that has *ended* rather than merely ripened still
+has no form, and it is the piece that most wants designing next, because it is
+the difference between "done" and "gone".
 
 ## Recorded assumption for the first scene
 

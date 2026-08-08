@@ -16,6 +16,10 @@ src/
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
                      edge validation, topology keys.
     graph.test.ts
+    history.ts       Per-node ring buffer of vitals and the vitalsAt accessor
+                     the scene reads time through.
+    layout.ts        Where plants and beds stand, arranged per planting type.
+    staleness.ts     Lateness from updatedAt, and the changedSince summary.
     scrub.ts         What counts as a legal cursor: the window, the clamp, and
                      when a scrub lands back on live. Knows nothing about the
                      sky, so the store can use it without importing a renderer.
@@ -47,18 +51,25 @@ src/
   state/             Zustand store. Holds EcosystemState, nothing derived.
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
-    daylight.ts      Timestamp to sun direction and full palette, and the
-                     inverse used by the drag. Pure, no three.js.
-    daylight.test.ts
-    SunScrub.tsx     The gesture: grabbing the sun or the moon to move time.
+    Garden.tsx       Assembles the scene: reads the store, places plants, drives
+                     lights and fog from the daylight for the cursor's hour.
+    Branches.tsx     Every branch in the garden in one InstancedMesh.
     Foliage.tsx      One InstancedMesh per leaf shape; groups plants by kind.
     Produce.tsx      Fruit on plants that bear it, drawn on a subset of their
                      leaf points. One instanced mesh; empty when no vegetables.
+    Grafts.tsx       Root grafts: one merged curved mesh per garden.
+    sway.ts          Per-plant lean, breathing, droop, and the motion factor
+                     that freezes a stale plant.
+    daylight.ts      Timestamp to sun direction and full palette, and the
+                     inverse used by the drag. Pure, no three.js.
+    daylight.test.ts
+    Sky.tsx          Gradient dome, sun glow, and stars, driven by the daylight.
+    SunScrub.tsx     The gesture: grabbing the sun or the moon to move time.
     Trellis.tsx      Static posts and wires for vineyard beds. Signal-free, like
                      the horizon; the vines are trained to it.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
-    planting.ts      The render half of the planting concept: which L-system
-                     forms each PlantingType is drawn with.
+    planting.ts      The render half of the planting concept: which plant forms
+                     each PlantingType is drawn with, and its produce.
   xr/                Planned, not yet created. Session setup, hand rays, and
                      world-anchored HUDs will live here. Named now so nothing
                      gets built in a way that blocks it.
@@ -84,15 +95,15 @@ inside a garden. This is what stops green meaning "low error rate" and "up 3%
 today" in the same field of view, and it bounds scene cost by the largest single
 garden rather than by everything the user tracks.
 
-A bed also carries a **planting type** — orchard, hedge, conifer stand, vineyard
-— set by translation on the bed node (`plantingType`). It is a container
-property, not a health signal: it decides the *form* a plant wears and how the
-bed is arranged, the way polarity decides plant versus weed, and it never moves
-with a metric. The concept splits across two layers to keep them clean:
-`ecosystem/planting.ts` owns the semantic vocabulary and each type's spatial
-arrangement (pure, read by `layout.ts`), and `scene/planting.ts` owns which
-L-system forms draw it (a render decision). `DESIGN.md` carries the reasoning
-and the roadmap for the plantings that still need their own geometry.
+A bed also carries a **planting type** — orchard, hedge, conifer stand, flower
+border, vegetable patch, vineyard, topiary — set by translation on the bed node
+(`plantingType`). It is a container property, not a health signal: it decides the
+*form* a plant wears and how the bed is arranged, the way polarity decides plant
+versus weed, and it never moves with a metric. The concept splits across two
+layers to keep them clean: `ecosystem/planting.ts` owns the semantic vocabulary
+and each type's spatial arrangement (pure, read by `layout.ts`), and
+`scene/planting.ts` owns which plant forms draw it and its produce (a render
+decision). Every declared planting is live; `DESIGN.md` carries the reasoning.
 
 Health normalizes onto four axes. `vitality` is the level, `activity` is how
 busy, `maturity` is how established, and `trend` is the signed delta, because a
@@ -197,6 +208,12 @@ hit rate and scrubbing costs less than a frame.
     height normalization. Build a bespoke form in a unit height comparable to the
     tree presets and let a low planting height scale make it short in the world,
     rather than authoring tiny unit coordinates.
+13. Motion is a channel, not just decoration. `swayMatrix` takes a motion factor
+    the scene sets to zero past the staleness threshold, so a stale plant freezes
+    while its live neighbours sway. Branches, foliage, and produce all read the
+    same per-plant factor, so a frozen plant freezes whole rather than a twig at a
+    time. This is why a dead adapter — grey but formerly still swaying — no longer
+    passes for a thriving plant.
 
 ## Collection
 
@@ -231,8 +248,10 @@ Geospatial domains, meaning disasters and geopolitics, do not fit a bed layout,
 because a garden discards the map. That wants a terrain environment mode, not a
 change to the node type.
 
-Completion has no vocabulary yet. Tasks and goals end, plants do not. Fruit and
-deadwood are the obvious answer, worth deciding once the scene exists.
+Completion is half-answered. Fruit exists now — the `Produce` layer hangs it on
+vegetables and vineyards, and any fruiting form can reuse the `bearsProduce`
+seam. Deadwood, the other half — for a task or goal that has *ended* rather than
+merely ripened — still has no vocabulary.
 
 The geometry cache still needs an explicit bound. 51MB is affordable and
 unbounded growth is not, so it wants an LRU keyed by node id and vitality bucket
