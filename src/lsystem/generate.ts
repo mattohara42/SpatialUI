@@ -1,5 +1,5 @@
 import { expand } from './grammar';
-import { PRESETS, type PresetName } from './presets';
+import { PRESETS, foliageFor, type PresetName } from './presets';
 import { rngFromSeed } from './random';
 import { interpret } from './turtle';
 import type { Bounds, Grammar, PlantGeometry, TurtleParams, Vec3 } from './types';
@@ -58,7 +58,12 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
   const maturity = clamp01(input.maturity ?? 1);
   const rng = rngFromSeed(input.seed);
 
+  // Preset picks the grammar and, when there is one, the foliage style. A raw
+  // grammar with no preset falls back to a single leaf per J. Because both
+  // cluster and scale derive purely from the preset, the geometry cache keyed on
+  // preset (see generatePlantMemo) stays correct with nothing new to add.
   const base = input.grammar ?? PRESETS[input.preset ?? 'broadleaf'];
+  const foliage = input.grammar ? foliageFor(undefined) : foliageFor(input.preset ?? 'broadleaf');
   const grammar: Grammar = {
     ...base,
     iterations: Math.max(
@@ -77,8 +82,10 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
     lengthFalloff: LENGTH_FALLOFF,
     jitter: lerpPair(VITALITY_RESPONSE.jitter, vitality),
     gravity: lerpPair(VITALITY_RESPONSE.gravity, vitality),
-    leafScale: lerpPair(VITALITY_RESPONSE.leafScale, vitality),
+    leafScale: lerpPair(VITALITY_RESPONSE.leafScale, vitality) * foliage.scale,
     leafSurvival: vitality,
+    leafCluster: foliage.cluster,
+    leafSpread: foliage.spread,
   };
 
   const { symbols, truncated } = expand(grammar, rng);

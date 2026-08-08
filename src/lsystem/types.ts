@@ -64,6 +64,14 @@ export interface TurtleParams {
    * a filter afterwards, so no leaf is ever allocated only to be discarded.
    */
   leafSurvival: number;
+  /**
+   * Leaves emitted per J marker. A cluster fans several leaves around one twig
+   * so foliage reads as a mass rather than a scatter of single blades, without
+   * adding branch symbols. 1 is the old one-leaf-per-J behaviour.
+   */
+  leafCluster: number;
+  /** How far cluster leaves spread from their J point, in unit space. */
+  leafSpread: number;
 }
 
 export interface Bounds {

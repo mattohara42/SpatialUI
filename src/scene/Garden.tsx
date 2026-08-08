@@ -6,6 +6,7 @@ import { Foliage } from './Foliage';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
 import { Sky } from './Sky';
+import { Horizon } from './Horizon';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -16,7 +17,7 @@ import { vitalsAt } from '../ecosystem/history';
 import { staleness, staleThresholdFor } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
-import type { PresetName } from '../lsystem/presets';
+import { TREE_PRESETS, leafKindFor, type PresetName } from '../lsystem/presets';
 import type { Vec3 } from '../lsystem/types';
 
 /**
@@ -37,14 +38,6 @@ const SHADOW_EXTENT = 12;
  */
 const SKY_STEP_MS = 30_000;
 
-/**
- * Archetype means kind of thing, never health. Shape is learnable and constant;
- * letting it move with health would put it in competition with the channels that
- * already carry health.
- *
- * Weeds are shrubs because a dense low mound reads as infestation rather than as
- * a specimen.
- */
 /** A unit direction pushed out to where a light or a body should stand. */
 function scaled(direction: Vec3, distance: number): Vec3 {
   return [
@@ -54,9 +47,33 @@ function scaled(direction: Vec3, distance: number): Vec3 {
   ];
 }
 
+/**
+ * Archetype means kind of thing, never health. Shape is learnable and constant;
+ * letting it move with health would put it in competition with the channels that
+ * already carry health.
+ *
+ * The load-bearing read is polarity: weeds are shrubs, because a dense low mound
+ * reads as infestation rather than as a specimen, and a thriving one is alarming
+ * on sight. Everything else is a tree, and which tree is picked by a hash of the
+ * node id, so a bed shows varied individuals the way a real planting does —
+ * without the choice ever encoding health or drifting from one tick to the next.
+ * The db conifer stays a deliberate exception, chosen by meaning rather than by
+ * the hash, so it keeps reading as the odd one out.
+ */
 function archetypeFor(node: EcosystemNode): PresetName {
   if (node.polarity === 'suppress') return 'shrub';
-  return node.domain === 'devops' && node.label.includes('db') ? 'spire' : 'broadleaf';
+  if (node.domain === 'devops' && node.label.includes('db')) return 'spire';
+  return TREE_PRESETS[hashString(node.id) % TREE_PRESETS.length];
+}
+
+/** Stable non-negative hash of a string, for deterministic archetype choice. */
+function hashString(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 /**
@@ -115,12 +132,13 @@ export function Garden() {
 
       // Memoized on the quantized vitals, so a tick that does not step a plant
       // across a vitality bucket reuses geometry instead of rebuilding it.
+      const preset = archetypeFor(node);
       const geometry = generatePlantMemo({
         seed: node.id,
         vitality: vitals.vitality,
         maturity: vitals.maturity,
         growthScale: placement.growthScale,
-        preset: archetypeFor(node),
+        preset,
       });
 
       return [
@@ -130,6 +148,7 @@ export function Garden() {
           geometry,
           tint: tintFor(signalHealth({ ...node, ...vitals }), stale),
           vitality: vitals.vitality,
+          leafKind: leafKindFor(preset),
         },
       ];
     });
@@ -213,10 +232,15 @@ export function Garden() {
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
         {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
       </group>
+      {/* Ground runs out to meet the sky, so there is no plate edge floating in
+          fog. Only the garden-sized centre receives shadows (the shadow camera
+          covers a few metres), but the whole sheet is lit and fogged, which is
+          what carries it to the horizon. The hills and tree line stand on it. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[60, 60]} />
+        <planeGeometry args={[1000, 1000]} />
         <meshStandardMaterial color="#5c6e3a" roughness={1} />
       </mesh>
+      <Horizon />
       {/* makeDefault so the sun drag can find these and suspend them; without
           it, grabbing the sun would orbit the camera at the same time. */}
       <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.05} />

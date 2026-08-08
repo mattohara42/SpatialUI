@@ -35,11 +35,12 @@ export function interpret(
   params: TurtleParams,
   rng: Rng,
 ): RawGeometry {
+  const cluster = Math.max(1, Math.round(params.leafCluster));
   let segmentCapacity = 0;
   let leafCapacity = 0;
   for (const ch of symbols) {
     if (ch === 'F') segmentCapacity++;
-    else if (ch === 'J') leafCapacity++;
+    else if (ch === 'J') leafCapacity += cluster;
   }
 
   const segmentStart = new Float32Array(segmentCapacity * 3);
@@ -148,19 +149,37 @@ export function interpret(
       }
 
       case 'J': {
-        // Foliage thins with vitality. Decided here so a discarded leaf is
-        // never written in the first place.
-        if (rng() >= params.leafSurvival) break;
-        const i3 = leafCount * 3;
-        leafPosition[i3] = state.pos[0];
-        leafPosition[i3 + 1] = state.pos[1];
-        leafPosition[i3 + 2] = state.pos[2];
-        leafDirection[i3] = state.h[0];
-        leafDirection[i3 + 1] = state.h[1];
-        leafDirection[i3 + 2] = state.h[2];
-        leafScale[leafCount] = params.leafScale * (1 + signed(rng) * 0.25);
-        leafDepth[leafCount] = Math.min(state.depth, MAX_DEPTH);
-        leafCount++;
+        // A cluster of leaves fanned around one twig. Offsets ride on the two
+        // frame axes across the heading (l and u), so the fan opens around the
+        // branch rather than along it, and each leaf tilts off the heading so a
+        // cluster catches light from several angles instead of reading as one
+        // flat card. Foliage still thins with vitality per leaf, decided here so
+        // a discarded leaf is never written in the first place.
+        for (let c = 0; c < cluster; c++) {
+          if (rng() >= params.leafSurvival) continue;
+
+          const a = signed(rng) * params.leafSpread;
+          const b = signed(rng) * params.leafSpread;
+          const i3 = leafCount * 3;
+          leafPosition[i3] = state.pos[0] + state.l[0] * a + state.u[0] * b;
+          leafPosition[i3 + 1] = state.pos[1] + state.l[1] * a + state.u[1] * b;
+          leafPosition[i3 + 2] = state.pos[2] + state.l[2] * a + state.u[2] * b;
+
+          const tiltL = signed(rng) * 0.6;
+          const tiltU = signed(rng) * 0.6;
+          const dir = normalize([
+            state.h[0] + state.l[0] * tiltL + state.u[0] * tiltU,
+            state.h[1] + state.l[1] * tiltL + state.u[1] * tiltU,
+            state.h[2] + state.l[2] * tiltL + state.u[2] * tiltU,
+          ]);
+          leafDirection[i3] = dir[0];
+          leafDirection[i3 + 1] = dir[1];
+          leafDirection[i3 + 2] = dir[2];
+
+          leafScale[leafCount] = params.leafScale * (1 + signed(rng) * 0.25);
+          leafDepth[leafCount] = Math.min(state.depth, MAX_DEPTH);
+          leafCount++;
+        }
         break;
       }
 

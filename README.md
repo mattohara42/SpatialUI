@@ -60,18 +60,29 @@ src/
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, nothing derived)
   scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
-               Sky, SunScrub, plus the pure sway and daylight modules
+               Sky, SunScrub, Horizon, plus the pure sway and daylight modules
   mock/        Mock ecosystem + drift tick
 ```
 
-Rendering aggregates every branch and leaf across all plants into one
-`InstancedMesh` each, for one draw call regardless of plant count. Geometry is
-memoized on quantized vitals, so a telemetry tick that doesn't move a plant
-across a bucket is a cache hit, not a rebuild.
+Rendering aggregates every branch across all plants into one `InstancedMesh`,
+and every leaf into one mesh per leaf shape (at most four), for a handful of
+draw calls regardless of plant count. Geometry is memoized on quantized vitals,
+so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
+not a rebuild.
 
 ## What's built
 
 - Procedural plants driven by health; garden switching; time scrub (history).
+- **Five plant archetypes** — broadleaf, bushy, willow, conifer spire, and the
+  weed shrub — each with its own branching grammar and leaf shape (broad, blade,
+  needle, round). Ordinary plants pick a tree archetype by a hash of the node id,
+  so a bed shows varied individuals; weeds and the db conifer are chosen by
+  meaning, keeping the polarity read intact. Leaves grow in fanned clusters, so a
+  healthy plant reads as a full canopy and a sick one sheds to bare twigs.
+- **A landscape behind the garden** — layered hills, distant mountains, and a
+  conifer tree line receding into fog. Static and signal-free by design; it is
+  lit and fogged by the same rig as the garden, so it tracks the day/night scrub
+  for free and never competes with the plants for attention.
 - Ambient motion: per-plant sway + breathing, drifting motes. Any value that
   updates on a telemetry tick (activity, vitality) is smoothed so it eases in
   rather than snapping — see the comments in `src/scene/sway.ts`.
