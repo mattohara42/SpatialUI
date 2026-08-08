@@ -19,9 +19,22 @@ import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from '
 
 /** One fruit for every Nth leaf. Sparser than foliage, so produce reads as a
  *  scatter of heavier objects rather than a second canopy. */
-const EVERY = 5;
-/** Fruit size relative to the leaf it sits on. */
-const FRUIT_SCALE = 2.2;
+/**
+ * How produce is drawn, per bearer. A vegetable carries a few large fruit; a
+ * vine hangs many small berries, so a grape reads as a bunch rather than a
+ * single big sphere. `every` is the leaf stride between fruit and `scale` is
+ * their size relative to the leaf they sit on.
+ */
+interface ProduceStyle {
+  every: number;
+  scale: number;
+}
+const VEGETABLE_STYLE: ProduceStyle = { every: 5, scale: 2.2 };
+const GRAPE_STYLE: ProduceStyle = { every: 2, scale: 1.05 };
+
+function styleFor(plant: PlacedPlant): ProduceStyle {
+  return plant.grape ? GRAPE_STYLE : VEGETABLE_STYLE;
+}
 
 function bearers(plants: PlacedPlant[]): PlacedPlant[] {
   return plants.filter((p) => p.produceTint !== undefined);
@@ -29,8 +42,8 @@ function bearers(plants: PlacedPlant[]): PlacedPlant[] {
 
 /** How many fruit a plant contributes: one per Nth leaf, matching the stride the
  *  render loop walks so the instance buffer is sized exactly. */
-function fruitCount(leafCount: number): number {
-  return Math.ceil(leafCount / EVERY);
+function fruitCount(plant: PlacedPlant): number {
+  return Math.ceil(plant.geometry.leafCount / styleFor(plant).every);
 }
 
 export function Produce({ plants }: { plants: PlacedPlant[] }) {
@@ -39,7 +52,7 @@ export function Produce({ plants }: { plants: PlacedPlant[] }) {
   const fruiting = useMemo(() => bearers(plants), [plants]);
 
   const count = useMemo(
-    () => fruiting.reduce((sum, p) => sum + fruitCount(p.geometry.leafCount), 0),
+    () => fruiting.reduce((sum, p) => sum + fruitCount(p), 0),
     [fruiting],
   );
 
@@ -53,7 +66,7 @@ export function Produce({ plants }: { plants: PlacedPlant[] }) {
     let i = 0;
     for (const plant of fruiting) {
       colour.set(plant.produceTint!);
-      const n = fruitCount(plant.geometry.leafCount);
+      const n = fruitCount(plant);
       for (let f = 0; f < n; f++) instanced.setColorAt(i++, colour);
     }
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
@@ -73,10 +86,12 @@ export function Produce({ plants }: { plants: PlacedPlant[] }) {
     let i = 0;
     for (const plant of fruiting) {
       const { geometry: geo, position, node } = plant;
-      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t);
+      const motion = plant.stale > 1 ? 0 : 1;
+      swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t, motion);
       const vit = smoothVitality(node.id, plant.vitality, t);
+      const style = styleFor(plant);
 
-      for (let l = 0; l < geo.leafCount; l += EVERY) {
+      for (let l = 0; l < geo.leafCount; l += style.every) {
         const l3 = l * 3;
         dummy.position
           .set(geo.leafPosition[l3], geo.leafPosition[l3 + 1], geo.leafPosition[l3 + 2])
@@ -87,7 +102,7 @@ export function Produce({ plants }: { plants: PlacedPlant[] }) {
         dummy.position.z += position[2];
         if (dummy.position.y < GROUND_Y) dummy.position.y = GROUND_Y;
 
-        const scale = geo.leafScale[l] * FRUIT_SCALE;
+        const scale = geo.leafScale[l] * style.scale;
         dummy.scale.set(scale, scale, scale);
         dummy.rotation.set(0, 0, 0);
         dummy.updateMatrix();

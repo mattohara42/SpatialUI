@@ -68,7 +68,7 @@ docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-136 tests across eleven files, `tsc --noEmit` clean, `vite build` succeeds.
+138 tests across eleven files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts

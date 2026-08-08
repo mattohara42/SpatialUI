@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { droopSag, smoothActivity, swayMatrix } from './sway';
 
-const read = (id: string, activity: number, t: number) => {
+const read = (id: string, activity: number, t: number, motion = 1) => {
   const m = new THREE.Matrix4();
-  swayMatrix(m, id, activity, t);
+  swayMatrix(m, id, activity, t, motion);
   return m.elements.slice();
 };
 
@@ -25,6 +25,20 @@ describe('swayMatrix', () => {
 
   it('different plants sway out of phase', () => {
     expect(read('svc-a', 0.5, 3.2)).not.toEqual(read('svc-b', 0.5, 3.2));
+  });
+
+  it('freezes at zero motion, so a stale plant stops moving', () => {
+    // Staleness passes motion 0. The matrix must then be the identity and, above
+    // all, must not change with time — a stale plant that still swayed would go
+    // on passing for a live one. (+0 normalizes signed zeros so -0 reads equal.)
+    const norm = (m: number[]) => m.map((v) => v + 0);
+    const identity = norm(new THREE.Matrix4().elements.slice());
+    expect(norm(read('svc-a', 0.9, 2.0, 0))).toEqual(identity);
+    expect(norm(read('svc-a', 0.9, 40.0, 0))).toEqual(identity);
+  });
+
+  it('still moves at full motion where it froze at zero', () => {
+    expect(read('svc-a', 0.5, 3.2, 1)).not.toEqual(read('svc-a', 0.5, 3.2, 0));
   });
 
   it('eases activity toward a telemetry step instead of jumping', () => {

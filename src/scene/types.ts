@@ -23,12 +23,20 @@ export interface PlacedPlant {
    */
   bloomTint: string;
   /**
-   * Set when this plant bears produce (a vegetable, later a vine or fruit tree).
+   * Set when this plant bears produce (a vegetable, a vine, later a fruit tree).
    * The colour is decorative and varietal; produce is drawn on a subset of the
    * plant's leaf points, so its amount follows leaf count and thins with health.
    * Undefined means no produce.
    */
   produceTint?: string;
+  /** Grapes hang as many small berries; a vegetable bears fewer, larger fruit. */
+  grape?: boolean;
+  /**
+   * How late this plant is, as a multiple of its garden's threshold (see
+   * ecosystem/staleness). Above 1 the plant is stale: it greys and, crucially,
+   * stops moving, so silence never passes for health.
+   */
+  stale: number;
   /**
    * Cursor-aware vitality for this frame, driving render-time droop. Kept
    * separate from node.vitality so wilt scrubs with time like the geometry does.
