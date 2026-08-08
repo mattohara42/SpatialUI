@@ -134,6 +134,27 @@ const GARDENS: GardenSpec[] = [
   },
 ];
 
+/**
+ * How long ago the silent plant last reported.
+ *
+ * One plant in each garden has a dead adapter. Without it the mock never
+ * exercises the failure the whole design is built around — silence looking like
+ * health — so the staleness state (grey, still, and dusty) could only be seen by
+ * hand-editing data. Fifty-five minutes is comfortably past the fifteen minute
+ * fallback threshold, far enough that the dust has reached full thickness rather
+ * than sitting on the ramp.
+ */
+const SILENT_FOR_MS = 55 * 60_000;
+
+/**
+ * Whether the mock marked this node as having a dead adapter. `raw` is opaque to
+ * every other layer by contract, and this module wrote it, so it is the one
+ * place allowed to know its shape.
+ */
+function isSilent(node: EcosystemNode): boolean {
+  return (node.raw as { silent?: boolean } | undefined)?.silent === true;
+}
+
 export function generateMockEcosystem(options: MockOptions = {}): EcosystemState {
   const {
     seed = 1337,
@@ -195,6 +216,11 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
         const label = `${garden.plants[p % garden.plants.length]}-${p + 1}`;
         const id = `${bedId}/${label}`;
         const sick = rng() < blightRate;
+        // The last plant of the first bed has stopped reporting. Deterministic
+        // rather than random, so the stale plant is always in the same place and
+        // the state is easy to go and look at.
+        const silent = b === 0 && p === plantsPerBed - 1;
+        const reportedAt = silent ? now - SILENT_FOR_MS : now;
         // A garden should read as mostly thriving with a few plants in trouble,
         // not as a field of the dying. Healthy plants sit high; sick ones sit
         // low but not flat, so they wilt rather than read as dead on arrival.
@@ -213,10 +239,12 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
           maturity: 0.2 + rng() * 0.8,
           trend: (rng() * 2 - 1) * 0.4,
           blights: sick ? [makeBlight(garden, vitality, rng, now)] : [],
-          updatedAt: now,
-          raw: { note: 'mock node, no upstream source' },
+          updatedAt: reportedAt,
+          raw: { note: 'mock node, no upstream source', silent },
         };
-        history[id] = backfillHistory(nodes[id], historyHours, now, rng);
+        // History stops when the adapter did, so scrubbing back through a silent
+        // plant shows the gap rather than a series that quietly kept going.
+        history[id] = backfillHistory(nodes[id], historyHours, reportedAt, rng);
         plantIds.push(id);
       }
 
@@ -269,7 +297,10 @@ export function tickMockEcosystem(
   const nodes: Record<string, EcosystemNode> = {};
 
   for (const [id, node] of Object.entries(state.nodes)) {
-    if (node.kind !== 'plant') {
+    // A silent node stays silent: its adapter is dead, so it neither drifts nor
+    // refreshes its timestamp, and it goes on ageing while everything around it
+    // reports. That is the whole point of it.
+    if (node.kind !== 'plant' || isSilent(node)) {
       nodes[id] = node;
       continue;
     }

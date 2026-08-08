@@ -59,16 +59,27 @@ src/
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
+    textures.ts      Surface grain at two scales: generated achromatic maps
+                     (turf, soil, bark) and the per-instance jitter. Pure but
+                     for the DataTexture builder, so the pixels are testable.
+    textures.test.ts
+    dust.ts          The staleness particulate: its density ramp and settle
+                     step. Pure, no renderer, like sway and daylight.
+    dust.test.ts
+    Dust.tsx         Draws the dust, one Points object for every stale plant in
+                     the garden and nothing at all when none are.
   xr/                Planned, not yet created. Session setup, hand rays, and
                      world-anchored HUDs will live here. Named now so nothing
                      gets built in a way that blocks it.
   mock/
-    mockEcosystemData.ts  Four gardens, edges, and a drift tick.
+    mockEcosystemData.ts  Four gardens, edges, and a drift tick. One plant per
+                     garden has a dead adapter, so the staleness state is
+                     reachable without hand-editing data.
 docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-138 tests across eleven files, `tsc --noEmit` clean, `vite build` succeeds.
+191 tests across thirteen files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -197,6 +208,21 @@ hit rate and scrubbing costs less than a frame.
     height normalization. Build a bespoke form in a unit height comparable to the
     tree presets and let a low planting height scale make it short in the world,
     rather than authoring tiny unit coordinates.
+
+13. Textures are generated, never loaded. A seeded PRNG fills a byte buffer that
+    goes straight into a `DataTexture`: no image files, no fetch, no decode, and
+    the same garden on every machine and in every test. Three properties are
+    load-bearing and easy to break. They are **achromatic**, so grain can only
+    darken and lighten a tuned colour and never tint it, which is what keeps it
+    out of the channel budget (DESIGN.md). They have a **fixed mean**, because a
+    `map` multiplies and a byte tops out at 1.0 — a texture can only darken, so
+    every textured material lifts its base colour by the inverse of that mean
+    (`liftForTexture`) or the whole scene quietly dims by 24%. And the lift is
+    done in **linear space**, since the map's bytes are consumed as linear
+    multipliers. Two `DataTexture` defaults are also wrong here and cost an hour
+    each: it filters nearest and generates no mipmaps, so a repeated map crawls
+    at any distance, and it carries no colour space — right for grain, wrong for
+    any real albedo map, which is the same trap as assumption 9.
 
 ## Collection
 

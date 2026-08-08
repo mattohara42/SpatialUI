@@ -101,13 +101,26 @@ not a rebuild.
   conifer tree line receding into fog. Static and signal-free by design; it is
   lit and fogged by the same rig as the garden, so it tracks the day/night scrub
   for free and never competes with the plants for attention.
+- **Textures and grain.** Every surface used to be one flat colour. Turf, soil,
+  and bark now wear generated maps — no image files, just a seeded PRNG filling a
+  byte buffer — and individual leaves, petals, and berries take a small stable
+  jitter so a canopy reads as leaves rather than as one solid green object. The
+  rule throughout is luminance only, never hue: grain darkens and lightens a
+  tuned colour and can never tint it, which is what keeps it clear of the reading
+  budget entirely. Soil furrows run along the bed's rows, so the ground looks
+  worked for what is planted in it.
 - Ambient motion: per-plant sway + breathing, drifting motes. Any value that
   updates on a telemetry tick (activity, vitality) is smoothed so it eases in
   rather than snapping — see the comments in `src/scene/sway.ts`.
 - Vitality **droop**: sick plants wilt toward the ground (clamped to the soil).
-- Staleness is grey **and still** — a stale plant stops swaying, so silence
-  (a dead adapter) never passes for a thriving plant. Plus "what changed since I
-  last looked" summary.
+- Staleness is grey, **still**, and **dusty** — a stale plant stops swaying, so
+  silence (a dead adapter) never passes for a thriving plant, and a slow fall of
+  pale specks around its base says so up close as well as in silhouette. The
+  dust thickens with the length of the silence, which is the only cue that
+  carries *how long*; it is the deliberate inverse of the activity motes, which
+  rise and glow where dust falls and dulls. The mock runs one silent plant per
+  garden so the state is there to look at. Plus "what changed since I last
+  looked" summary.
 - **Time scrub as the sun crossing the sky.** Drag the sun (or the moon, after
   dark) and history moves with it: the whole look — key light, fill, fog, sky
   gradient, stars — is a function of the hour under the cursor, so scrubbing
@@ -132,5 +145,5 @@ standing in for.
 ## What's next
 
 The design docs track the open work. Near-term candidates: longer spans as
-seasons (the day is done, the year is not), a signal-gust transient, finishing
-the staleness visual state, and real adapters behind the translation layer.
+seasons (the day is done, the year is not), a signal-gust transient, and real
+adapters behind the translation layer.

@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import { barkPixels, liftForTexture, surfaceTexture } from './textures';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -24,6 +25,13 @@ const UP = new THREE.Vector3(0, 1, 0);
  * Per-instance taper is lost, since a cylinder cannot narrow along its own
  * length without a custom shader. Segments are short enough that the stepping is
  * hard to see, and the radii are in the buffer when we want to fix it properly.
+ *
+ * The bark map has the same limitation from the same cause: UVs belong to the
+ * shared geometry, so a twig and a trunk get the same number of grain cycles
+ * along their length and the twig's grain is compressed. It survives because the
+ * map is low-contrast luminance rather than detail — nobody reads the grain on a
+ * twig — and the fix, a per-instance UV scale, is the same custom shader the
+ * taper wants. Colour is per instance and unaffected.
  */
 export function Branches({ plants }: { plants: PlacedPlant[] }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
@@ -46,6 +54,11 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
     }
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
   }, [plants, count]);
+
+  // Bark grain, generated once. Streaks run along v, which cylinder UVs map to
+  // the limb's own axis, so the grain runs up the trunk rather than around it.
+  const bark = useMemo(() => surfaceTexture(barkPixels(), [1, 2]), []);
+  useLayoutEffect(() => () => bark.dispose(), [bark]);
 
   const scratch = useMemo(
     () => ({
@@ -128,7 +141,15 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
       receiveShadow
     >
       <cylinderGeometry args={[1, 1, 1, 5, 1]} />
-      <meshStandardMaterial roughness={0.9} metalness={0} />
+      {/* The lifted white cancels the map's mean, so the per-instance health
+          tint arrives at the brightness it was tuned to and the grain rides on
+          top of it. See textures.ts. */}
+      <meshStandardMaterial
+        map={bark}
+        color={liftForTexture('#ffffff')}
+        roughness={0.9}
+        metalness={0}
+      />
     </instancedMesh>
   );
 }

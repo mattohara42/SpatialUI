@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
@@ -7,6 +7,7 @@ import { Produce } from './Produce';
 import { Trellis } from './Trellis';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
+import { Dust } from './Dust';
 import { Sky } from './Sky';
 import { Horizon } from './Horizon';
 import { SunScrub } from './SunScrub';
@@ -23,6 +24,7 @@ import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets'
 import { plantingOf } from '../ecosystem/planting';
 import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
+import { liftForTexture, surfaceTexture, turfPixels } from './textures';
 
 /**
  * How far out the key lights sit. A directional light only needs a direction,
@@ -33,6 +35,12 @@ const LIGHT_DISTANCE = 30;
 
 /** Half-width of the shadow frustum. The garden footprint is about 15m by 3m. */
 const SHADOW_EXTENT = 12;
+
+/** Edge length of the ground sheet, and metres of it per turf tile. Two metres
+ *  is a compromise: tighter and the tiling repeats visibly underfoot, wider and
+ *  the grain coarsens into blotches that stop reading as grass. */
+const GROUND_SIZE = 1000;
+const TURF_TILE = 2;
 
 /**
  * Time is quantized before it reaches the sky. The sun crosses a full circle in
@@ -215,6 +223,15 @@ export function Garden() {
     [skyBucket],
   );
 
+  // Turf, generated once for the life of the garden. The ground is the largest
+  // surface in the scene and was a single flat green, which is what made it read
+  // as a plane rather than as a field.
+  const turf = useMemo(
+    () => surfaceTexture(turfPixels(), [GROUND_SIZE / TURF_TILE, GROUND_SIZE / TURF_TILE]),
+    [],
+  );
+  useEffect(() => () => turf.dispose(), [turf]);
+
   const sunPosition = useMemo(
     () => scaled(daylight.sunDirection, LIGHT_DISTANCE),
     [daylight.sunDirection],
@@ -280,14 +297,17 @@ export function Garden() {
         <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
         {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
+        {/* Dust falls only on plants that have gone silent, so this draws
+            nothing at all in a garden that is reporting. */}
+        <Dust plants={plants} night={daylight.stars} />
       </group>
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
           fog. Only the garden-sized centre receives shadows (the shadow camera
           covers a few metres), but the whole sheet is lit and fogged, which is
           what carries it to the horizon. The hills and tree line stand on it. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[1000, 1000]} />
-        <meshStandardMaterial color="#5c6e3a" roughness={1} />
+        <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
+        <meshStandardMaterial map={turf} color={liftForTexture('#5c6e3a')} roughness={1} />
       </mesh>
       <Horizon />
       {/* makeDefault so the sun drag can find these and suspend them; without
