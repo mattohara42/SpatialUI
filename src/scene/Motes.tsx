@@ -44,11 +44,11 @@ export function Motes({
 
   useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime;
-    const rise = (0.12 + activity * 0.4) * MOTION;
+    const rise = (0.05 + activity * 0.16) * MOTION;
     const arr = geometry.attributes.position.array as Float32Array;
     for (let i = 0; i < COUNT; i++) {
       arr[i * 3 + 1] += rise * delta;
-      arr[i * 3] += Math.sin(t * 0.5 + phase[i]) * 0.0016;
+      arr[i * 3] += Math.sin(t * 0.3 + phase[i]) * 0.0009;
       if (arr[i * 3 + 1] > CEILING) {
         arr[i * 3 + 1] = FLOOR;
         arr[i * 3] = Math.random() * size[0];

@@ -45,6 +45,9 @@ function phaseOf(id: string): number {
 /** Constant so activity can never leak into a sine frequency. See swayMatrix. */
 const BREATH_FREQ = 0.8;
 
+/** Slows the whole sway. Lower is calmer; the look-dev sketch ran near 1.0. */
+const SWAY_SPEED = 0.45;
+
 /** Seconds for an animated value to catch up to a telemetry step. */
 const SMOOTH_TAU = 1.0;
 
@@ -121,13 +124,14 @@ export function swayMatrix(
   t: number,
 ): void {
   const phase = phaseOf(id);
+  const ts = t * SWAY_SPEED;
   const amp = (0.015 + activity * 0.05) * MOTION; // radians of lean
-  const ax = osc(t, phase) * amp;
-  const az = osc(t * 0.93, phase + 1.3) * amp;
+  const ax = osc(ts, phase) * amp;
+  const az = osc(ts * 0.93, phase + 1.3) * amp;
   // Frequencies must never depend on activity either: the argument of a sine is
   // t times the frequency, so a step would jump the phase by t * delta-frequency,
   // a snap that grows with elapsed time. Activity touches amplitude only.
-  const breath = Math.sin(t * BREATH_FREQ + phase) * (0.004 + activity * 0.006) * MOTION;
+  const breath = Math.sin(ts * BREATH_FREQ + phase) * (0.004 + activity * 0.006) * MOTION;
 
   euler.set(ax, 0, az, 'ZXY');
   out.makeRotationFromEuler(euler);

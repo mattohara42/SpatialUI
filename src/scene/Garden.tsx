@@ -5,6 +5,7 @@ import { Branches } from './Branches';
 import { Foliage } from './Foliage';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
+import { Sky } from './Sky';
 import type { PlacedPlant, Tint } from './types';
 import { useEcosystem } from '../state/ecosystemStore';
 import { edgesInGarden, nodesInGarden } from '../ecosystem/graph';
@@ -14,6 +15,13 @@ import { staleness, staleThresholdFor } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
 import type { PresetName } from '../lsystem/presets';
+import type { Vec3 } from '../lsystem/types';
+
+/**
+ * Direction the sun sits and the key light shines from. One vector so the visible
+ * sun and the shadows always agree; the future time-scrub drives this.
+ */
+const SUN_DIR: Vec3 = [-3, 1.4, -8];
 
 /**
  * Archetype means kind of thing, never health. Shape is learnable and constant;
@@ -130,18 +138,21 @@ export function Garden() {
        * sides never go fully black. Fog gives depth and, at garden scale, doubles
        * as a soft distance cue. Density is deliberately gentle; tune to taste.
        */}
-      <color attach="background" args={['#14110e']} />
-      <fogExp2 attach="fog" args={['#14110e', 0.03]} />
+      {/* Fog colour matches the sky horizon so plants fade into it, not a seam. */}
+      <fogExp2 attach="fog" args={['#241812', 0.03]} />
+      <Sky sunDirection={SUN_DIR} />
 
-      <hemisphereLight args={['#3a3326', '#0a0806', 0.5]} />
+      <hemisphereLight args={['#4a4030', '#0a0806', 0.75]} />
       <directionalLight
-        position={[-4.5, 9, 4]}
+        position={SUN_DIR}
         intensity={2.1}
         color="#ffd9ad"
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
-      <directionalLight position={[6, 5, -6]} intensity={1.1} color="#a8c4ff" />
+      {/* Cool fill on the camera side, so the backlit plants keep readable
+          faces against the warm sun instead of going to silhouette. */}
+      <directionalLight position={[4, 4, 8]} intensity={1.0} color="#a8c4ff" />
 
       <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
         <Beds beds={layout.beds} />
