@@ -173,6 +173,63 @@ bye from a dead feed, and should not — both mean what you are looking at is ol
 That is the strongest form the staleness argument has taken so far, because the
 data volunteered it.
 
+## The book: what a *second* source asks, that the first one never did
+
+The league proved the pipeline. It could not test it, because a single source
+cannot tell you which of your decisions were principles and which were
+coincidences that happened to fit football. The market was chosen for
+disagreement, and it settled four more things.
+
+**Polarity was theory until something was short.** `suppress` has existed since
+the first sketch — the idea that some things are alarming when they thrive —
+and until now only mock threat data used it, which means it was never really
+tested. A short position is the genuine article: you hold it, and you want it to
+go *down*.
+
+Getting it right turned on one decision that looks like a detail and is not.
+Vitality is **the instrument's move since you took it on, unsigned by side** —
+not the position's profit. Sign it by side and the number already says "this is
+going well for me", polarity then inverts it *back*, and a short reads healthy
+exactly while it is losing you money. The garden would look right and mean the
+opposite. So the rule the vocabulary needs: **a translator states what the thing
+is doing; polarity states whether that is good news. A translator that answers
+both has broken the axis.**
+
+**"Silence is never health" has an exception, and it is structural.** A market
+is shut every night and all weekend and nothing is wrong. The rule cannot simply
+be relaxed — silence looking like health is the failure the whole staleness state
+exists to prevent — so the threshold is sized to the longest gap the source
+*legitimately* produces, computed from the exchange calendar rather than chosen.
+That is the league's bye argument, and it generalizes: **staleness is measured
+against a source's own expected cadence, and the adapter is the only layer that
+knows what that is.**
+
+What it costs is real. A feed that dies on Friday is not called stale until
+midweek, because the ratio `(now - updatedAt) / threshold` cannot tell a shut
+exchange from a dead vendor. The honest fix is session-aware staleness — the
+threshold consuming a source-supplied notion of "when should I next have heard
+something" — which changes the `staleness` contract for every source and is not
+done. It is the largest single piece of unfinished design in the project.
+
+**Calibration is a measurement, not a taste.** Two faults shipped into the first
+draft of this source and neither was visible in the render. The generated tape
+had a volatility drag that decayed every instrument, putting the whole book at a
+median 6% down; and vitality charged for ordinary drawdown, which at market
+volatilities is 10–20% off the high almost all the time, so the axis was
+reporting volatility rather than health and the median plant sat at 0.40. Both
+were found by comparing the book's health distribution against the league's, and
+neither would have been found by looking at a screenshot. **A new source's
+distribution should be measured against an existing one before it is judged.**
+
+**Every source has a shape the model does not have.** Football had two grouping
+levels (conference, division) against the model's one, solved by ordering bed ids
+so a conference reads as a row. The market has sectors, which fit the one level
+exactly — but it also has *lots*, several fills making up one position, which the
+node type has nowhere to put. That resolved cleanly because a position is the sum
+of its lots as of a moment, so the derivation absorbs it and the node never
+learns. Both are the same lesson: **the pressure to widen the node type is
+usually a derivation that has not been written yet.**
+
 ## What is decoration, and why decoration is allowed
 
 Three recent additions carry no signal at all, and that is the point of them.
