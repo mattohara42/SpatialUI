@@ -263,3 +263,20 @@ describe('the mock gardens archive too', () => {
     expect(Math.abs(now.vitality - then.vitality)).toBeGreaterThan(0.05);
   });
 });
+
+describe('the silent plant', () => {
+  it('goes quiet for longer than a history step, whatever the clock says', () => {
+    // The gap only exists if the last reading and now fall in different slots.
+    // A silence shorter than one step lands in the same slot for part of every
+    // hour, and for those minutes a scrub would show a reading where there was
+    // none — silence passing for health, in the one place built to prevent it.
+    const state = generateMockEcosystem({ historyHours: 48 });
+    const silent = Object.values(state.nodes).filter(
+      (n) => n.kind === 'plant' && (n.raw as { silent?: boolean })?.silent,
+    );
+    expect(silent.length).toBeGreaterThan(0);
+    for (const plant of silent) {
+      expect(state.revision - plant.updatedAt).toBeGreaterThan(HOUR_MS);
+    }
+  });
+});

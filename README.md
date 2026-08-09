@@ -63,14 +63,15 @@ src/
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
                the garden, and the only place the mapping is decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
-               staleness, scrub window rules, planting types
+               staleness, scrub window rules, planting types, labels and
+               emblems, history-as-a-series, and the raw-payload flattener
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, near enough nothing derived) and the
                composition point where the gardens are assembled
   scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
-               Grafts, Beds, Motes, Sky, SunScrub, Horizon, plus the pure sway,
-               daylight, dust, and greenhouse modules
+               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, plus
+               the pure sway, daylight, dust, greenhouse, and label modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -148,6 +149,27 @@ not a rebuild.
   furnished: a hose on its hook with a length left on the floor, a potting bench
   on castors, a watering can, shears, gloves, twine, and stacks of terracotta
   pots. All of it signal-free, against the walls, and still.
+- **Names, at the distance a name belongs.** Every plant carries a nursery tag —
+  a stake with a card, the thing's mark on a roundel and its name beside it —
+  and the tags **are not there until you walk up to a plant**. They fade in
+  inside about nine metres and read fully at four and a half, so the view of a
+  whole house has no text in it at all and the beds are named once you are among
+  them. Health is what you read across the room; a name is what you read at the
+  bed. What goes on the card is chosen by translation, never guessed by the
+  renderer: the league uses its own abbreviations and club colours (`DAL` in
+  Cowboys navy), and a source with no marks of its own takes the documented
+  default — initials on a stable colour — as a deliberate choice. An emblem is
+  fixed for the life of a node, which is what keeps a colour on a card clear of
+  the health channel: identity never moves, signal does.
+- **Tap a tag and the plant explains itself.** A panel opens in the air beside
+  it — world-anchored rather than stuck to the screen, because the same object
+  has to work in a headset — carrying the four axes as numbers, vitality over
+  the last day and over the season as sparklines, the blights, and the source's
+  own payload flattened into rows. It is the only place in the app with numbers
+  in it, which is what a deliberately lossy summary owes you. It reads through
+  the cursor, so scrubbing with a panel open moves the panel; and a stretch
+  nobody recorded is drawn as a **gap in the line**, never bridged, because a
+  trend line across silence is a picture of something that did not happen.
 - **A landscape behind the garden** — layered hills, distant mountains, and a
   conifer tree line receding into fog. Static and signal-free by design; it is
   lit and fogged by the same rig as the garden, so it tracks the day/night scrub

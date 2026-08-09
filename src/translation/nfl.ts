@@ -9,6 +9,7 @@ import {
   type Availability,
   type Injury,
   type NflSeasonSnapshot,
+  type NflTeam,
   type NflTeamSeason,
   type Seasoning,
   type TeamGame,
@@ -25,6 +26,7 @@ import {
   record as recordVitals,
   type VitalsHistory,
 } from '../ecosystem/history';
+import { inkFor, luminanceOf, type Emblem } from '../ecosystem/labels';
 import type { PlantingType } from '../ecosystem/planting';
 import type {
   Blight,
@@ -238,6 +240,7 @@ export function translateNflSnapshot(
         parentId: bedIdFor(key),
         gardenId: NFL_GARDEN_ID,
         label: `${team.team.location} ${team.team.nickname}`,
+        emblem: emblemFor(team.team),
         domain: 'sports',
         kind: 'plant',
         polarity: 'nurture',
@@ -294,6 +297,38 @@ export function translateNflSnapshot(
 /** `nfl/team/kc`, stable across restarts, so a club always grows the same plant. */
 export function teamNodeId(teamId: string): string {
   return `${NFL_GARDEN_ID}/team/${teamId}`;
+}
+
+/**
+ * The mark a club's tag wears: its abbreviation in its own colours.
+ *
+ * This is the league's answer to the question every source has to answer for
+ * itself — *what does this thing look like when it is named* — and it is the
+ * reason the emblem is chosen in translation rather than derived in the
+ * renderer. A club has a real abbreviation and two real colours; deriving `DC`
+ * for the Dallas Cowboys off the label, as the default would, throws away
+ * something the source already knows.
+ *
+ * It is not a crest. The wordmarks and logos are trademarks and the project
+ * loads no image assets at all — the same rule the generated textures keep — so
+ * a club is drawn as its letters on its primary colour, which is what a plant
+ * tag would carry anyway. Alignment and colours are real; nothing here implies
+ * the crest.
+ *
+ * The secondary colour is used as ink only when it will actually survive on the
+ * primary. Half the league's pairs are a colour and near-white, which reads;
+ * the other half are two darks, and Ravens purple on Ravens gold is a smear at
+ * tag size. Luminance decides, per club, which is why this is a function rather
+ * than two fields copied across.
+ */
+export function emblemFor(team: NflTeam): Emblem {
+  const { primary, secondary } = team.colors;
+  const contrast = Math.abs(luminanceOf(primary) - luminanceOf(secondary));
+  return {
+    mark: team.abbr,
+    color: primary,
+    ink: contrast > 0.35 ? secondary : inkFor(primary),
+  };
 }
 
 /**

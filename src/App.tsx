@@ -22,6 +22,7 @@ export default function App() {
   const cursor = useEcosystem((s) => s.cursor);
   const setCursor = useEcosystem((s) => s.setCursor);
   const tick = useEcosystem((s) => s.tick);
+  const select = useEcosystem((s) => s.select);
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
 
   const [live, setLive] = useState(true);
@@ -58,13 +59,18 @@ export default function App() {
       else if (event.key === 'ArrowRight') nudge(hours);
       else if (event.key === 'ArrowDown') nudge(-days);
       else if (event.key === 'ArrowUp') nudge(days);
-      else if (event.key === 'Escape' || event.key === 'Home') setCursor(null);
-      else return;
+      else if (event.key === 'Escape' || event.key === 'Home') {
+        // Escape backs out of one thing at a time, innermost first: an open
+        // plant before the time you were looking at it. Collapsing both at once
+        // would lose the scrub for anyone who only wanted the panel shut.
+        if (useEcosystem.getState().selectedId) select(null);
+        else setCursor(null);
+      } else return;
       event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [nudge, setCursor]);
+  }, [nudge, setCursor, select]);
 
   const changes = changesSinceLastVisit();
 

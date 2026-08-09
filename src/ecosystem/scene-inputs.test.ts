@@ -4,6 +4,9 @@ import { layoutGarden } from './layout';
 import { nodesInGarden } from './graph';
 import { HOUR_MS, record } from './history';
 import { generateMockEcosystem } from '../mock/mockEcosystemData';
+import { syntheticNflSource } from '../adapters/nfl';
+import { translateNflSnapshot } from '../translation/nfl';
+import { MARK_LIMIT, emblemOf, luminanceOf } from './labels';
 import type { EcosystemNode } from './types';
 
 const node = (overrides: Partial<EcosystemNode> = {}): EcosystemNode => ({
@@ -158,5 +161,50 @@ describe('layoutGarden', () => {
       );
       expect(tallest.nodeId).toBe(oldest.nodeId);
     }
+  });
+});
+
+describe('every plant is named', () => {
+  /**
+   * The emblem is a decision translation makes, and this is where the project
+   * asks for it. A plant with no emblem still renders — `emblemOf` falls back —
+   * but the fallback exists so a half-written adapter shows something, not so
+   * an adapter can skip the choice, and a source that silently took initials it
+   * never picked would be the kind of default nobody notices until a demo.
+   */
+  const sources = [
+    ['mock gardens', generateMockEcosystem().nodes],
+    ['the league', translateNflSnapshot(syntheticNflSource().snapshot()).nodes],
+  ] as const;
+
+  for (const [name, nodes] of sources) {
+    it(`${name}: every plant carries an emblem translation chose`, () => {
+      const plants = Object.values(nodes).filter((n) => n.kind === 'plant');
+      expect(plants.length).toBeGreaterThan(0);
+      for (const plant of plants) {
+        expect(plant.emblem, `${plant.id} has no emblem`).toBeDefined();
+        expect(plant.emblem!.mark.length).toBeGreaterThan(0);
+        expect(plant.emblem!.mark.length).toBeLessThanOrEqual(MARK_LIMIT);
+      }
+    });
+
+    it(`${name}: every mark is legible on its own plate`, () => {
+      for (const plant of Object.values(nodes).filter((n) => n.kind === 'plant')) {
+        const { color, ink } = emblemOf(plant);
+        expect(
+          Math.abs(luminanceOf(color) - luminanceOf(ink)),
+          `${plant.label}: ${ink} on ${color}`,
+        ).toBeGreaterThan(0.2);
+      }
+    });
+  }
+
+  it('the league uses its own abbreviations rather than derived initials', () => {
+    const nodes = translateNflSnapshot(syntheticNflSource().snapshot()).nodes;
+    const cowboys = Object.values(nodes).find((n) => n.label.includes('Cowboys'));
+    // Deriving initials off the label would give DC, which is not what anyone
+    // calls them: the whole point of choosing in translation is that the source
+    // already knows the answer.
+    expect(cowboys?.emblem?.mark).toBe('DAL');
   });
 });

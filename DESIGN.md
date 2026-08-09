@@ -260,6 +260,62 @@ motes, dust, and sway are the only things that move here and all three carry
 signal, so a rocking watering can would be motion that meant nothing — which is
 worse in this scene than it would be in one where motion means nothing anyway.
 
+## Three questions, three distances
+
+The garden answers one question extremely well and, until now, only that one:
+**something is wrong, and it is over there.** That reading works across a room,
+it is what shape and colour and motion are spent on, and it is the whole reason
+this is a garden rather than a dashboard.
+
+It leaves two questions unanswered, and both of them are asked from closer up.
+
+| distance | question | what answers it |
+| --- | --- | --- |
+| across the room | is anything wrong? | the plants themselves |
+| at the bed | which one is this? | the tag |
+| standing at it | what happened, and which way is it going? | the panel |
+
+Reading them as a sequence is what keeps the first one intact. A name is not a
+health cue and must never compete with one, so **labels do not exist at a
+distance**: a tag fades in as you approach a plant and is gone again when you
+step back, the way a nursery label is only readable when you are next to it.
+Thirty-two captions floating over a garden would be a chart with foliage — every
+one of them pulling at the glance the plants are supposed to own.
+
+**An emblem is chosen by translation, never guessed by the renderer.** Every
+source has its own idea of what a thing is called and what it looks like — a
+league has club colours and a three letter code, a cluster has service names —
+and none of that is derivable from the four health axes. So the emblem is a
+translator's decision, like planting type and polarity, with an explicit default
+(`emblemFrom`: initials on a stable colour) for sources that have no mark of
+their own. Calling the default is itself a choice, made where the domain is
+still in scope.
+
+That puts colour on a card, which the channel budget above would normally
+forbid. The line that resolves it: **a colour that never moves is identity, and
+a colour that moves is signal.** An emblem is fixed for the life of the node and
+sits on an object that is obviously a label, so nothing about it can be read as
+vitality. The ban that still holds absolutely is on a source palette reaching
+the *organism* — bark, foliage, produce, bloom — where it would sit in the same
+channel as health and win.
+
+**The panel is the record, not a verdict.** It is the only place in the app with
+numbers in it, which is what a deliberately lossy summary owes you: you can
+always get back to the readings the picture was made from. It carries no colour
+and no ranking, because a panel that turned red would be a second, competing
+reading of a node the garden has already described. It reads everything through
+the cursor, so scrubbing with one open moves it — the numbers, the trend, and
+the end of the sparkline are the same moment the sky is showing. And it hangs in
+the air beside its plant rather than being welded to the corner of the screen,
+because `src/xr/` exists to keep this project honest and a head-locked card is
+the one interface a headset cannot have.
+
+One rule inside it is worth stating on its own: **a gap in the data is drawn as
+a gap.** The sparkline breaks where nothing was recorded rather than joining the
+line across it. A trend line that bridges silence is a picture of something that
+did not happen, in an app whose central claim is that silence must never be able
+to pass for health.
+
 ## The moment of use
 
 Desk Bonsai is the primary mode and Greenhouse is the occasional deep dive.

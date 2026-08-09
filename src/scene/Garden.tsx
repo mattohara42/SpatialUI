@@ -14,6 +14,8 @@ import { Sky } from './Sky';
 import { Horizon } from './Horizon';
 import { Greenhouse } from './Greenhouse';
 import { Props } from './Props';
+import { Tags } from './Tags';
+import { Detail } from './Detail';
 import { FLOOR_Y, shellFor, type Shell } from './greenhouse';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
@@ -364,6 +366,11 @@ export function Garden() {
         <Foliage plants={plants} />
         <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
+        {/* Names, and the panel behind them. Inside the translated group
+            because both are placed at a plant, and a plant's position is in the
+            garden's own coordinates. */}
+        <Tags plants={plants} />
+        <Detail plants={plants} />
         {plants.length > 0 && (
           <Motes size={layout.size} activity={activity} ceiling={shell.eaves - 0.3} />
         )}

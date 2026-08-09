@@ -41,6 +41,15 @@ src/
                      each type's spatial arrangement. Self-contained, imports
                      nothing, so layout and the renderer share it cycle-free.
     planting.test.ts
+    labels.ts        What a thing is called and the mark it wears. The Emblem
+                     contract translation must choose, plus the explicit default.
+    labels.test.ts
+    series.ts        History as a line rather than a point, for the detail
+                     panel. Gaps stay gaps all the way to the drawn path.
+    series.test.ts
+    inspect.ts       The opaque `raw` payload flattened into rows, without
+                     knowing anything about its shape.
+    inspect.test.ts
   lsystem/           Pure procedural geometry. No React, no three.js.
     types.ts         Vec3, Grammar, TurtleParams, PlantGeometry.
     random.ts        Seeded PRNG so a node id always grows the same plant.
@@ -88,6 +97,14 @@ src/
     Props.tsx        The hose, the rolling bench, the can, the shears, the
                      gloves, the pots. Decoration, against the walls, still.
     Beds.tsx         Raised beds: soil in a timber box with a cap rail.
+    labels.ts        When a tag is legible, and how big it is. Pure.
+    labels.test.ts
+    Tags.tsx         The tags themselves: stake, card, fade, and the tap that
+                     opens the panel.
+    tagTexture.ts    A tag drawn to a 2D canvas — the one place text enters the
+                     scene, and the one texture that is a real albedo map.
+    Detail.tsx       The panel: axes, trend lines, blights, source payload.
+                     World-anchored beside its plant, never head-locked.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
     textures.ts      Surface grain at two scales: generated achromatic maps
@@ -111,7 +128,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-342 tests across seventeen files, `tsc --noEmit` clean, `vite build` succeeds.
+407 tests across twenty-one files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -399,6 +416,45 @@ hit rate and scrubbing costs less than a frame.
     depth of the house — and fires on the house's dimensions only, never on a
     telemetry tick, or the camera would snatch itself back every two seconds
     while somebody was looking at something.
+
+21. Identity is a channel of its own, entered by walking. Labels do not exist at
+    a distance: a plant tag fades in inside about nine metres and is fully
+    legible at four and a half, so the view of a whole house has no text in it
+    and the beds are named once you are among them. That is what lets a label be
+    as legible as it likes — it competes with the health reading by not being
+    present at the same time. The distance rule lives in `scene/labels.ts`, pure
+    and asserted, rather than as two numbers inside a `useFrame`.
+
+22. The emblem on a tag is chosen by translation and is never a signal. It is a
+    node field (`Emblem`: a mark, a plate colour, an ink) with an explicit
+    default in `ecosystem/labels.ts`, because what a thing is called and what it
+    looks like is domain knowledge the renderer does not have — the league uses
+    its own abbreviations and club colours, and deriving `DC` for the Dallas
+    Cowboys off a label throws away something the source already knew. It is
+    fixed for the life of the node, which is what keeps a colour on a card clear
+    of the channel budget: identity never moves, signal does. The ban on a source
+    palette reaching bark, foliage, produce, or bloom still holds absolutely.
+
+23. Text is the one thing this project cannot generate. Grain comes from a
+    seeded PRNG and plants come from a grammar, but letterforms come from a
+    font, and both usual routes break rules already committed to — a bitmap font
+    is an image asset, and drei's text helpers fetch a typeface at first render.
+    A 2D canvas is the way out: a face the machine already has, pixels rather
+    than a file, no fetch. The cost, stated plainly, is that the tag is the only
+    surface whose exact appearance depends on the machine, since font
+    availability differs; nothing reads it but a person. It is also the one
+    texture in the app that is a real albedo map, so it must declare
+    `SRGBColorSpace` — the same trap as assumptions 9 and 13, from the other
+    direction.
+
+24. The detail panel is world-anchored, not head-locked, and reads through the
+    cursor. Anchored because `src/xr/` exists to keep the project honest and a
+    card welded to the corner of the screen is the one interface a headset
+    cannot have; through the cursor because a panel that showed live numbers
+    while the sky showed Tuesday would be two clocks in one frame. Selection
+    lives in the store rather than in a component: the tag that was clicked and
+    the panel that opens are at opposite ends of the scene, and a panel that
+    closed itself on every telemetry tick would be unusable.
 
 ## Collection
 

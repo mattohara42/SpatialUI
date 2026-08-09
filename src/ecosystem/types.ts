@@ -1,4 +1,5 @@
 import type { VitalsHistory } from './history';
+import type { Emblem } from './labels';
 import type { PlantingType } from './planting';
 
 /**
@@ -109,8 +110,22 @@ export interface EcosystemNode extends Vitals {
    * of walking parents. For a garden node this equals its own id.
    */
   gardenId: string;
-  /** Shown on the HUD and on bed signage. */
+  /** Shown on the HUD, on bed signage, and on the plant's own tag. */
   label: string;
+  /**
+   * The mark this thing wears on its tag: a few characters and a colour.
+   *
+   * **Translation chooses it**, the way translation chooses a planting type and
+   * a polarity — a league has club colours and a three letter abbreviation, a
+   * cluster has service names, and none of that is derivable from the four
+   * health axes. `emblemFrom` in `labels.ts` is the deliberate default for a
+   * source with no mark of its own, and calling it is a decision made in the
+   * translator, where the domain is still in scope.
+   *
+   * Fixed for the life of the node. An emblem is identity, never state, which is
+   * what keeps its colour clear of the channel budget.
+   */
+  emblem?: Emblem;
   domain: Domain;
   kind: NodeKind;
   polarity: Polarity;
