@@ -116,6 +116,9 @@ not a rebuild.
   instead of four days. The genuine staleness case is a **trading halt**: one
   symbol stops printing while the rest of the book carries on, and it greys
   itself because `updatedAt` is the last close on the tape and nothing edits it.
+  The same calendar drives the poll: the source is re-read exactly when it says a
+  bar should have printed, so "should I have heard something by now" and "is
+  there anything new to fetch" are one question asked once.
 
   **And it costs more.** The league's history backfill collapses a season to
   about fourteen real computations per club, because a club only moves when a

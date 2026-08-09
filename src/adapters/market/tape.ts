@@ -6,6 +6,7 @@ import {
   hourlyCloses,
   previousClose,
   tradingDaysBack,
+  tradingDaysBetween,
 } from './session';
 import type { Bar, Halt, Instrument, Lot, MarketSnapshot, MarketSource } from './types';
 
@@ -45,6 +46,14 @@ export interface TapeOptions {
   sessions?: number;
   /** Symbol to halt partway through, or null for none. */
   halt?: string | null;
+  /**
+   * The oldest trading day in the record. Omit and it is `sessions` trading days
+   * back from `now`, which is right for a one-shot snapshot and wrong for a
+   * source that will be asked again — see `syntheticMarketSource`.
+   */
+  from?: number;
+  /** When the halted symbol stops printing. Omit and it is derived from the window. */
+  haltAt?: number;
 }
 
 /**
@@ -74,20 +83,26 @@ export function generateMarketSnapshot(
   now: number = Date.now(),
   options: TapeOptions = {},
 ): MarketSnapshot {
-  const { seed = 20_260_301, sessions = SESSIONS, halt = 'SLB' } = options;
+  const { seed = 20_260_301, sessions = SESSIONS, halt = 'SLB', from } = options;
 
   // Walk forward from the oldest session so the series compounds in the
   // direction time runs. `tradingDaysBack` hands them back newest first.
-  const days = tradingDaysBack(now, sessions).reverse();
+  const days =
+    from === undefined
+      ? tradingDaysBack(now, sessions).reverse()
+      : tradingDaysBetween(from, now);
 
   const bars: Bar[] = [];
   const halts: Halt[] = [];
 
   // A halt lands two thirds of the way through the recent stretch, so the
-  // instrument has plenty of history and then visibly stops.
-  const haltAt = days.length
-    ? days[Math.max(0, days.length - Math.floor(INTRADAY_SESSIONS * 0.6))]
-    : now;
+  // instrument has plenty of history and then visibly stops. Overridable because
+  // a source asked twice must not move its own halt forward under itself.
+  const haltAt =
+    options.haltAt ??
+    (days.length
+      ? days[Math.max(0, days.length - Math.floor(INTRADAY_SESSIONS * 0.6))]
+      : now);
 
   for (const instrument of INSTRUMENTS) {
     const halted = halt === instrument.symbol;
@@ -184,7 +199,10 @@ function seriesFor(
           close: round2(price),
           // Volume follows the size of the move, which is the one real
           // regularity worth having: a quiet hour is a thin one.
-          volume: Math.round((baseVolume / closes.length) * (0.55 + move * 26 + rng() * 0.5)),
+          volume: Math.round(
+            (baseVolume / closes.length) *
+              (0.55 + move * 26 + jitter(seed, instrument.symbol, closeAt) * 0.5),
+          ),
         });
       }
       stepOpen = price;
@@ -200,7 +218,10 @@ function seriesFor(
         high: round2(high),
         low: round2(low),
         close: round2(price),
-        volume: Math.round(baseVolume * (0.55 + move * 26 + rng() * 0.5)),
+        volume: Math.round(
+          baseVolume *
+            (0.55 + move * 26 + jitter(seed, instrument.symbol, dailyClose) * 0.5),
+        ),
       });
     }
   });
@@ -261,6 +282,23 @@ function buildLots(bars: Bar[], days: number[], seed: number): Lot[] {
   return lots.sort((a, b) => a.openedAt - b.openedAt);
 }
 
+/**
+ * Volume noise for one bar, drawn from where the bar *is* rather than from the
+ * walk's stream.
+ *
+ * This looks like a stylistic choice and is a correctness one. The walk's rng is
+ * consumed in order, so taking volume noise from it made the price path depend
+ * on which bars happened to be emitted — and emission depends on `now`, on the
+ * halt, and on whether a day fell inside the intraday stretch. Ask the same
+ * source twice and the second answer disagreed with the first about prices that
+ * had already been recorded. Keyed on the close time instead, a bar's volume is
+ * a fact about that bar, and the walk consumes exactly the same draws whatever
+ * gets printed.
+ */
+function jitter(seed: number, symbol: string, closeAt: number): number {
+  return mulberry32(seed ^ hashString(`${symbol}:vol:${closeAt}`))();
+}
+
 /** Box–Muller, one half of it. Normal enough for a walk. */
 function gauss(rng: () => number): number {
   const u = Math.max(1e-9, rng());
@@ -273,13 +311,41 @@ function round2(n: number): number {
 }
 
 /**
- * The generated source. `snapshot(now)` is pure in `now` and the seed, so two
- * calls with the same arguments produce the same tape.
+ * The generated source.
+ *
+ * `snapshot(now)` is pure in `now`, the seed, and the instance's anchor. The
+ * anchor is the part that matters, and it exists because this source gets asked
+ * more than once: a poll re-asks whenever the calendar says a new bar should
+ * have printed (see the store), and a feed whose past changes under a second
+ * question is not standing in for a feed at all.
+ *
+ * So the first call fixes the two things that would otherwise be measured back
+ * from "now" — where the record starts, and when the halted symbol stopped — and
+ * every later call reuses them. The record then **extends**: bars already handed
+ * out come back identical, with new ones on the end. That is what a real feed
+ * does, and it is the whole difference between polling and re-rolling.
  */
 export function syntheticMarketSource(options: TapeOptions = {}): MarketSource {
+  let anchor: TapeOptions | null = null;
+
   return {
     name: 'synthetic-tape',
-    snapshot: (now = Date.now()) => generateMarketSnapshot(now, options),
+    snapshot: (now = Date.now()) => {
+      if (anchor === null) {
+        const { sessions = SESSIONS } = options;
+        const days = tradingDaysBack(now, sessions).reverse();
+        anchor = {
+          ...options,
+          from: options.from ?? days[0] ?? now,
+          haltAt:
+            options.haltAt ??
+            (days.length
+              ? days[Math.max(0, days.length - Math.floor(INTRADAY_SESSIONS * 0.6))]
+              : now),
+        };
+      }
+      return generateMarketSnapshot(now, anchor);
+    },
   };
 }
 

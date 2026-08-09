@@ -110,8 +110,12 @@ src/
                      gesture asks for on every pointer move and which only
                      changes when the garden does. Recomputing it per move
                      would walk every node's archive at pointer rate.
-    ecosystemStore.ts  The store, and `composeEcosystem` — the one place that
-                     knows more than one source exists.
+    ecosystemStore.ts  The store, `composeEcosystem`, and the poll that asks a
+                     source for a reading when its own schedule says one is due.
+    sources.ts       The real sources: what each garden is read from, when it is
+                     next owed a reading, and whether asking again is meaningful.
+                     The one place that knows more than one source exists.
+    sources.test.ts
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
     types.ts         What the scene is handed per plant: geometry, place, tint.
@@ -184,7 +188,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-485 tests across twenty-four files, `tsc --noEmit` clean, `vite build` succeeds.
+498 tests across twenty-five files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -368,13 +372,59 @@ state reachable in that garden. A market reader needs to know the vendor is
 alive; a league reader needs to know whether what they are looking at is current.
 Same contract, opposite answers, which is the argument for it being per-source.
 
-**What this exposes.** Both real sources take their snapshot once at module load
-and never poll, so under the sharpened rule the market garden correctly greys
-about three hours into a trading session — the feed genuinely is dead, and the
-old threshold was only hiding it behind four days of slack. That is the state
-working, and it turns the collector below from a nice-to-have into the thing
-standing between these gardens and a true reading. The league is unaffected: its
-due time is a week out.
+**What this exposed, and what it cost to fix.** Both real sources took their
+snapshot once at module load and never polled. Under the old four-day threshold
+that was invisible; under a two-bar grace the market garden correctly greyed
+about three hours into a trading session, because the feed genuinely was dead
+and the slack had only been hiding it. The garden was right and the app was
+wrong, so the app polls — see **Polling** below. The league is unaffected either
+way: its due time is a week out.
+
+## Polling
+
+`state/sources.ts` holds the real sources, and exists because `dueAfter` turned
+out to answer two questions rather than one. "Should I have heard something by
+now" is the staleness state; "is there anything new to fetch" is a poll. They are
+the same question, so a source that can say when it will next speak has already
+said when to ask it again, and nothing here runs a clock of its own — the poll
+rides the existing two-second beat, asks `dueSources` (a scan of the garden's
+plants against a due time), and does the expensive part only when something is
+owed. For the market that is once an hour during a session and never outside one.
+
+Two things had to be true of a source before it could be asked twice, and neither
+was:
+
+**The record must extend, not slide.** The tape's walk started at the oldest day
+of `tradingDaysBack(now, SESSIONS)`, a window measured back from *now*. Ask again
+after midnight and the window moved, so the walk began a day later and re-priced
+every bar behind it — history the store had already recorded would disagree with
+the source it came from. `syntheticMarketSource` now fixes its origin and its
+halt time on the first call and reuses them, so later calls extend. The one-shot
+`generateMarketSnapshot` is unchanged, which is right: a caller that asks once
+wants a window ending now.
+
+**The price path must not depend on what gets printed.** Volume noise was drawn
+from the walk's own rng stream inside the emission branch, so whether a bar was
+emitted — which depends on `now`, on the halt, and on whether the day fell inside
+the intraday stretch — changed how many draws the walk consumed and therefore
+every price after it. Volume noise is now keyed on the bar's own close time. A
+bar's volume is a fact about that bar, and the walk consumes the same draws
+whatever it prints.
+
+The hourly grain is a retention window, so a later snapshot legitimately holds
+*fewer* intraday bars at the old end and more at the new. Only the settled past
+is asserted unchanged; ageing out is not the same as re-rolling.
+
+**Not every source can be polled.** The league's season is anchored to when it was
+generated — its most recent kickoff is always 26 hours ago, which is what keeps a
+game inside the scrub window — so asking again slides the whole season rather
+than extending it, and every recorded result moves with it. `pollable: false`
+says so, and it costs nothing, because nothing is due from the league inside a
+week. This is a property of the fiction, not of the design: a live adapter does
+not have it.
+
+What is still missing is the collector — polling keeps the *live* reading true,
+but history is still backfilled at load and lives only as long as the tab.
 
 ## Time and history
 
@@ -687,12 +737,13 @@ produces a history full of holes exactly across the gaps you most want to
 inspect. Recording therefore implies a collector that runs continuously and a
 viewer that reads from it, rather than one application that does both.
 
-Session-aware staleness sharpened the point considerably. A garden whose source
-publishes a calendar now flags a dead feed within hours, and the two real sources
-here snapshot once at load and never poll — so they are dead feeds, and the
-garden now says so out loud. The same `dueAfter` that answers "should I have
-heard something by now" is also the answer to "when should I ask again", which is
-the collector's schedule handed over for free.
+Half of this now exists. The poll in `state/sources.ts` keeps the live reading
+true — a source is re-read when its own calendar says a reading is due — and it
+took the same `dueAfter` staleness uses, which is the collector's schedule handed
+over for free. What the poll does not do is outlive the tab: it refreshes what is
+on screen, while history is still backfilled at load and lost on reload. The
+collector is the part that runs whether or not anyone is looking, and it is still
+missing.
 
 Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports

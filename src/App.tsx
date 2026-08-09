@@ -22,6 +22,7 @@ export default function App() {
   const cursor = useEcosystem((s) => s.cursor);
   const setCursor = useEcosystem((s) => s.setCursor);
   const tick = useEcosystem((s) => s.tick);
+  const poll = useEcosystem((s) => s.poll);
   const select = useEcosystem((s) => s.select);
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
 
@@ -32,11 +33,20 @@ export default function App() {
     [nodes],
   );
 
+  // One beat for both, because they are the same claim: the world is moving.
+  // `tick` drifts the mock gardens; `poll` asks the real sources whether they
+  // owe a reading, which almost always they do not — the question is a scan and
+  // the answer is usually nothing. Turning this off stops both, and the gardens
+  // then go grey on their own, correctly, as feeds nobody is reading.
   useEffect(() => {
     if (!live) return;
-    const id = setInterval(tick, 2000);
+    const beat = () => {
+      tick();
+      poll();
+    };
+    const id = setInterval(beat, 2000);
     return () => clearInterval(id);
-  }, [live, tick]);
+  }, [live, tick, poll]);
 
   const nudge = useCallback(
     (deltaMs: number) => {

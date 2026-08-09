@@ -4,18 +4,8 @@ import { record } from '../ecosystem/history';
 import { changedSince, setStaleSchedule, type Change } from '../ecosystem/staleness';
 import { SCRUB_WINDOW_MS, windowFor } from '../ecosystem/scrub';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
-import { syntheticNflSource } from '../adapters/nfl';
-import { syntheticMarketSource } from '../adapters/market';
-import {
-  MARKET_GARDEN_ID,
-  MARKET_STALE_SCHEDULE,
-  translateMarketSnapshot,
-} from '../translation/market';
-import {
-  NFL_GARDEN_ID,
-  NFL_STALE_AFTER_MS,
-  translateNflSnapshot,
-} from '../translation/nfl';
+import { NFL_GARDEN_ID } from '../translation/nfl';
+import { SOURCES, dueSources } from './sources';
 
 /**
  * The store holds state and nothing derived. Geometry, layout, adjacency, and
@@ -50,6 +40,11 @@ interface EcosystemStore extends EcosystemState {
   setCursor: (cursor: number | null) => void;
   commit: (nodes: Record<string, EcosystemNode>, at?: number) => void;
   tick: () => void;
+  /**
+   * Ask any source that owes a reading for one. Returns the gardens refreshed,
+   * which is nothing on almost every call.
+   */
+  poll: (at?: number) => string[];
   /** What moved since the user last stood in the active garden. */
   changesSinceLastVisit: () => Change[];
 }
@@ -69,30 +64,28 @@ interface EcosystemStore extends EcosystemState {
  * happened, and because thirty-two clubs across eight beds is the first scene
  * with enough in it to judge the reading at a glance.
  */
-function composeEcosystem(): EcosystemState {
-  const mock = generateMockEcosystem();
-  const league = translateNflSnapshot(syntheticNflSource().snapshot());
-  const markets = translateMarketSnapshot(syntheticMarketSource().snapshot());
-
-  // When a source should next be heard from is a fact about the source, and the
-  // two real ones disagree about it in kind rather than merely in size. The
-  // exchange publishes a calendar, so the market garden gets a schedule and can
-  // afford a tolerance of hours. The league's feed carries only games already
-  // played, so it gets the degenerate form — a flat duration, which is the same
-  // contract with nothing scheduled — and it wants that anyway, because a bye
-  // greying is the behaviour the reader needs there. Neither is the fifteen
-  // minute fallback, which would paint both entirely grey.
-  setStaleSchedule(NFL_GARDEN_ID, NFL_STALE_AFTER_MS);
-  setStaleSchedule(MARKET_GARDEN_ID, MARKET_STALE_SCHEDULE);
-
-  return {
-    ...mock,
-    nodes: { ...mock.nodes, ...league.nodes, ...markets.nodes },
-    edges: { ...mock.edges, ...league.edges, ...markets.edges },
-    history: { ...mock.history, ...league.history, ...markets.history },
-    archive: { ...mock.archive, ...league.archive, ...markets.archive },
+function composeEcosystem(now = Date.now()): EcosystemState {
+  const state: EcosystemState = {
+    ...generateMockEcosystem(),
     activeGardenId: NFL_GARDEN_ID,
   };
+
+  for (const source of SOURCES) {
+    const garden = source.read(now);
+    Object.assign(state.nodes, garden.nodes);
+    Object.assign(state.edges, garden.edges);
+    Object.assign(state.history, garden.history);
+    Object.assign(state.archive, garden.archive);
+
+    // When a source should next be heard from is a fact about the source, and
+    // the two real ones disagree about it in kind rather than merely in size —
+    // the exchange publishes a calendar, the league's feed carries only games
+    // already played. Registered here rather than inside a translator because
+    // this is the layer that has the whole picture.
+    setStaleSchedule(source.gardenId, source.policy);
+  }
+
+  return state;
 }
 
 /**
@@ -152,6 +145,31 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
   },
 
   tick: () => set((state) => tickMockEcosystem(state)),
+
+  /**
+   * The poll.
+   *
+   * Deliberately not a timer of its own. It runs on the same beat as everything
+   * else and asks a cheap question first — `dueSources` is a scan of the garden's
+   * plants against a due time — so the expensive part, re-reading a source and
+   * translating it, happens only when the source's own calendar says something
+   * should have arrived. For the market that is once an hour during a session and
+   * never outside one.
+   *
+   * It commits nodes only. The history buffers a re-read produces are thrown
+   * away, because the ones already in the store hold what was actually observed
+   * and `commit` records the new reading into them — a backfill overwriting live
+   * history would be the app inventing a past it had watched happen.
+   */
+  poll: (at = Date.now()) => {
+    const due = dueSources(get().nodes, at);
+    if (due.length === 0) return [];
+
+    const nodes: Record<string, EcosystemNode> = {};
+    for (const source of due) Object.assign(nodes, source.read(at).nodes);
+    get().commit(nodes, at);
+    return due.map((source) => source.gardenId);
+  },
 
   changesSinceLastVisit: () => {
     const state = get();
