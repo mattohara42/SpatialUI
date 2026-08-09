@@ -1,0 +1,123 @@
+import type { EcosystemEdge, EcosystemNode } from '../ecosystem/types';
+import type { VitalsHistory } from '../ecosystem/history';
+import { scheduleFor, type StalePolicy } from '../ecosystem/staleness';
+import { syntheticNflSource } from '../adapters/nfl';
+import { syntheticMarketSource } from '../adapters/market';
+import {
+  MARKET_GARDEN_ID,
+  MARKET_STALE_SCHEDULE,
+  translateMarketSnapshot,
+} from '../translation/market';
+import {
+  NFL_GARDEN_ID,
+  NFL_STALE_AFTER_MS,
+  translateNflSnapshot,
+} from '../translation/nfl';
+
+/**
+ * The real sources, and the one question that turned out to have two uses.
+ *
+ * `StaleSchedule.dueAfter` was written to answer "should I have heard something
+ * by now" for the staleness state. It is word for word the question a poll asks
+ * — "is there anything new to fetch" — so a source that can say when it will
+ * next speak has already said when to ask it again, and this module is the two
+ * uses meeting. Nothing here schedules anything on a clock of its own.
+ *
+ * Sharpening staleness is what made this necessary rather than merely tidy. Both
+ * sources snapshot once and, before this, never again; under the old four-day
+ * threshold a garden that never refreshed still read as fresh, and under a
+ * two-bar grace it correctly reads as dead. The garden was right and the app was
+ * wrong, so the app polls.
+ */
+
+export interface TranslatedGarden {
+  nodes: Record<string, EcosystemNode>;
+  edges: Record<string, EcosystemEdge>;
+  history: Record<string, VitalsHistory>;
+  archive: Record<string, VitalsHistory>;
+}
+
+export interface LiveSource {
+  gardenId: string;
+  /** When this source should next be heard from. Registered against the garden. */
+  policy: StalePolicy;
+  /** Ask the source, and translate what it says, as of `now`. */
+  read(now: number): TranslatedGarden;
+  /**
+   * Whether asking again is meaningful.
+   *
+   * Not every generated source can be re-asked. The league's season is anchored
+   * to the moment it was first generated — its most recent kickoff is always 26
+   * hours ago, which is what keeps a game inside the scrub window — so asking
+   * again at a later time does not extend the season, it *slides* it, and every
+   * result the history already recorded moves with it. That is a property of the
+   * fiction rather than of the design, and a live adapter simply does not have
+   * it. The market's tape was given an anchor precisely so it would not.
+   *
+   * It costs nothing here: the league's next reading is due a week out, so a
+   * source that cannot be re-asked inside that window has nothing to be asked
+   * for.
+   */
+  pollable: boolean;
+}
+
+const nfl = syntheticNflSource();
+const market = syntheticMarketSource();
+
+export const SOURCES: readonly LiveSource[] = [
+  {
+    gardenId: NFL_GARDEN_ID,
+    policy: NFL_STALE_AFTER_MS,
+    read: (now) => translateNflSnapshot(nfl.snapshot(now), { asOf: now }),
+    pollable: false,
+  },
+  {
+    gardenId: MARKET_GARDEN_ID,
+    policy: MARKET_STALE_SCHEDULE,
+    read: (now) => translateMarketSnapshot(market.snapshot(now), { asOf: now }),
+    pollable: true,
+  },
+];
+
+/**
+ * When a garden should next have something new in it.
+ *
+ * Taken from the *freshest* plant, not the stalest. A source is a single feed:
+ * if the thing that spoke most recently was due to speak again and has not, the
+ * feed owes us something. Taking the stalest instead would let one halted symbol
+ * — which is legitimately silent and permanently overdue — demand a poll every
+ * two seconds forever.
+ */
+export function dueAt(
+  nodes: Record<string, EcosystemNode>,
+  gardenId: string,
+  policy: StalePolicy = scheduleFor(gardenId),
+): number | null {
+  let freshest = -Infinity;
+  for (const node of Object.values(nodes)) {
+    if (node.gardenId !== gardenId || node.kind !== 'plant') continue;
+    if (node.updatedAt > freshest) freshest = node.updatedAt;
+  }
+  if (freshest === -Infinity) return null;
+
+  return typeof policy === 'number' ? freshest + policy : policy.dueAfter(freshest);
+}
+
+/**
+ * The sources with something owed, at `now`.
+ *
+ * Pure, and separate from the store on purpose: whether a poll is due is the
+ * whole of the decision, and it should be assertable without standing up a
+ * zustand singleton whose sources snapshot at module load.
+ */
+export function dueSources(
+  nodes: Record<string, EcosystemNode>,
+  now: number,
+  sources: readonly LiveSource[] = SOURCES,
+): LiveSource[] {
+  return sources.filter((source) => {
+    if (!source.pollable) return false;
+    const due = dueAt(nodes, source.gardenId, source.policy);
+    return due !== null && now >= due;
+  });
+}

@@ -12,8 +12,8 @@ are still open.
 
 ## State
 
-`main` is green. 485 tests across 24 files, `tsc --noEmit` clean, `vite build`
-clean, and CI runs all three on every push and every pull request. 85 tracked
+`main` is green. 498 tests across 25 files, `tsc --noEmit` clean, `vite build`
+clean, and CI runs all three on every push and every pull request. 87 tracked
 source files.
 
 Six gardens. Two are real, in the sense that they come through the
@@ -41,6 +41,13 @@ single highest-value thing an environment with network access could do.
   session is flagged in 3.2 hours rather than 95.7. A bare number is still a legal
   policy and is the degenerate schedule, which is what the league stays on, on
   purpose. Details below and in ARCHITECTURE.md.
+- **The poll**, which that change made necessary rather than merely nice. Both
+  sources snapshotted once and never again; sharpened staleness correctly called
+  the market garden dead about three hours in, because it was. `state/sources.ts`
+  now re-reads a source when its own `dueAfter` says a reading is owed — the same
+  question, used twice. Making the tape safe to ask twice was most of the work,
+  and found a latent determinism bug: the price walk's rng was consumed inside the
+  bar-emission branch, so what got printed changed the prices.
 - **#9** — an audit of the docs against the code. Five claims were false,
   including a `src/xr/` that never existed and a sample count that was out by
   4,000. Then the CI that would have caught them, because the repository had
@@ -77,6 +84,16 @@ the staleness state reachable in that garden. Its feed also carries no fixture
 list to point `dueAfter` at. Giving it a schedule "for consistency" would silently
 delete a documented behaviour and a demonstrable state.
 
+**A generated source that gets polled must extend, never slide.**
+`syntheticMarketSource` fixes its origin day and its halt time on the first
+`snapshot()` and reuses them. Measure either back from `now` again — which is
+what `tradingDaysBack(now, SESSIONS)` did — and asking twice re-prices the whole
+record behind you, so the history already recorded disagrees with the source it
+came from. Related and just as easy to undo: bar volume is keyed on the bar's
+close time rather than drawn from the walk's rng, because drawing it inside the
+emission branch made the price path depend on which bars happened to be printed.
+There are tests for both.
+
 **Beds are raised by lowering the floor.** Plants sit at `y = 0` and grafts,
 dust, and sway all measure from there. Raising the soil would force every one of
 those to learn a bed height. `FLOOR_Y` is negative for this reason.
@@ -98,27 +115,7 @@ plausible numbers is indistinguishable from data.
 
 ## Open work, in the order I would take it
 
-### 1. A poll, or the collector — newly load-bearing
-
-This moved to the top because session-aware staleness put it there. Both real
-sources take their snapshot at module load and never ask again, which under a
-four-day threshold was invisible and under a two-bar grace is not: the market
-garden now correctly greys about three hours into a trading session, because the
-feed genuinely is dead and nothing was hiding it any more. The league is fine —
-its due time is a week out.
-
-The cheap half is a poll. `MarketSource.snapshot(now)` already takes a time and
-the tape is seeded, so re-snapshotting is a re-run rather than a fetch, and
-`dueAfter` says exactly when to do it: the same "when should I next have heard
-something" that decides staleness decides when to ask. One caveat to check before
-wiring it — the tape walks forward from `tradingDaysBack(now, SESSIONS)`, so a
-re-snapshot on the far side of midnight ET slides the window and re-prices the
-whole series. Within a session it is stable.
-
-The expensive half is the real one, and it is the collector below: history is
-backfilled at module load and then lives only as long as the tab.
-
-### 2. A look control that does not orbit
+### 1. A look control that does not orbit
 
 The sun is the time scrub, and on desktop most of the day it cannot be pointed
 at, because an orbit control aims at its target and the upper sky is out of
@@ -134,7 +131,7 @@ must register itself the same way (`makeDefault`) or the shift-drag will fight
 it. And the existing orbit clamps in `viewpointFor` — walls, nearest plant,
 eaves — are what keep the viewer indoors; a new control needs its own equivalent.
 
-### 3. An inspection HUD that uses what is already there
+### 2. An inspection HUD that uses what is already there
 
 Both real sources fill `raw` with a full payload nothing renders — a club's stat
 sheet, an instrument's cost basis, market value, drawdown, volatility, and bar
@@ -142,17 +139,21 @@ count. `ecosystem/inspect.ts` already flattens an opaque payload into rows, and
 `ecosystem/series.ts` already turns history into a line with the gaps preserved.
 The pieces exist; the panel that shows them on selection does not.
 
-### 4. A collector
+### 3. A collector
 
 The archive tier can hold months and nothing is recording them. History is
 backfilled at module load and then lives only as long as the tab. A collector is
 a layer the original architecture diagram does not have — something that runs
 whether or not anyone is looking — and it is the difference between a scrub over
-generated history and a scrub over the real past. It also inherits its schedule
-free of charge: `StaleSchedule.dueAfter` is already the answer to "when should I
-ask this source again".
+generated history and a scrub over the real past.
 
-### 5. Bound the geometry cache
+The poll is the half of this that now exists, and it is worth reading first: it
+keeps the *live* reading true but dies with the tab. `state/sources.ts` already
+holds the schedule, the pollability flag, and the "is anything owed" scan, so a
+collector is that loop moved somewhere it can outlive a page — and `LiveSource`
+is the shape it would want anyway.
+
+### 4. Bound the geometry cache
 
 51MB is affordable, unbounded growth is not. Wants an LRU keyed on node id and
 vitality bucket. Recorded as a risk since before the scrub shipped.

@@ -137,6 +137,25 @@ export function nextBarClose(at: number, maxDays = 14): number | null {
   return null;
 }
 
+/**
+ * Trading-day starts from `from` to `to` inclusive, oldest first.
+ *
+ * The counterpart to `tradingDaysBack`, and the one a source that gets asked
+ * twice needs. Counting back from "now" gives a window that slides, so the same
+ * calendar day sits at a different offset on every call and a walk compounding
+ * across it re-prices the whole record. Anchoring the far end instead makes a
+ * later call *extend* the record rather than move it, which is how a real feed
+ * behaves and the only way a second poll can agree with the first.
+ */
+export function tradingDaysBetween(from: number, to: number): number[] {
+  const days: number[] = [];
+  const first = localDayStart(from);
+  for (let day = first; day <= to; day += DAY_MS) {
+    if (isTradingDay(day)) days.push(localDayStart(day));
+  }
+  return days;
+}
+
 /** Trading-day starts at or before `at`, most recent first. */
 export function tradingDaysBack(at: number, count: number): number[] {
   const days: number[] = [];
