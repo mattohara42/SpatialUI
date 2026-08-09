@@ -6,6 +6,8 @@ import { HOUR_MS, record } from './history';
 import { generateMockEcosystem } from '../mock/mockEcosystemData';
 import { syntheticNflSource } from '../adapters/nfl';
 import { translateNflSnapshot } from '../translation/nfl';
+import { syntheticMarketSource } from '../adapters/market';
+import { translateMarketSnapshot } from '../translation/market';
 import { MARK_LIMIT, emblemOf, luminanceOf } from './labels';
 import type { EcosystemNode } from './types';
 
@@ -175,6 +177,7 @@ describe('every plant is named', () => {
   const sources = [
     ['mock gardens', generateMockEcosystem().nodes],
     ['the league', translateNflSnapshot(syntheticNflSource().snapshot()).nodes],
+    ['the book', translateMarketSnapshot(syntheticMarketSource().snapshot()).nodes],
   ] as const;
 
   for (const [name, nodes] of sources) {
