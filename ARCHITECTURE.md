@@ -33,6 +33,15 @@ src/
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
                      edge validation, topology keys.
     graph.test.ts
+    history.ts       Vitals over time as fixed-size ring buffers, slotted on
+                     absolute time so gaps stay gaps. Four parallel typed
+                     arrays, both grains, and `vitalsAt`.
+    history.test.ts
+    layout.ts        Where things stand. Pure and deterministic, kept out of
+                     the scene; reads each bed's arrangement off its planting
+                     type rather than deciding it.
+    staleness.ts     How late a node is against its garden's threshold, and the
+                     visual state that follows. Silence must not read as health.
     scrub.ts         What counts as a legal cursor: the window, the clamp, and
                      when a scrub lands back on live. Knows nothing about the
                      sky, so the store can use it without importing a renderer.
@@ -50,6 +59,8 @@ src/
     inspect.ts       The opaque `raw` payload flattened into rows, without
                      knowing anything about its shape.
     inspect.test.ts
+    scene-inputs.test.ts  The seam itself: what the scene is handed for a given
+                     state, asserted end to end rather than per module.
   lsystem/           Pure procedural geometry. No React, no three.js.
     types.ts         Vec3, Grammar, TurtleParams, PlantGeometry.
     random.ts        Seeded PRNG so a node id always grows the same plant.
@@ -76,8 +87,26 @@ src/
                      gesture asks for on every pointer move and which only
                      changes when the garden does. Recomputing it per move
                      would walk every node's archive at pointer rate.
+    ecosystemStore.ts  The store, and `composeEcosystem` — the one place that
+                     knows more than one source exists.
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
+    types.ts         What the scene is handed per plant: geometry, place, tint.
+    Garden.tsx       The garden itself: assembles the scene from store state
+                     and owns the rig every other component draws under.
+    Branches.tsx     Every branch in the garden in a single InstancedMesh, so
+                     draw calls do not scale with plant count.
+    Grafts.tsx       Root grafts as curves dipping under the soil. Merged per
+                     garden, rebuilt only on topology change.
+    Beds.tsx         Soil. Structure rather than signal, with furrows running
+                     along the axis layout puts rows on.
+    Motes.tsx        Drifting motes: activity made visible in the air,
+                     additive so they read as light — the inverse of dust.
+    Sky.tsx          The sky dome, a pure function of the hour under the
+                     cursor. Decides nothing; draws what `daylight.ts` says.
+    sway.ts          Ambient motion: a rigid lean about the base, shared by
+                     branches and foliage so they stay glued together.
+    sway.test.ts
     daylight.ts      Timestamp to sun direction and full palette, and the
                      inverse used by the drag. Pure, no three.js.
     daylight.test.ts
@@ -107,6 +136,7 @@ src/
                      World-anchored beside its plant, never head-locked.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
+    planting.test.ts
     textures.ts      Surface grain at two scales: generated achromatic maps
                      (turf, soil, bark) and the per-instance jitter. Pure but
                      for the DataTexture builder, so the pixels are testable.
@@ -125,6 +155,9 @@ src/
                      reachable without hand-editing data. The tick moves only
                      the gardens this module generated, so it can never drift
                      a translated one.
+  App.tsx            Deliberately plain chrome: garden buttons and a readout of
+                     where the cursor is. The garden is the interface.
+  main.tsx           Vite entry.
 ```
 
 Everything listed above without a "planned" note exists and is under test:
@@ -183,11 +216,11 @@ feed that hands you totals has already thrown away when each number changed.
 **Every derivation takes an `asOf`.** `recordOf`, `statsOf`, and
 `availabilityAt` answer for any moment in the season, so the live view and the
 history are the same function called at different times and cannot disagree.
-Backfilling a week of hourly vitals is that function in a loop; because a club's
-numbers only move when a game goes final or an injury is reported, the loop is
-memoized on the count of each and collapses to two or three real computations
-per club. The whole league — thirty-two clubs, 48 edges, 168 hourly samples each
-— translates in about 25ms at module load.
+Backfilling history is that function in a loop; because a club's numbers only
+move when a game goes final or an injury is reported, the loop is memoized on
+the count of each and collapses to a handful of real computations per club. The
+whole league — thirty-two clubs, 48 edges, and both grains of history —
+translates in about 40ms at module load. The measurements are below.
 
 **A container level can be a row rather than a bed.** The model has exactly one
 grouping level between garden and plant, and the NFL has two (conference,
@@ -254,16 +287,24 @@ behind it:
 
 ```
 storage, archive       2.9KB per node per season (daily, 140 slots)
-snapshot generation    6ms       272 games, 32 rosters, 32 injury reports
-translation            48ms      32 clubs to nodes, plus both grains of history
-                                 backfilled — a week of hours and a season of
-                                 days, 5,824 samples in all
+snapshot generation    7ms       210 games (14 weeks played), 32 rosters,
+                                 32 injury reports
+translation            40ms      32 clubs to nodes, plus both grains of history
+                                 backfilled — a week of hours and the season so
+                                 far in days, 8,346 samples written
 ```
+
+The archive is capacious rather than full: 140 slots reach 20 weeks back, the
+season so far is 14, and slots before the season opened are deliberately left
+unwritten rather than filled with an opening-day figure that would read as a
+flat line of data. That is the gap between the 4,480 daily slots allocated and
+the 2,970 written.
 
 Both grains come from the same as-of derivation, so the cost is not in the
 sampling but in how often it has to be recomputed: memoized on games played and
-injuries active, a club's season of dailies collapses to about twenty real
-computations. It runs once at module load and never again.
+injuries active, a club's season of dailies collapses to about fourteen real
+computations, and its week of hours to three or four. It runs once at module
+load and never again.
 
 Storage was never the expensive part. Rebuilding geometry on every scrub step
 is, and quantized vitality is what defuses it: a week of hourly history collapses
@@ -292,8 +333,9 @@ hit rate and scrubbing costs less than a frame.
    one geometry per garden, rebuilt only on topology change and keyed by
    `topologyKey`. Strength and directional flow animate in the shader against a
    static mesh, so a strength wobble costs nothing.
-6. Desktop browser is the first target. XR is not wired, but no HUD or control
-   is head-locked and `src/xr/` exists to keep that honest.
+6. Desktop browser is the first target. XR is not wired and `src/xr/` has not
+   been created, but no HUD or control is head-locked, so nothing built so far
+   has to be undone to get there.
 7. The sun travels a tilted circle with a declination. This was a plane great
    circle, on the reasoning that an almanac position "needs a latitude and a date
    and would buy nothing" — right about the latitude, wrong about the date. Tilt

@@ -25,6 +25,10 @@ npm run typecheck    # tsc --noEmit
 npm run build        # typecheck + production build
 ```
 
+All three run in CI on every push to `main` and every pull request
+(`.github/workflows/ci.yml`), so "the tests pass" is a checked fact rather than
+a claim in a commit message.
+
 The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
 built through the real adapter → translation pipeline — alongside four mock
 gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It
