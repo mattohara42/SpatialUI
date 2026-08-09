@@ -1,0 +1,53 @@
+name: CI
+
+# Every "307 tests pass, typecheck and build clean" in this repository's history
+# was a human or an agent running the commands and reporting the result. That
+# held up until it didn't: a commit whose subject was correcting stale docs
+# shipped two new false claims. This workflow is the part that cannot be
+# mistaken or overstated.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So a red main can be re-checked without an empty commit.
+  workflow_dispatch:
+
+# A force-push or a quick second push should cancel the run it superseded rather
+# than race it. Never cancel on main: those runs are the record.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the version the suite is actually verified on. There is no
+      # `engines` field to honour, so this is the claim rather than a guess.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # ci, not install: the lockfile is committed, and a run that silently
+      # resolved different dependencies would not be checking this commit.
+      - name: Install
+        run: npm ci
+
+      # Kept as three named steps even though `build` re-runs tsc. The extra
+      # pass costs a few seconds and buys an unambiguous answer to "what broke" —
+      # a failing test, a type error, and a bundling failure are three different
+      # problems, and a single red step would conflate them.
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
