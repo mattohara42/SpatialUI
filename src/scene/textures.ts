@@ -276,6 +276,52 @@ export function barkPixels(seed = 0xba12, size = TEXTURE_SIZE): Uint8Array {
 }
 
 /**
+ * Sawn timber: grain running the length of the board.
+ *
+ * The transpose of bark, and deliberately so. Bark's lattice is many cells
+ * around the trunk and one along it, because a cylinder's u goes around and its
+ * v goes up. A board is a box, and a box face's u runs along whichever edge is
+ * longest, so the grain has to vary across v and hold along u — which is what
+ * puts the lines down the plank rather than banded across it like a barcode.
+ *
+ * Louder than the other maps. A raised bed's timber is a hard, man-made surface
+ * a metre from the camera, and it is the one thing in the scene that should look
+ * sawn rather than grown: the beds are structure, and the sides saying "somebody
+ * built this" is exactly the read that stops them looking like a hole in the
+ * floor.
+ */
+export function plankPixels(seed = 0x91a4, size = TEXTURE_SIZE): Uint8Array {
+  return encode(
+    fieldOf(size, seed, [
+      [1, 10, 0.46],
+      [2, 20, 0.28],
+      [3, 40, 0.16],
+      [12, 12, 0.1],
+    ]),
+    0.2,
+  );
+}
+
+/**
+ * Grit: the floor of the house, and the stone the glazing stands on.
+ *
+ * Finer and busier than turf, with no scale that reads as a clump. Gravel is the
+ * one surface here made of pieces small enough that the eye gives up and calls
+ * it a texture, and the point of it is negative: the path has to be visibly
+ * *not* a bed, so that the raised beds are the only ground anything grows out of.
+ */
+export function gravelPixels(seed = 0x6d21, size = TEXTURE_SIZE): Uint8Array {
+  return encode(
+    fieldOf(size, seed, [
+      [16, 16, 0.16],
+      [32, 32, 0.3],
+      [64, 64, 0.54],
+    ]),
+    0.18,
+  );
+}
+
+/**
  * Pixels to a texture ready to hang on a material.
  *
  * Two DataTexture defaults are wrong for this and both are easy to lose an hour

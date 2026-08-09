@@ -67,13 +67,15 @@ src/
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
                the garden, and the only place the mapping is decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
-               staleness, scrub window rules, planting types
+               staleness, scrub window rules, planting types, labels and
+               emblems, history-as-a-series, and the raw-payload flattener
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, near enough nothing derived) and the
                composition point where the gardens are assembled
-  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
-               Sky, SunScrub, Horizon, plus the pure sway and daylight modules
+  scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
+               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, plus
+               the pure sway, daylight, dust, greenhouse, and label modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -137,6 +139,49 @@ not a rebuild.
   a healthy plant reads as a full canopy — or a full bloom — and a sick one sheds
   to bare twigs or a bare stem. Petal colour is decorative and varietal, never a
   health signal.
+- **You stand inside it.** The viewer is on the path under the glass at eye
+  height, not outside looking in — the beds are either side, the glazing bars
+  are overhead, and the hills are seen through the wall. The orbit is clamped by
+  the walls, the nearest plant, and the eaves, so you cannot scroll back out
+  into the field by accident: being indoors is a constraint rather than a
+  starting position. The cost is that a garden's apparent size is no longer
+  fixed — a three-bed garden and the league differ by how much house is around
+  you, which is the difference a person walking in would get.
+- **The garden is under glass.** A greenhouse — dwarf wall, painted frame,
+  glazing bars, a pitched roof with a vent propped open, and a door standing
+  ajar — sized from whatever is planted, so the league gets a bigger house rather
+  than a cramped one. It answers "how much world has to exist" with a wall three
+  metres away: the field and the hills are still out there and still lit by the
+  same sun, but they are weather now rather than scenery. The sky is the one
+  thing it may not take, so the panes cast no shadow and write no depth and the
+  sun, moon, and stars read straight through the roof — you can still grab the
+  sun to scrub time. **Beds are raised**, held in timber with corner posts and a
+  cap rail; they are raised by lowering the floor, so the soil surface never
+  moved and nothing that measures from a plant had to change. And the house is
+  furnished: a hose on its hook with a length left on the floor, a potting bench
+  on castors, a watering can, shears, gloves, twine, and stacks of terracotta
+  pots. All of it signal-free, against the walls, and still.
+- **Names, at the distance a name belongs.** Every plant carries a nursery tag —
+  a stake with a card, the thing's mark on a roundel and its name beside it —
+  and the tags **are not there until you walk up to a plant**. They fade in
+  inside about nine metres and read fully at four and a half, so the view of a
+  whole house has no text in it at all and the beds are named once you are among
+  them. Health is what you read across the room; a name is what you read at the
+  bed. What goes on the card is chosen by translation, never guessed by the
+  renderer: the league uses its own abbreviations and club colours (`DAL` in
+  Cowboys navy), and a source with no marks of its own takes the documented
+  default — initials on a stable colour — as a deliberate choice. An emblem is
+  fixed for the life of a node, which is what keeps a colour on a card clear of
+  the health channel: identity never moves, signal does.
+- **Tap a tag and the plant explains itself.** A panel opens in the air beside
+  it — world-anchored rather than stuck to the screen, because the same object
+  has to work in a headset — carrying the four axes as numbers, vitality over
+  the last day and over the season as sparklines, the blights, and the source's
+  own payload flattened into rows. It is the only place in the app with numbers
+  in it, which is what a deliberately lossy summary owes you. It reads through
+  the cursor, so scrubbing with a panel open moves the panel; and a stretch
+  nobody recorded is drawn as a **gap in the line**, never bridged, because a
+  trend line across silence is a picture of something that did not happen.
 - **A landscape behind the garden** — layered hills, distant mountains, and a
   conifer tree line receding into fog. Static and signal-free by design; it is
   lit and fogged by the same rig as the garden, so it tracks the day/night scrub
@@ -174,14 +219,22 @@ not a rebuild.
 ### Reaching the sun
 
 Dragging the sun is the gesture the concept is about, and on desktop it is only
-half reachable: the camera orbits a target at knee height and is clamped at the
-horizon, so sky above roughly 25 degrees cannot be pointed at with a mouse, and
-the sun is up there for most of the day. Swing the camera toward a low sun and
-you can take hold of the disc directly. Otherwise **shift-drag anywhere** does
-the same thing, and the sun still visibly moves under the drag. Left and right
-arrows step an hour (shift, six); up and down step a day (shift, a week); escape
-returns to live. A drag commits to hours or to seasons on its first movement and
-holds it, so a diagonal never means both.
+half reachable. The camera stands inside the house and orbits a target at plant
+height, so it is always looking somewhat down at the beds: the sky is visible
+through the roof and the walls, but the upper sky where the sun spends most of
+the day cannot be pointed at with a mouse. Standing inside did not cause this —
+the old outdoor camera had the same limit for the same reason — but it does not
+fix it either, and it removes the one workaround the field allowed, which was
+backing away until the sky came into frame.
+
+The glass itself is not in the way: it carries no pointer handlers, so R3F never
+raycasts it and the sun, the moon, and their grab handles stay reachable straight
+through the roof. Swing the camera toward a low sun and you can take hold of the
+disc directly. Otherwise **shift-drag anywhere** does the same thing, and the sun
+still visibly moves under the drag. Left and right arrows step an hour (shift,
+six); up and down step a day (shift, a week); escape returns to live. A drag
+commits to hours or to seasons on its first movement and holds it, so a diagonal
+never means both.
 
 In a headset you look up and grab it, which is the interaction the shift-drag is
 standing in for.

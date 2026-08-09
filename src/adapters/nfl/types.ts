@@ -51,10 +51,22 @@ export interface NflTeam {
    */
   founded: number;
   /**
-   * Team colours, for the inspection HUD only. Explicitly *not* a render input:
-   * colour in this scene is a redundant encoding of health (DESIGN.md), and
-   * thirty-two team palettes arriving through the back door would quietly make
-   * hue mean something again.
+   * Team colours, for identity surfaces only — the inspection panel, and the
+   * emblem on the club's plant tag.
+   *
+   * This said "the HUD only, explicitly not a render input" and the reasoning
+   * behind that has not changed: colour in this scene is a redundant encoding
+   * of health (DESIGN.md), and thirty-two team palettes arriving through the
+   * back door would quietly make hue mean something again. What changed is that
+   * there is now a surface where a colour cannot be mistaken for a reading. An
+   * emblem is **fixed for the life of the node** and sits on a card with the
+   * club's name on it, which is not a thing anybody reads as vitality; the ban
+   * is on a palette reaching the *organism* — bark, foliage, produce, bloom —
+   * where it would sit in the same channel as health and lose an argument with
+   * it every time.
+   *
+   * The line to hold: a colour that never moves is identity, and a colour that
+   * moves is signal. Nothing in this record may ever be handed to a plant.
    */
   colors: { primary: string; secondary: string };
 }

@@ -50,6 +50,15 @@ src/
                      each type's spatial arrangement. Self-contained, imports
                      nothing, so layout and the renderer share it cycle-free.
     planting.test.ts
+    labels.ts        What a thing is called and the mark it wears. The Emblem
+                     contract translation must choose, plus the explicit default.
+    labels.test.ts
+    series.ts        History as a line rather than a point, for the detail
+                     panel. Gaps stay gaps all the way to the drawn path.
+    series.test.ts
+    inspect.ts       The opaque `raw` payload flattened into rows, without
+                     knowing anything about its shape.
+    inspect.test.ts
     scene-inputs.test.ts  The seam itself: what the scene is handed for a given
                      state, asserted end to end rather than per module.
   lsystem/           Pure procedural geometry. No React, no three.js.
@@ -108,6 +117,23 @@ src/
     Trellis.tsx      Static posts and wires for vineyard beds. Signal-free, like
                      the horizon; the vines are trained to it.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
+    greenhouse.ts    The house as arithmetic: floor level, proportions, bay
+                     spacing, roof height at a distance in from the wall. Pure,
+                     no three.js, like daylight and dust.
+    greenhouse.test.ts
+    Greenhouse.tsx   Draws it — dwarf wall, frame, glazing, roof, vent, door —
+                     from one unit cube and one unit quad.
+    Props.tsx        The hose, the rolling bench, the can, the shears, the
+                     gloves, the pots. Decoration, against the walls, still.
+    Beds.tsx         Raised beds: soil in a timber box with a cap rail.
+    labels.ts        When a tag is legible, and how big it is. Pure.
+    labels.test.ts
+    Tags.tsx         The tags themselves: stake, card, fade, and the tap that
+                     opens the panel.
+    tagTexture.ts    A tag drawn to a 2D canvas — the one place text enters the
+                     scene, and the one texture that is a real albedo map.
+    Detail.tsx       The panel: axes, trend lines, blights, source payload.
+                     World-anchored beside its plant, never head-locked.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
     planting.test.ts
@@ -135,7 +161,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-307 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
+407 tests across twenty-one files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -401,6 +427,92 @@ hit rate and scrubbing costs less than a frame.
     drag's *direction* is latched at the grab for the same reason: whether
     pulling the sun up means earlier or later depends on which side of a solstice
     the cursor is on, and dragging across one must not reverse under the hand.
+
+18. The garden is under glass, and the beds are raised by **lowering the
+    world**. A plant is placed at y = 0 by `layout.ts`; grafts run between those
+    points, dust settles from them, sway is measured up from them. Lifting the
+    soil would have made every one of those learn a bed height, so the floor
+    drops to `FLOOR_Y` instead and the timber sides fall away beneath a soil
+    surface that never moved. Nothing above the ground changed. The consequence
+    to keep straight is that the building's own heights — knee, eaves, ridge,
+    door — are measured **from the floor**, not from the soil, and `Greenhouse`
+    puts that datum in place with one group offset.
+
+19. Glass casts no shadow and writes no depth. Not casting is a light decision:
+    the shadow map is 2048 texels over twenty-four metres, so a glazing bar is
+    three or four of them and would shimmer as the sun moved, and a hard lattice
+    over the beds would compete with the plants' own shadows for the glance the
+    product is built around. Not writing depth is a correctness one: the panes
+    are blended over everything opaque, so plants behind glass are never sorted
+    away — and neither are the sky, the sun, the moon, or the invisible sixteen
+    metre grab handles the last two carry. Scrubbing time *is* grabbing the sun,
+    so a roof that swallowed the pointer would have cost the whole gesture.
+    (R3F only dispatches pointer events to objects that have handlers, so the
+    panes are not in the way either.)
+
+20. The viewer stands inside the house. The camera used to solve for a distance
+    that fit the whole width in frame, which is arithmetic that can only ever
+    put it outside the building — for the league, sixteen metres past the back
+    wall, looking at a greenhouse with a garden shut inside it. The house was
+    never the subject. `viewpointFor` places a body on the path instead: eye
+    height above the floor, at the near wall, looking at the middle of the
+    planting.
+
+    Being inside is not a starting position but a constraint, and the clamps are
+    the substance of it. A wheel that carried the camera out through the glass
+    would undo the whole thing in one gesture, so the orbit is bounded by the
+    nearer of the two walls, by the nearest plant coming in, and by the eaves
+    going up. The arithmetic lives in `scene/greenhouse.ts` with the rest of the
+    proportions, because the failure mode is a camera inside a wall and that is
+    a claim a test can settle.
+
+    What it costs: the apparent size of a garden is no longer constant. A three
+    bed garden and the league now differ by how much house is around you rather
+    than by how far away you stand, which is the honest difference and the one a
+    person walking in would get.
+
+    `Framing` still fires on the house's dimensions only, never on a telemetry
+    tick, or the camera would snatch itself back every two seconds while
+    somebody was looking at something.
+
+21. Identity is a channel of its own, entered by walking. Labels do not exist at
+    a distance: a plant tag fades in inside about nine metres and is fully
+    legible at four and a half, so the view of a whole house has no text in it
+    and the beds are named once you are among them. That is what lets a label be
+    as legible as it likes — it competes with the health reading by not being
+    present at the same time. The distance rule lives in `scene/labels.ts`, pure
+    and asserted, rather than as two numbers inside a `useFrame`.
+
+22. The emblem on a tag is chosen by translation and is never a signal. It is a
+    node field (`Emblem`: a mark, a plate colour, an ink) with an explicit
+    default in `ecosystem/labels.ts`, because what a thing is called and what it
+    looks like is domain knowledge the renderer does not have — the league uses
+    its own abbreviations and club colours, and deriving `DC` for the Dallas
+    Cowboys off a label throws away something the source already knew. It is
+    fixed for the life of the node, which is what keeps a colour on a card clear
+    of the channel budget: identity never moves, signal does. The ban on a source
+    palette reaching bark, foliage, produce, or bloom still holds absolutely.
+
+23. Text is the one thing this project cannot generate. Grain comes from a
+    seeded PRNG and plants come from a grammar, but letterforms come from a
+    font, and both usual routes break rules already committed to — a bitmap font
+    is an image asset, and drei's text helpers fetch a typeface at first render.
+    A 2D canvas is the way out: a face the machine already has, pixels rather
+    than a file, no fetch. The cost, stated plainly, is that the tag is the only
+    surface whose exact appearance depends on the machine, since font
+    availability differs; nothing reads it but a person. It is also the one
+    texture in the app that is a real albedo map, so it must declare
+    `SRGBColorSpace` — the same trap as assumptions 9 and 13, from the other
+    direction.
+
+24. The detail panel is world-anchored, not head-locked, and reads through the
+    cursor. Anchored because `src/xr/` exists to keep the project honest and a
+    card welded to the corner of the screen is the one interface a headset
+    cannot have; through the cursor because a panel that showed live numbers
+    while the sky showed Tuesday would be two clocks in one frame. Selection
+    lives in the store rather than in a component: the tag that was clicked and
+    the panel that opens are at opposite ends of the scene, and a panel that
+    closed itself on every telemetry tick would be unusable.
 
 ## Collection
 

@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { OrbitControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
+import type * as THREE from 'three';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
@@ -10,6 +12,11 @@ import { Motes } from './Motes';
 import { Dust } from './Dust';
 import { Sky } from './Sky';
 import { Horizon } from './Horizon';
+import { Greenhouse } from './Greenhouse';
+import { Props } from './Props';
+import { Tags } from './Tags';
+import { Detail } from './Detail';
+import { FLOOR_Y, shellFor, viewpointFor, type Viewpoint } from './greenhouse';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -39,7 +46,13 @@ const SHADOW_EXTENT = 12;
 
 /** Edge length of the ground sheet, and metres of it per turf tile. Two metres
  *  is a compromise: tighter and the tiling repeats visibly underfoot, wider and
- *  the grain coarsens into blotches that stop reading as grass. */
+ *  the grain coarsens into blotches that stop reading as grass.
+ *
+ *  The field outside matters much less now that the garden is under glass. It is
+ *  still lit and fogged by the same rig, and still runs out to meet the sky so
+ *  there is no plate edge floating in fog, but it is weather rather than
+ *  scenery: seen through a pane from three metres inside, it only has to be a
+ *  soft green distance. */
 const GROUND_SIZE = 1000;
 const TURF_TILE = 2;
 
@@ -133,6 +146,42 @@ function hashString(id: string): number {
   return h >>> 0;
 }
 
+/**
+ * Where you stand when you walk into a garden.
+ *
+ * You stand *in* it. The camera used to solve for a distance that fit the whole
+ * width in frame, which necessarily put it outside the house — for the league,
+ * some sixteen metres past the back wall, looking at a building with a garden
+ * inside it. The house is not the subject and never was; being under the glass
+ * with the plants is the entire reason for having built it.
+ *
+ * The position comes from `viewpointFor`, so the arithmetic that decides where a
+ * body can stand lives with the rest of the proportions and is tested there.
+ * This component only applies it.
+ *
+ * It fires on the house's dimensions and on nothing else. Those change when you
+ * enter a garden and never on a telemetry tick, which is the difference between
+ * a camera that frames what you walked into and one that snatches itself back
+ * every two seconds while you are trying to look at something.
+ */
+function Framing({ view }: { view: Viewpoint }) {
+  const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
+  const controls = useThree((state) => state.controls) as {
+    target: THREE.Vector3;
+    update: () => void;
+  } | null;
+
+  useEffect(() => {
+    camera.position.set(...view.position);
+    if (controls) {
+      controls.target.set(...view.target);
+      controls.update();
+    }
+  }, [view, controls, camera]);
+
+  return null;
+}
+
 export function Garden() {
   const nodes = useEcosystem((s) => s.nodes);
   const edges = useEcosystem((s) => s.edges);
@@ -150,6 +199,11 @@ export function Garden() {
   );
 
   const layout = useMemo(() => layoutGarden(gardenNodes), [gardenNodes]);
+
+  // The house the garden stands in, sized from what is planted rather than
+  // fixed, so the league gets a bigger building and not a cramped one.
+  const shell = useMemo(() => shellFor(layout.size), [layout]);
+  const view = useMemo(() => viewpointFor(shell), [shell]);
 
   const gardenEdges = useMemo(
     () => (activeGardenId ? edgesInGarden(state, activeGardenId) : []),
@@ -300,23 +354,54 @@ export function Garden() {
         <Foliage plants={plants} />
         <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
-        {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
+        {/* Names, and the panel behind them. Inside the translated group
+            because both are placed at a plant, and a plant's position is in the
+            garden's own coordinates. */}
+        <Tags plants={plants} />
+        <Detail plants={plants} />
+        {plants.length > 0 && (
+          <Motes size={layout.size} activity={activity} ceiling={shell.eaves - 0.3} />
+        )}
         {/* Dust falls only on plants that have gone silent, so this draws
             nothing at all in a garden that is reporting. */}
         <Dust plants={plants} night={daylight.stars} />
       </group>
+      {/* The house, and the things left lying about in it. Both stand outside
+          the translated group: the garden is centred on the origin by that
+          offset, so the shell is centred there too, and neither knows anything
+          about where a particular bed landed. */}
+      <Greenhouse shell={shell} />
+      <Props shell={shell} />
+
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
           fog. Only the garden-sized centre receives shadows (the shadow camera
           covers a few metres), but the whole sheet is lit and fogged, which is
-          what carries it to the horizon. The hills and tree line stand on it. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
+          what carries it to the horizon. The hills and tree line stand on it.
+          Everything outdoors sits at the house's floor level, because raising
+          the beds was done by lowering the world (see greenhouse.ts). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]} receiveShadow>
         <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
         <meshStandardMaterial map={turf} color={liftForTexture('#5c6e3a')} roughness={1} />
       </mesh>
-      <Horizon />
+      <group position={[0, FLOOR_Y, 0]}>
+        <Horizon />
+      </group>
       {/* makeDefault so the sun drag can find these and suspend them; without
-          it, grabbing the sun would orbit the camera at the same time. */}
-      <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.05} />
+          it, grabbing the sun would orbit the camera at the same time.
+
+          The limits are what keep you indoors. Starting inside is only a
+          position, and a wheel that carries the camera out through the wall
+          would undo it in one gesture — so the far clamp is the glass, the near
+          one is the nearest plant, and the upward one is the eaves. */}
+      <OrbitControls
+        makeDefault
+        target={view.target}
+        minDistance={view.minRadius}
+        maxDistance={view.maxRadius}
+        minPolarAngle={view.minPolar}
+        maxPolarAngle={view.maxPolar}
+      />
+      <Framing view={view} />
     </>
   );
 }

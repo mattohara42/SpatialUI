@@ -25,8 +25,21 @@ interface EcosystemStore extends EcosystemState {
    * on every pointer move and the answer only changes when the garden does.
    */
   scrubWindowMs: number;
+  /**
+   * The plant whose detail is open, or null.
+   *
+   * Selection is state rather than a component's business because two things
+   * need it and they live at opposite ends of the scene: the tag that was
+   * clicked, and the panel that opens. Keeping it here also means it survives a
+   * telemetry tick — a panel that closed itself every two seconds because the
+   * numbers moved would be unusable — while entering a garden clears it, since
+   * the plant it was about is no longer in front of you.
+   */
+  selectedId: string | null;
 
   enterGarden: (gardenId: string) => void;
+  /** Open the detail panel for a plant, or close it with null. */
+  select: (nodeId: string | null) => void;
   /** Null returns the scene to live. */
   setCursor: (cursor: number | null) => void;
   commit: (nodes: Record<string, EcosystemNode>, at?: number) => void;
@@ -91,16 +104,20 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
   ...initial,
   lastViewedAt: {},
   scrubWindowMs: scrubWindowFor(initial, initial.activeGardenId),
+  selectedId: null,
 
   enterGarden: (gardenId) =>
     set((state) => ({
       activeGardenId: gardenId,
       cursor: null,
+      selectedId: null,
       scrubWindowMs: scrubWindowFor(state, gardenId),
       // Stamped on the way out rather than on the way in, so the first render
       // after entering still has the previous visit to compare against.
       lastViewedAt: { ...state.lastViewedAt },
     })),
+
+  select: (nodeId) => set({ selectedId: nodeId }),
 
   setCursor: (cursor) => set({ cursor }),
 

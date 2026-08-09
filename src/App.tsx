@@ -22,6 +22,7 @@ export default function App() {
   const cursor = useEcosystem((s) => s.cursor);
   const setCursor = useEcosystem((s) => s.setCursor);
   const tick = useEcosystem((s) => s.tick);
+  const select = useEcosystem((s) => s.select);
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
 
   const [live, setLive] = useState(true);
@@ -58,24 +59,31 @@ export default function App() {
       else if (event.key === 'ArrowRight') nudge(hours);
       else if (event.key === 'ArrowDown') nudge(-days);
       else if (event.key === 'ArrowUp') nudge(days);
-      else if (event.key === 'Escape' || event.key === 'Home') setCursor(null);
-      else return;
+      else if (event.key === 'Escape' || event.key === 'Home') {
+        // Escape backs out of one thing at a time, innermost first: an open
+        // plant before the time you were looking at it. Collapsing both at once
+        // would lose the scrub for anyone who only wanted the panel shut.
+        if (useEcosystem.getState().selectedId) select(null);
+        else setCursor(null);
+      } else return;
       event.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [nudge, setCursor]);
+  }, [nudge, setCursor, select]);
 
   const changes = changesSinceLastVisit();
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#14110e' }}>
-      {/* Far enough back to hold the widest garden. The league is eight beds in
-          two rows, about twenty metres across, and a camera framed for a three
-          bed garden cuts a conference off at both ends. Scroll to close in. */}
+      {/* A starting position only, and deliberately one already inside the
+          house: the garden places the viewer properly once it knows how big a
+          house it needs (see scene/Garden.tsx), and a first frame out in the
+          field would read as walking in rather than as being there. Drag to
+          look round; the scroll stops at the glass. */}
       <Canvas
         shadows
-        camera={{ position: [0, 5.5, 15], fov: 50 }}
+        camera={{ position: [0, 1.2, 4.5], fov: 50 }}
         gl={{ toneMappingExposure: 1.1 }}
       >
         <Garden />

@@ -15,6 +15,7 @@ import {
   record,
   type VitalsHistory,
 } from '../ecosystem/history';
+import { emblemFrom } from '../ecosystem/labels';
 import type { PlantingType } from '../ecosystem/planting';
 import { mulberry32, type Rng } from '../lsystem/random';
 
@@ -144,11 +145,19 @@ const GARDENS: GardenSpec[] = [
  * One plant in each garden has a dead adapter. Without it the mock never
  * exercises the failure the whole design is built around — silence looking like
  * health — so the staleness state (grey, still, and dusty) could only be seen by
- * hand-editing data. Fifty-five minutes is comfortably past the fifteen minute
+ * hand-editing data. Ninety-five minutes is comfortably past the fifteen minute
  * fallback threshold, far enough that the dust has reached full thickness rather
  * than sitting on the ramp.
+ *
+ * It must also be **longer than one history step**, and that is not a
+ * preference. History is hourly, and a silence of fifty-five minutes — what this
+ * was — lands in the same hourly slot as now whenever the clock happens to read
+ * past the fifty-fifth minute. For those five minutes in every hour the silent
+ * plant's history had no gap in it at all: the scrub would have shown a reading
+ * where there was none, which is precisely the failure the staleness state
+ * exists to make impossible. Anything over an hour cannot land in the same slot.
  */
-const SILENT_FOR_MS = 55 * 60_000;
+const SILENT_FOR_MS = 95 * 60_000;
 
 /**
  * Whether the mock marked this node as having a dead adapter. `raw` is opaque to
@@ -252,6 +261,13 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
           parentId: bedId,
           gardenId: garden.id,
           label,
+          // A source with no marks of its own takes the default deliberately,
+          // which is what "translation chooses the emblem" means for a source
+          // that has nothing to choose: initials on a colour keyed to the id,
+          // fixed for the life of the node. A real adapter with an abbreviation
+          // and a brand colour passes those instead — see `emblemFor` in
+          // translation/nfl.ts.
+          emblem: emblemFrom(label, id),
           domain: garden.domain,
           kind: 'plant',
           polarity: garden.polarity,

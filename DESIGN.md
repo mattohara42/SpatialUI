@@ -209,6 +209,113 @@ sick one, a lighter berry like a riper one. Small enough to be felt rather than
 seen is the same guardrail from the other direction: at the amplitudes used, no
 reader could mistake one bright leaf for a statement about that leaf.
 
+## Under glass
+
+The garden now stands in a greenhouse, and that is a decision about how much
+world has to exist rather than a change of backdrop.
+
+Outdoors, the answer to "how much" is *all of it*. Grass to the horizon, hills,
+a tree line, and every one of them a surface that has to hold up from any angle
+the camera can reach — none of which anybody is meant to look at. A wall three
+metres away answers the same question and stops asking it. The field and the
+ridges are still out there and still lit by the same sun, but they have become
+weather rather than scenery: seen through a pane, softened, no longer
+load-bearing. That is the horizon's own bargain taken one step further, and the
+first real cost saving the scene has made.
+
+The sky is the one thing the glass may not take. Time is dragged on the sun, so
+a roof that hid it, dimmed it, or swallowed the pointer aimed at it would have
+cost the whole gesture — which is why the panes cast no shadow and write no
+depth, and why the sun, the moon, and the stars read through the roof exactly as
+they did in the open. Everything the light does, it still does.
+
+What the house adds beyond enclosure is the same three rules the horizon keeps:
+static, signal-free, no colour logic of its own. It carries no reading, so it
+can be as detailed as it likes. The one place it touches the reading at all is a
+gain — a glasshouse **diffuses**, and diffused light is exactly what a scene
+read at a glance from three metres wants.
+
+**Raised beds are the part that reads.** The soil was a slab lying on the
+ground, which is a patch of a different colour rather than an object in a room:
+that is most of why the beds looked like regions on a map. Four boards, corner
+posts, and a cap rail give the soil an edge, a thickness, and a shadow, and that
+is the whole difference between ground somebody coloured in and ground somebody
+built. The trick is which way it was built: the beds are raised by *lowering the
+floor*, so the soil surface stays exactly where the plants already stood and
+nothing that measures from a plant had to learn about it.
+
+**The props are for tense.** A hose on its hook, a bench on castors, a watering
+can set down beside a pair of gloves, pots waiting to be filled. None of it
+means anything and none of it may ever appear to. What it buys is that beds and
+glass say a garden *exists*, while a can next to a pair of gloves says somebody
+was here this morning and is coming back — which is the reading the whole
+product wants, a place you keep an eye on rather than a dashboard you open. It
+is also the cheapest thing in the scene, because unlike a plant, none of it has
+to be true.
+
+Two rules hold it in place, and they are the ones any future decoration should
+inherit. It lives **against the walls**, in the path the shell leaves around the
+beds, so it never stands between the camera and a plant. And it is **still**:
+motes, dust, and sway are the only things that move here and all three carry
+signal, so a rocking watering can would be motion that meant nothing — which is
+worse in this scene than it would be in one where motion means nothing anyway.
+
+## Three questions, three distances
+
+The garden answers one question extremely well and, until now, only that one:
+**something is wrong, and it is over there.** That reading works across a room,
+it is what shape and colour and motion are spent on, and it is the whole reason
+this is a garden rather than a dashboard.
+
+It leaves two questions unanswered, and both of them are asked from closer up.
+
+| distance | question | what answers it |
+| --- | --- | --- |
+| across the room | is anything wrong? | the plants themselves |
+| at the bed | which one is this? | the tag |
+| standing at it | what happened, and which way is it going? | the panel |
+
+Reading them as a sequence is what keeps the first one intact. A name is not a
+health cue and must never compete with one, so **labels do not exist at a
+distance**: a tag fades in as you approach a plant and is gone again when you
+step back, the way a nursery label is only readable when you are next to it.
+Thirty-two captions floating over a garden would be a chart with foliage — every
+one of them pulling at the glance the plants are supposed to own.
+
+**An emblem is chosen by translation, never guessed by the renderer.** Every
+source has its own idea of what a thing is called and what it looks like — a
+league has club colours and a three letter code, a cluster has service names —
+and none of that is derivable from the four health axes. So the emblem is a
+translator's decision, like planting type and polarity, with an explicit default
+(`emblemFrom`: initials on a stable colour) for sources that have no mark of
+their own. Calling the default is itself a choice, made where the domain is
+still in scope.
+
+That puts colour on a card, which the channel budget above would normally
+forbid. The line that resolves it: **a colour that never moves is identity, and
+a colour that moves is signal.** An emblem is fixed for the life of the node and
+sits on an object that is obviously a label, so nothing about it can be read as
+vitality. The ban that still holds absolutely is on a source palette reaching
+the *organism* — bark, foliage, produce, bloom — where it would sit in the same
+channel as health and win.
+
+**The panel is the record, not a verdict.** It is the only place in the app with
+numbers in it, which is what a deliberately lossy summary owes you: you can
+always get back to the readings the picture was made from. It carries no colour
+and no ranking, because a panel that turned red would be a second, competing
+reading of a node the garden has already described. It reads everything through
+the cursor, so scrubbing with one open moves it — the numbers, the trend, and
+the end of the sparkline are the same moment the sky is showing. And it hangs in
+the air beside its plant rather than being welded to the corner of the screen,
+because `src/xr/` exists to keep this project honest and a head-locked card is
+the one interface a headset cannot have.
+
+One rule inside it is worth stating on its own: **a gap in the data is drawn as
+a gap.** The sparkline breaks where nothing was recorded rather than joining the
+line across it. A trend line that bridges silence is a picture of something that
+did not happen, in an app whose central claim is that silence must never be able
+to pass for health.
+
 ## The moment of use
 
 Desk Bonsai is the primary mode and Greenhouse is the occasional deep dive.
@@ -249,11 +356,19 @@ checks, so the moon takes the key light when the sun is down rather than the
 scene simply going dark, and shape and droop survive in silhouette. Colour does
 not, which is another reason colour is not load-bearing.
 
-**The sun is often unreachable.** With the camera clamped at the horizon, most
-of the day the sun is somewhere a mouse cannot point. Shift-drag anywhere is the
-desktop stand-in, and it is a stand-in: the gesture assumes you can look up,
-which is true in a headset and false on a desk. Worth remembering before this is
-judged on a monitor.
+**The sun is often unreachable.** The camera looks down at the beds from inside
+the house, so most of the day the sun is somewhere a mouse cannot point.
+Shift-drag anywhere is the desktop stand-in, and it is a stand-in: the gesture
+assumes you can look up, which is true in a headset and false on a desk. Worth
+remembering before this is judged on a monitor.
+
+Moving indoors sharpened this rather than causing it. The outdoor camera had the
+same limit for the same reason — an orbit control aims at its target — but out
+in the field you could at least back away until the sky came into frame, and
+inside the glass you cannot. The honest fix is a control that can look up
+without also orbiting, which is a real piece of work and not yet done; the glass
+is already out of the way for it, since the panes carry no pointer handlers and
+so never intercept a ray.
 
 Seasons are now built too, and the league is what forced them: a football season
 is eighteen weeks and the sun's window was two days, so the whole gesture reached
