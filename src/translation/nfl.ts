@@ -95,6 +95,30 @@ const DAY_MS = 24 * HOUR_MS;
  * This is the staleness state (grey, still, dusty) reached by the data genuinely
  * being stale rather than by a mock hand-editing a timestamp — two clubs a week
  * stand there greyed and motionless because they did not play.
+ *
+ * ## Why the league stayed flat when the market did not
+ *
+ * Staleness now takes a `StaleSchedule` — a source-supplied "when should I next
+ * have heard something" — and the market uses it to cut its detection latency
+ * from four days to two hours. The league is registered as a bare duration
+ * anyway, which is the degenerate schedule (nothing is ever due; the whole
+ * duration is tolerance), and that is deliberate on two counts.
+ *
+ * The first is that this feed cannot answer the question. `NflSeasonSnapshot`
+ * carries games that have been *played*; a fixture list is not in the shape, so
+ * there is no next kickoff to point at. A cadence — last final plus seven days —
+ * is the most the snapshot supports, and a cadence expressed as tolerance is
+ * this constant.
+ *
+ * The second is that the league wants the flat behaviour even where it could do
+ * better. A bye is legitimate silence, so a schedule would clear it, and clearing
+ * it would take the greying off exactly the two clubs a week that make the state
+ * reachable here at all. That trade is the right way round for a market, where
+ * the shut hours are most of the week and greying through them destroys the
+ * signal. It is the wrong way round for a league, where the reader's question is
+ * "is what I am looking at current" and a bye and a dead feed answer it
+ * identically. Same contract, opposite answer, because the sources differ — which
+ * is the entire argument for the contract being per-source.
  */
 export const NFL_STALE_AFTER_MS = 7 * DAY_MS;
 

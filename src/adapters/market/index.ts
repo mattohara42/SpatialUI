@@ -9,8 +9,9 @@
  *
  * What it would *not* have to supply is a calendar: `session.ts` is here because
  * generated bars need to land in real sessions, and a real feed stamps its own.
- * It stays useful for one thing only — the staleness threshold, which is a fact
- * about how long this source is legitimately silent.
+ * It stays useful for one thing only — staleness, which needs to know when this
+ * source next expects to speak. `nextBarClose` is that answer, and it is a fact
+ * about the source that no layer above could reconstruct.
  */
 export * from './types';
 export { INSTRUMENTS, SECTORS, instrumentsIn } from './instruments';
@@ -23,6 +24,7 @@ export {
   isHoliday,
   isOpen,
   isTradingDay,
+  nextBarClose,
   previousClose,
   sessionOn,
   tradingDaysBack,

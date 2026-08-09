@@ -7,6 +7,7 @@ import {
   isHoliday,
   isOpen,
   isTradingDay,
+  nextBarClose,
   previousClose,
   sessionOn,
   tradingDaysBack,
@@ -86,6 +87,39 @@ describe('the trading calendar', () => {
 
   it('gives a closed day no bars at all', () => {
     expect(hourlyCloses(SATURDAY)).toHaveLength(0);
+  });
+
+  it('answers when an instrument should next print, across a weekend', () => {
+    // The question a flat threshold cannot ask. Friday's close is followed by
+    // Monday's first bar, so the whole weekend is time in which nothing was due.
+    const fridayClose = sessionOn(SATURDAY - DAY_MS).close;
+    const next = nextBarClose(fridayClose);
+    expect(next).not.toBeNull();
+    expect(isTradingDay(next!)).toBe(true);
+    expect(new Date(next!).getUTCDay()).toBe(1); // Monday
+    expect(next!).toBe(hourlyCloses(SATURDAY + 2 * DAY_MS)[0]);
+
+    // And it is exactly the far end of the gap `previousClose` measures from.
+    expect(previousClose(next! - 1)).toBe(fridayClose);
+  });
+
+  it('walks bar to bar inside a session, and is strict about "next"', () => {
+    const closes = hourlyCloses(WEDNESDAY_OPEN);
+    for (let i = 1; i < closes.length; i++) {
+      expect(nextBarClose(closes[i - 1])).toBe(closes[i]);
+    }
+    // Strictly after, or a source that just printed would be due again at the
+    // same instant and every plant would be permanently late.
+    expect(nextBarClose(closes[0])).toBeGreaterThan(closes[0]);
+  });
+
+  it('never looks further ahead than the longest legitimate closure', () => {
+    // The bound that lets the schedule keep a tight grace: however awkwardly a
+    // closure falls, the next print is inside a holiday weekend of it.
+    const fridayClose = sessionOn(SATURDAY - DAY_MS).close;
+    expect(nextBarClose(fridayClose)! - fridayClose).toBeLessThanOrEqual(
+      LONGEST_CLOSURE_MS,
+    );
   });
 
   it('sizes the longest closure at a holiday weekend', () => {

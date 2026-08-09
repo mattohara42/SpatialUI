@@ -24,7 +24,7 @@ import { useEcosystem } from '../state/ecosystemStore';
 import { edgesInGarden, nodesInGarden } from '../ecosystem/graph';
 import { layoutGarden } from '../ecosystem/layout';
 import { vitalsAt } from '../ecosystem/history';
-import { staleness, staleThresholdFor } from '../ecosystem/staleness';
+import { scheduleFor, staleness } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
 import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets';
@@ -219,7 +219,7 @@ export function Garden() {
   const plants = useMemo<PlacedPlant[]>(() => {
     if (!activeGardenId) return [];
     const now = cursor ?? revision;
-    const threshold = staleThresholdFor(activeGardenId);
+    const schedule = scheduleFor(activeGardenId);
 
     return layout.plants.flatMap((placement) => {
       const node = nodes[placement.nodeId];
@@ -230,7 +230,7 @@ export function Garden() {
       // archive is the coarse tier: hours come from the week, months from the
       // season, and this one call is the whole of the scene knowing that.
       const vitals = vitalsAt(node, history[node.id], cursor, archive[node.id]);
-      const stale = staleness(node, now, threshold);
+      const stale = staleness(node, now, schedule);
 
       // Memoized on the quantized vitals, so a tick that does not step a plant
       // across a vitality bucket reuses geometry instead of rebuilding it.

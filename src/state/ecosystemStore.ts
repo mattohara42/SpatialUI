@@ -1,14 +1,14 @@
 import { create } from 'zustand';
 import type { EcosystemNode, EcosystemState } from '../ecosystem/types';
 import { record } from '../ecosystem/history';
-import { changedSince, setStaleThreshold, type Change } from '../ecosystem/staleness';
+import { changedSince, setStaleSchedule, type Change } from '../ecosystem/staleness';
 import { SCRUB_WINDOW_MS, windowFor } from '../ecosystem/scrub';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
 import { syntheticNflSource } from '../adapters/nfl';
 import { syntheticMarketSource } from '../adapters/market';
 import {
   MARKET_GARDEN_ID,
-  MARKET_STALE_AFTER_MS,
+  MARKET_STALE_SCHEDULE,
   translateMarketSnapshot,
 } from '../translation/market';
 import {
@@ -74,12 +74,16 @@ function composeEcosystem(): EcosystemState {
   const league = translateNflSnapshot(syntheticNflSource().snapshot());
   const markets = translateMarketSnapshot(syntheticMarketSource().snapshot());
 
-  // What counts as late is a fact about the source, and the two real ones
-  // disagree about it by an order of magnitude for good reasons: a club plays
-  // weekly, and an exchange is shut every night and all weekend. A fifteen
-  // minute threshold would paint either of them entirely grey.
-  setStaleThreshold(NFL_GARDEN_ID, NFL_STALE_AFTER_MS);
-  setStaleThreshold(MARKET_GARDEN_ID, MARKET_STALE_AFTER_MS);
+  // When a source should next be heard from is a fact about the source, and the
+  // two real ones disagree about it in kind rather than merely in size. The
+  // exchange publishes a calendar, so the market garden gets a schedule and can
+  // afford a tolerance of hours. The league's feed carries only games already
+  // played, so it gets the degenerate form — a flat duration, which is the same
+  // contract with nothing scheduled — and it wants that anyway, because a bye
+  // greying is the behaviour the reader needs there. Neither is the fifteen
+  // minute fallback, which would paint both entirely grey.
+  setStaleSchedule(NFL_GARDEN_ID, NFL_STALE_AFTER_MS);
+  setStaleSchedule(MARKET_GARDEN_ID, MARKET_STALE_SCHEDULE);
 
   return {
     ...mock,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MARKET_GARDEN_ID,
-  MARKET_STALE_AFTER_MS,
+  MARKET_STALE_SCHEDULE,
   activityOf,
   bedIdFor,
   correlationOf,
@@ -12,11 +12,14 @@ import {
   vitalityOf,
 } from './market';
 import {
+  HOUR_MS,
   INSTRUMENTS,
   LONGEST_CLOSURE_MS,
   SECTORS,
   barsBySymbol,
   generateMarketSnapshot,
+  nextBarClose,
+  previousClose,
   type Bar,
 } from '../adapters/market';
 import { isStale, staleness } from '../ecosystem/staleness';
@@ -181,34 +184,59 @@ describe('the axes', () => {
 });
 
 describe('staleness, on a source that is shut most of the time', () => {
-  it('clears the longest legitimate closure', () => {
-    // A threshold under a holiday weekend would grey the entire garden every
-    // time one came round, which is the failure that makes the state useless.
-    expect(MARKET_STALE_AFTER_MS).toBeGreaterThan(LONGEST_CLOSURE_MS);
+  // The single threshold this schedule replaced, kept here as the thing to beat:
+  // the longest closure the calendar can produce, plus a session of margin.
+  const FLAT_THRESHOLD_MS = LONGEST_CLOSURE_MS + 6 * HOUR_MS;
+
+  // A weekend the exchange is shut through. Friday is the last session.
+  const saturday = Date.UTC(2026, 3, 18, 18, 0);
+  const weekend = translateMarketSnapshot(generateMarketSnapshot(saturday), {
+    asOf: saturday,
+  });
+  const liveOverWeekend = Object.values(weekend.nodes).filter(
+    (n) => n.kind === 'plant' && !n.blights.some((b) => b.id.endsWith('-halt')),
+  );
+
+  it('costs nothing at all while the exchange is legitimately shut', () => {
+    // Not merely "under the line" — zero. Nothing was due, so nothing is late,
+    // which is the whole difference between a schedule and a duration. Under the
+    // flat threshold these same plants were already part-way up the ramp by
+    // Saturday and dusty by Monday.
+    for (const plant of liveOverWeekend) {
+      expect(staleness(plant, saturday, MARKET_STALE_SCHEDULE), plant.label).toBe(0);
+      expect(staleness(plant, saturday, FLAT_THRESHOLD_MS), plant.label).toBeGreaterThan(0);
+    }
   });
 
-  it('leaves the book fresh over an ordinary weekend', () => {
-    // Saturday afternoon: every instrument last printed on Friday and none of
-    // them is stale, because nothing is wrong.
-    const saturday = Date.UTC(2026, 3, 18, 18, 0);
-    const weekend = translateMarketSnapshot(generateMarketSnapshot(saturday), {
-      asOf: saturday,
-    });
-    const live = Object.values(weekend.nodes).filter(
-      (n) => n.kind === 'plant' && !n.blights.some((b) => b.id.endsWith('-halt')),
-    );
-    for (const plant of live) {
-      expect(isStale(plant, saturday, MARKET_STALE_AFTER_MS), plant.label).toBe(false);
-    }
+  it('flags a vendor that died on Friday two bars into Monday, not midweek', () => {
+    // Nothing prints after Friday's close: the tape simply stops, which is what a
+    // dead feed looks like from here.
+    const fridayClose = previousClose(saturday)!;
+    const monday = nextBarClose(fridayClose)!;
+    const sample = liveOverWeekend[0];
+    expect(sample.updatedAt).toBe(fridayClose);
+
+    // One missed print is not evidence, and the first bar of the session is the
+    // earliest anything could be missed at all.
+    expect(isStale(sample, monday + HOUR_MS, MARKET_STALE_SCHEDULE)).toBe(false);
+    // Two is.
+    expect(isStale(sample, monday + 3 * HOUR_MS, MARKET_STALE_SCHEDULE)).toBe(true);
+
+    // The measurement that justifies the change: at that same moment the flat
+    // threshold is still silent, and stays silent well over a day longer.
+    expect(isStale(sample, monday + 3 * HOUR_MS, FLAT_THRESHOLD_MS)).toBe(false);
+    const flatFires = fridayClose + FLAT_THRESHOLD_MS;
+    const scheduleFires = monday + 2 * HOUR_MS;
+    expect(flatFires - scheduleFires).toBeGreaterThan(24 * HOUR_MS);
   });
 
   it('greys the halted instrument, and only that one', () => {
     const haltedSymbol = snapshot.halts[0].symbol;
     const halted = translated.nodes[instrumentNodeId(haltedSymbol)];
-    expect(isStale(halted, NOW, MARKET_STALE_AFTER_MS)).toBe(true);
+    expect(isStale(halted, NOW, MARKET_STALE_SCHEDULE)).toBe(true);
 
     const others = plants.filter((p) => p.id !== halted.id);
-    const stale = others.filter((p) => isStale(p, NOW, MARKET_STALE_AFTER_MS));
+    const stale = others.filter((p) => isStale(p, NOW, MARKET_STALE_SCHEDULE));
     expect(stale.map((p) => p.label)).toEqual([]);
   });
 
@@ -219,7 +247,7 @@ describe('staleness, on a source that is shut most of the time', () => {
     const node = translated.nodes[instrumentNodeId(haltedSymbol)];
     const own = barsBySymbol(snapshot)[haltedSymbol];
     expect(node.updatedAt).toBe(own[own.length - 1].closeAt);
-    expect(staleness(node, NOW, MARKET_STALE_AFTER_MS)).toBeGreaterThan(1);
+    expect(staleness(node, NOW, MARKET_STALE_SCHEDULE)).toBeGreaterThan(1);
   });
 
   it('names the halt as a blight so the reason is readable, not just the grey', () => {

@@ -9,6 +9,7 @@ import {
   lastBarAt,
   lotsBySymbol,
   momentumAt,
+  nextBarClose,
   positionAt,
   priceAt,
   returnSince,
@@ -31,6 +32,7 @@ import {
 } from '../ecosystem/history';
 import { inkFor, type Emblem } from '../ecosystem/labels';
 import type { PlantingType } from '../ecosystem/planting';
+import type { StaleSchedule } from '../ecosystem/staleness';
 import type {
   Blight,
   BlightSeverity,
@@ -90,15 +92,38 @@ import type {
 export const MARKET_GARDEN_ID = 'markets';
 
 /**
- * How long the book may be silent before the garden calls it stale.
+ * How many missed prints mean the vendor is gone rather than slow.
  *
- * Derived from the calendar rather than chosen: the longest gap the exchange
- * legitimately produces is a Friday close with a Monday holiday behind it, and
- * a threshold under that would grey the entire garden every long weekend. The
- * margin above it is one session's worth, so an ordinary reopening clears the
- * line rather than skimming it.
+ * One is not evidence: a bar can be published late, and a garden that greyed on
+ * a single slow print would grey somewhere most days. Two in a row is a pattern
+ * — the same reasoning, and roughly the same number, as the `for` duration on
+ * any sane alerting rule. Held as a count of bars rather than a duration so it
+ * tracks the source's own cadence instead of being a second thing to keep in
+ * step with it.
  */
-export const MARKET_STALE_AFTER_MS = LONGEST_CLOSURE_MS + 6 * HOUR_MS;
+const GRACE_BARS = 2;
+
+/**
+ * When the book should next have spoken, and how late it may be before the
+ * garden calls it silent.
+ *
+ * The exchange calendar answers the first part — `nextBarClose` is the adapter's
+ * own function and the only thing that knows Friday's close is followed by
+ * Monday's open — so a weekend costs nothing at all: nothing was due, so nothing
+ * is late. That is what lets the second part be tight. The old single threshold
+ * had to span the longest legitimate closure (`LONGEST_CLOSURE_MS`, very nearly
+ * four days) and so could not flag a vendor that died on Friday evening until
+ * the middle of the following week. This flags it two bars into Monday's
+ * session, which is the first moment the silence means anything.
+ *
+ * `LONGEST_CLOSURE_MS` remains as the fallback, for the case where the calendar
+ * cannot see a next session inside its horizon. That is unreachable with the
+ * holidays above, and it is the old behaviour rather than a guess.
+ */
+export const MARKET_STALE_SCHEDULE: StaleSchedule = {
+  dueAfter: (lastUpdate) => nextBarClose(lastUpdate) ?? lastUpdate + LONGEST_CLOSURE_MS,
+  graceMs: GRACE_BARS * HOUR_MS,
+};
 
 /** Hours of hourly history backfilled per instrument. A week, as elsewhere. */
 const DEFAULT_HISTORY_HOURS = 168;
