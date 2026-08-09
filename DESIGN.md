@@ -171,7 +171,9 @@ genuinely has no new data, so with a seven day threshold the two clubs idle each
 week stand there grey, still, and dusty on their own. The garden cannot tell a
 bye from a dead feed, and should not — both mean what you are looking at is old.
 That is the strongest form the staleness argument has taken so far, because the
-data volunteered it.
+data volunteered it. It survived staleness becoming schedule-aware: the league
+keeps the flat seven days on purpose, because a schedule would clear the bye and
+take the state with it.
 
 ## The book: what a *second* source asks, that the first one never did
 
@@ -198,18 +200,24 @@ both has broken the axis.**
 **"Silence is never health" has an exception, and it is structural.** A market
 is shut every night and all weekend and nothing is wrong. The rule cannot simply
 be relaxed — silence looking like health is the failure the whole staleness state
-exists to prevent — so the threshold is sized to the longest gap the source
-*legitimately* produces, computed from the exchange calendar rather than chosen.
-That is the league's bye argument, and it generalizes: **staleness is measured
-against a source's own expected cadence, and the adapter is the only layer that
-knows what that is.**
+exists to prevent — so it is stated more precisely instead: **the reader is owed
+a warning when the source misses something it said it would produce, and owed
+nothing at all for silence that was scheduled.** The adapter is the only layer
+that knows which is which.
 
-What it costs is real. A feed that dies on Friday is not called stale until
-midweek, because the ratio `(now - updatedAt) / threshold` cannot tell a shut
-exchange from a dead vendor. The honest fix is session-aware staleness — the
-threshold consuming a source-supplied notion of "when should I next have heard
-something" — which changes the `staleness` contract for every source and is not
-done. It is the largest single piece of unfinished design in the project.
+The first attempt sized one threshold to the longest gap the source
+*legitimately* produces, computed from the exchange calendar rather than chosen.
+It held the rule but blunted it: a ratio of elapsed time to a single duration
+cannot tell a shut exchange from a dead vendor, so a feed dying on Friday was not
+called stale until midweek. Staleness now takes a **schedule** — a due time from
+the source's own calendar, plus a grace that only starts running once something
+is actually owed. Nothing is owed over a weekend, so a weekend is free; two
+missed prints inside a session is a dead vendor, and reads as one. The numbers
+are in ARCHITECTURE.md.
+
+The design consequence worth carrying forward: **duration was the wrong unit.**
+The reading a person makes is not "how long since I heard" but "is anything
+missing", and those only coincide for a source that never sleeps.
 
 **Calibration is a measurement, not a taste.** Two faults shipped into the first
 draft of this source and neither was visible in the render. The generated tape
@@ -490,8 +498,11 @@ plant that has merely greyed but still moves in the breeze still reads as alive;
 stillness is what makes silence legible. `swayMatrix` takes a motion factor that
 the scene drops to zero past the staleness threshold, so branches, leaves, and
 fruit freeze together. `isStale` in `ecosystem/staleness.ts` derives the state
-from `updatedAt`; the threshold is per-garden, because an hourly notes scrape and
-a fifteen second Prometheus scrape mean very different things by late.
+from `updatedAt` against the schedule its source keeps; that schedule is
+per-garden, because an hourly notes scrape and a fifteen second Prometheus scrape
+mean very different things by late — and because a source with a calendar can say
+when it will next speak, which is a sharper question than how long it has been
+quiet.
 
 The dust is now there too, which completes the state. Grey and stillness are
 silhouette cues: they work across the room, which is the reading the product is

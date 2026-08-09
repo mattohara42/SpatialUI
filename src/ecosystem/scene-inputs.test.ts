@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { changedSince, isStale, staleness } from './staleness';
+import {
+  FALLBACK_STALE_AFTER_MS,
+  afterQuietFor,
+  changedSince,
+  isStale,
+  scheduleFor,
+  staleness,
+  type StaleSchedule,
+} from './staleness';
 import { layoutGarden } from './layout';
 import { nodesInGarden } from './graph';
 import { HOUR_MS, record } from './history';
@@ -45,6 +53,80 @@ describe('staleness', () => {
 
   it('never reports a future timestamp as stale', () => {
     expect(staleness(node({ updatedAt: 5000 }), 1000, 60_000)).toBe(0);
+  });
+});
+
+describe('staleness against a schedule', () => {
+  // A stand-in for any source with a session: it prints on the hour from
+  // midnight until six, then says nothing for eighteen hours.
+  const HOUR = 60 * 60_000;
+  const DAY = 24 * HOUR;
+  const SESSION_END = 6 * HOUR;
+
+  const hourly: StaleSchedule = {
+    dueAfter: (last) => {
+      const next = last + HOUR;
+      const dayStart = Math.floor(next / DAY) * DAY;
+      // Inside the session, the next hour. Past the close, the first bar of
+      // tomorrow's — which is the whole point: the shut hours are not owed.
+      return next <= dayStart + SESSION_END ? next : dayStart + DAY + HOUR;
+    },
+    graceMs: 2 * HOUR,
+  };
+
+  // The last print of the day, followed by a legitimate nineteen hour silence.
+  const lastPrint = SESSION_END;
+  const nextDue = DAY + HOUR;
+  const overnight = node({ updatedAt: lastPrint });
+
+  it('is free while the source is legitimately shut, however long that runs', () => {
+    // A flat threshold able to sit through this without greying would have to be
+    // at least nineteen hours wide, and would then take nineteen hours to notice
+    // a death. That is the trade the schedule dissolves.
+    expect(staleness(overnight, lastPrint + 3 * HOUR, hourly)).toBe(0);
+    expect(staleness(overnight, lastPrint + 12 * HOUR, hourly)).toBe(0);
+    expect(staleness(overnight, nextDue, hourly)).toBe(0);
+  });
+
+  it('starts counting from the moment something was actually due', () => {
+    expect(staleness(overnight, nextDue + HOUR, hourly)).toBe(0.5);
+    expect(staleness(overnight, nextDue + 2 * HOUR, hourly)).toBe(1);
+    // Tight where it matters: three hours after the reopen, not nineteen plus.
+    expect(isStale(overnight, nextDue + 3 * HOUR, hourly)).toBe(true);
+    // Still growing afterwards, so the dust keeps deepening with the neglect.
+    expect(staleness(overnight, nextDue + 8 * HOUR, hourly)).toBe(4);
+  });
+
+  it('reports a still-open session as fresh right up to the next bar', () => {
+    // Mid-session, one bar ago. Nothing is due until the hour is out.
+    const midSession = node({ updatedAt: 2 * HOUR });
+    expect(staleness(midSession, 3 * HOUR, hourly)).toBe(0);
+    expect(staleness(midSession, 5 * HOUR, hourly)).toBe(1);
+  });
+
+  it('treats a bare duration as the schedule with nothing ever scheduled', () => {
+    // The old model is a value of the new type rather than a second code path,
+    // which is what lets a source with no forward calendar keep using it.
+    const flat = afterQuietFor(60_000);
+    const quiet = node({ updatedAt: 0 });
+    expect(staleness(quiet, 90_000, flat)).toBe(staleness(quiet, 90_000, 60_000));
+    expect(staleness(quiet, 90_000, flat)).toBe(1.5);
+  });
+
+  it('reports nothing rather than dividing by a zero grace', () => {
+    expect(staleness(node({ updatedAt: 0 }), 10_000, 0)).toBe(0);
+  });
+
+  it('leaves an unregistered garden on the old arithmetic exactly', () => {
+    // The mock gardens never register a policy, so they fall back — and the
+    // fallback must still be the plain ratio it always was, or introducing the
+    // schedule would have quietly moved every garden that did not ask for it.
+    const quiet = node({ updatedAt: 0 });
+    const fallback = scheduleFor('a-garden-nobody-registered');
+    expect(fallback.graceMs).toBe(FALLBACK_STALE_AFTER_MS);
+    for (const now of [0, 1_000, FALLBACK_STALE_AFTER_MS, 4 * FALLBACK_STALE_AFTER_MS]) {
+      expect(staleness(quiet, now, fallback)).toBe(now / FALLBACK_STALE_AFTER_MS);
+    }
   });
 });
 

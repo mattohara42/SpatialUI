@@ -9,15 +9,18 @@
  * enough to catch a dead vendor overnight would paint every plant grey every
  * single night, which destroys the signal it exists to protect.
  *
- * The resolution is the league's, restated: the threshold is a fact about the
- * source, so it is set from the longest gap the source *legitimately* produces.
- * Here that is a holiday weekend — Friday's close to Tuesday's open — and
- * `LONGEST_CLOSURE_MS` is that number rather than a chosen one.
+ * The first resolution was the league's, restated: size a single threshold to the
+ * longest gap the source *legitimately* produces, which here is a holiday
+ * weekend — Friday's close to Tuesday's open — computed as `LONGEST_CLOSURE_MS`
+ * rather than chosen. It worked, and it cost nearly four days of detection
+ * latency, because one number has to cover both "shut" and "dead".
  *
- * What it costs is recorded rather than hidden: a feed that dies on Friday
- * evening is not called stale until the middle of the following week. Making
- * that sharper needs staleness to be session-aware, which is a change to the
- * `staleness` contract and not to this file. See ARCHITECTURE.md.
+ * Staleness is now session-aware and asks a sharper question instead: **when
+ * should this instrument print again?** `nextBarClose` is this file's answer, and
+ * it is the whole of what the exchange calendar contributes. Silence before that
+ * moment is free however long it runs; silence after it is measured against a
+ * tolerance of hours rather than days. `LONGEST_CLOSURE_MS` survives as the
+ * bound on how far ahead that answer can legitimately be.
  *
  * ## The timezone simplification
  *
@@ -109,6 +112,27 @@ export function previousClose(at: number, maxDays = 14): number | null {
     if (!isTradingDay(probe)) continue;
     const { close } = sessionOn(probe);
     if (close <= at) return close;
+  }
+  return null;
+}
+
+/**
+ * The next hourly bar close strictly after `at`, or null if there is none within
+ * the search horizon.
+ *
+ * The mirror of `previousClose`, and the one question staleness needs that a
+ * duration cannot answer: given that an instrument last printed at `at`, when
+ * should it print again? Overnight and across a weekend the answer is the first
+ * bar of the next session, which is why silence in between costs nothing —
+ * nothing was due. Bounded for the same reason `previousClose` is: an unbounded
+ * walk over a bad timestamp is how a scene stops rendering with no message.
+ */
+export function nextBarClose(at: number, maxDays = 14): number | null {
+  for (let ahead = 0; ahead <= maxDays; ahead++) {
+    const probe = at + ahead * DAY_MS;
+    for (const close of hourlyCloses(probe)) {
+      if (close > at) return close;
+    }
   }
   return null;
 }

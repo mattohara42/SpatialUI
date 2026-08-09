@@ -7,52 +7,111 @@ import type { EcosystemNode, EcosystemState } from './types';
  * reassuring enough that people believe it. Staleness is therefore a first class
  * visual state rather than a footnote: grey, dusty, motionless, and faintly
  * unsettling.
+ *
+ * The hard part is that not all silence is a fault. An exchange is shut every
+ * night and all weekend, a club is idle on its bye, and a garden that greyed for
+ * either would spend most of its life crying wolf — at which point the state
+ * stops being read at all, which is the same failure by a longer route. So the
+ * question the state actually asks is not "how long has this been quiet" but
+ * **"should I have heard something by now"**, and only the source can answer it.
+ * That answer is `StaleSchedule`.
  */
 
 /**
- * How late a node is, as a multiple of what its garden considers normal.
- * 0 is fresh, 1 is exactly at the threshold, above 1 is stale.
+ * When a source expects to speak next, and how long past that it may be quiet
+ * before the silence counts as a fault.
+ *
+ * This is the shape the old flat threshold could not express. A duration has one
+ * lever, so a source that is legitimately silent for long stretches — an
+ * exchange overnight, a league between weeks — forces that one lever wide, and a
+ * wide lever cannot tell a shut source from a dead one. The market's threshold
+ * came out at nearly four days, which meant a feed dying on Friday evening was
+ * not flagged until midweek: the precise failure the state exists to prevent,
+ * arrived at honestly.
+ *
+ * Splitting it in two fixes that, because the two halves answer different
+ * questions. `dueAfter` is a fact about the source's calendar — the adapter is
+ * the only layer that knows it — and it may be arbitrarily far out without
+ * costing anything. `graceMs` is the tolerance once the source is genuinely
+ * late, and it can be tight, because by then the source has missed something it
+ * said it would produce.
+ */
+export interface StaleSchedule {
+  /**
+   * Given the moment a node last spoke, the moment by which it should have
+   * spoken again. Absolute epoch ms.
+   */
+  dueAfter(lastUpdate: number): number;
+  /** How long past due before silence reads as a fault. */
+  graceMs: number;
+}
+
+/**
+ * A schedule, or the flat duration that is the degenerate case of one.
+ *
+ * A bare number means "this source publishes no calendar": nothing is ever
+ * scheduled, so the whole duration is tolerance. That is exactly the old model,
+ * which is why it survives as a value of the new type rather than as a second
+ * code path — and it remains the right answer for a source whose feed genuinely
+ * carries no forward schedule. See `NFL_STALE_AFTER_MS`.
+ */
+export type StalePolicy = StaleSchedule | number;
+
+/** Due immediately, tolerating `ms` of quiet. The flat threshold, as a schedule. */
+export function afterQuietFor(ms: number): StaleSchedule {
+  return { dueAfter: (lastUpdate) => lastUpdate, graceMs: ms };
+}
+
+function asSchedule(policy: StalePolicy): StaleSchedule {
+  return typeof policy === 'number' ? afterQuietFor(policy) : policy;
+}
+
+/**
+ * How late a node is, as a multiple of the grace its source allows.
+ * 0 is fresh — including every moment the source is legitimately quiet — 1 is
+ * exactly at the limit, and above 1 is stale.
  */
 export function staleness(
   node: EcosystemNode,
   now: number,
-  thresholdMs: number,
+  policy: StalePolicy,
 ): number {
-  if (thresholdMs <= 0) return 0;
-  return Math.max(0, (now - node.updatedAt) / thresholdMs);
+  const { dueAfter, graceMs } = asSchedule(policy);
+  if (graceMs <= 0) return 0;
+  return Math.max(0, (now - dueAfter(node.updatedAt)) / graceMs);
 }
 
 export function isStale(
   node: EcosystemNode,
   now: number,
-  thresholdMs: number,
+  policy: StalePolicy,
 ): boolean {
-  return staleness(node, now, thresholdMs) > 1;
+  return staleness(node, now, policy) > 1;
 }
 
 /**
- * Default lateness threshold per garden, in milliseconds.
+ * Lateness policy per garden.
  *
  * Deliberately per-garden rather than global. An hourly notes scrape and a
  * fifteen second Prometheus scrape mean entirely different things by late, and a
  * single number would either cry wolf on one or stay silent on the other.
  */
-export const DEFAULT_STALE_AFTER_MS: Record<string, number> = {};
+const SCHEDULES: Record<string, StaleSchedule> = {};
 export const FALLBACK_STALE_AFTER_MS = 15 * 60_000;
 
-export function staleThresholdFor(gardenId: string): number {
-  return DEFAULT_STALE_AFTER_MS[gardenId] ?? FALLBACK_STALE_AFTER_MS;
+export function scheduleFor(gardenId: string): StaleSchedule {
+  return SCHEDULES[gardenId] ?? afterQuietFor(FALLBACK_STALE_AFTER_MS);
 }
 
 /**
- * Register a garden's threshold. Whoever composes the ecosystem calls this,
- * because what counts as late is a fact about the source and this module has no
- * business knowing that a league plays weekly and a scrape runs every fifteen
- * seconds. Keeping it a function rather than a mutable export means the write
+ * Register a garden's policy. Whoever composes the ecosystem calls this, because
+ * when a source next expects to speak is a fact about the source and this module
+ * has no business knowing that an exchange shuts at four or that a league plays
+ * weekly. Keeping it a function rather than a mutable export means the write
  * happens somewhere you can find it.
  */
-export function setStaleThreshold(gardenId: string, thresholdMs: number): void {
-  DEFAULT_STALE_AFTER_MS[gardenId] = thresholdMs;
+export function setStaleSchedule(gardenId: string, policy: StalePolicy): void {
+  SCHEDULES[gardenId] = asSchedule(policy);
 }
 
 export interface Change {

@@ -109,12 +109,13 @@ not a rebuild.
   exactly what it is.
 
   **The market is shut most of the time**, which is a problem for a garden whose
-  first rule is that silence must never look like health. The threshold is sized
-  to the longest gap the exchange legitimately produces — a holiday weekend,
-  computed from the calendar rather than picked — so an ordinary Saturday greys
-  nothing. The genuine staleness case is a **trading halt**: one symbol stops
-  printing while the rest of the book carries on, and it greys itself because
-  `updatedAt` is the last close on the tape and nothing edits it.
+  first rule is that silence must never look like health. Staleness therefore
+  asks the exchange calendar *when this instrument should next print* rather than
+  measuring flat elapsed time: a weekend costs nothing, because nothing was due,
+  and a vendor that goes quiet inside a session is flagged in about three hours
+  instead of four days. The genuine staleness case is a **trading halt**: one
+  symbol stops printing while the rest of the book carries on, and it greys
+  itself because `updatedAt` is the last close on the tape and nothing edits it.
 
   **And it costs more.** The league's history backfill collapses a season to
   about fourteen real computations per club, because a club only moves when a

@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-`main` is green. 476 tests across 24 files, `tsc --noEmit` clean, `vite build`
+`main` is green. 485 tests across 24 files, `tsc --noEmit` clean, `vite build`
 clean, and CI runs all three on every push and every pull request. 85 tracked
 source files.
 
@@ -34,6 +34,13 @@ single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
 
+- **Session-aware staleness**, which was the item at the top of this list and the
+  largest open piece of design. `staleness` now takes a `StaleSchedule` — a
+  source-supplied due time plus a grace that only runs once something is owed —
+  instead of a flat duration. Measured on the same tape, a vendor dying inside a
+  session is flagged in 3.2 hours rather than 95.7. A bare number is still a legal
+  policy and is the degenerate schedule, which is what the league stays on, on
+  purpose. Details below and in ARCHITECTURE.md.
 - **#9** — an audit of the docs against the code. Five claims were false,
   including a `src/xr/` that never existed and a sample count that was out by
   4,000. Then the CI that would have caught them, because the repository had
@@ -57,9 +64,18 @@ it by side in the translator and polarity inverts it back, so a short reads
 healthy exactly while it loses money. The garden looks right and means the
 opposite. There is a test named for this.
 
-**The staleness threshold is computed, not chosen.** The market's comes from
-the exchange calendar (`session.ts`, longest legitimate closure). Shorten it to
-something that "feels responsive" and the entire garden greys every weekend.
+**The staleness schedule is computed, not chosen, and its two halves are not
+interchangeable.** `dueAfter` comes from the exchange calendar (`session.ts`,
+`nextBarClose`) and may be days out at no cost; `graceMs` is two bars and is
+tight on purpose. Collapse them back into one duration — or point `dueAfter` at
+"last update plus a bit" — and you are back to a ratio that cannot tell a shut
+exchange from a dead vendor, which is the whole thing this replaced.
+
+**The league is on a flat duration deliberately, not by omission.** A schedule
+would clear a bye, and the two clubs a week on byes are the only thing that makes
+the staleness state reachable in that garden. Its feed also carries no fixture
+list to point `dueAfter` at. Giving it a schedule "for consistency" would silently
+delete a documented behaviour and a demonstrable state.
 
 **Beds are raised by lowering the floor.** Plants sit at `y = 0` and grafts,
 dust, and sway all measure from there. Raising the soil would force every one of
@@ -82,20 +98,25 @@ plausible numbers is indistinguishable from data.
 
 ## Open work, in the order I would take it
 
-### 1. Session-aware staleness — the biggest unfinished piece of design
+### 1. A poll, or the collector — newly load-bearing
 
-Staleness is `(now - updatedAt) / threshold`. A ratio has one lever, so a source
-that is legitimately silent for long stretches forces the threshold wide: the
-market's is nearly four days, which means a feed that dies on Friday evening is
-not flagged until midweek. That is the precise failure the state exists to
-prevent, reached by honestly accommodating a source that is shut every night.
+This moved to the top because session-aware staleness put it there. Both real
+sources take their snapshot at module load and never ask again, which under a
+four-day threshold was invisible and under a two-bar grace is not: the market
+garden now correctly greys about three hours into a trading session, because the
+feed genuinely is dead and nothing was hiding it any more. The league is fine —
+its due time is a week out.
 
-The fix is for staleness to consume a source-supplied *"when should I next have
-heard something"* instead of a flat duration. The adapter is the only layer that
-knows — `session.ts` can already answer it for the market, and the NFL's
-schedule can answer it for a club. It changes the contract for every source,
-which is why it belongs to whoever has the whole picture rather than to a
-translator.
+The cheap half is a poll. `MarketSource.snapshot(now)` already takes a time and
+the tape is seeded, so re-snapshotting is a re-run rather than a fetch, and
+`dueAfter` says exactly when to do it: the same "when should I next have heard
+something" that decides staleness decides when to ask. One caveat to check before
+wiring it — the tape walks forward from `tradingDaysBack(now, SESSIONS)`, so a
+re-snapshot on the far side of midnight ET slides the window and re-prices the
+whole series. Within a session it is stable.
+
+The expensive half is the real one, and it is the collector below: history is
+backfilled at module load and then lives only as long as the tab.
 
 ### 2. A look control that does not orbit
 
@@ -127,7 +148,9 @@ The archive tier can hold months and nothing is recording them. History is
 backfilled at module load and then lives only as long as the tab. A collector is
 a layer the original architecture diagram does not have — something that runs
 whether or not anyone is looking — and it is the difference between a scrub over
-generated history and a scrub over the real past.
+generated history and a scrub over the real past. It also inherits its schedule
+free of charge: `StaleSchedule.dueAfter` is already the answer to "when should I
+ask this source again".
 
 ### 5. Bound the geometry cache
 

@@ -28,9 +28,10 @@ src/
                      live feed implements.
       instruments.ts The thirty-two symbols, their sectors, listing years, and
                      colours. Real, unlike the prices.
-      session.ts     When the exchange is open, and the arithmetic behind the
-                     staleness threshold: the longest gap it legitimately
-                     produces is a holiday weekend, computed not chosen.
+      session.ts     When the exchange is open, and what staleness asks it:
+                     `nextBarClose`, when an instrument should print again.
+                     Plus the longest gap it legitimately produces, computed
+                     not chosen, which bounds that answer.
       session.test.ts
       tape.ts        The synthetic source: a seeded walk in feed shape, printing
                      only during sessions, with one instrument halted.
@@ -61,8 +62,9 @@ src/
     layout.ts        Where things stand. Pure and deterministic, kept out of
                      the scene; reads each bed's arrangement off its planting
                      type rather than deciding it.
-    staleness.ts     How late a node is against its garden's threshold, and the
-                     visual state that follows. Silence must not read as health.
+    staleness.ts     How late a node is against the schedule its source keeps,
+                     and the visual state that follows. Silence must not read as
+                     health — and shut must not read as dead.
     scrub.ts         What counts as a legal cursor: the window, the clamp, and
                      when a scrub lands back on live. Knows nothing about the
                      sky, so the store can use it without importing a renderer.
@@ -182,7 +184,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-476 tests across twenty-four files, `tsc --noEmit` clean, `vite build` succeeds.
+485 tests across twenty-four files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -254,7 +256,9 @@ flat structure.
 every seven days, so the league's threshold is seven days rather than the fifteen
 minute fallback, and the clubs that cross it are exactly the ones on a bye. The
 garden cannot distinguish a bye from a dead feed, and should not: both mean what
-you are looking at is old.
+you are looking at is old. That is still true now that staleness takes a schedule
+— the league is registered as a flat duration deliberately, and the reasoning is
+under **Staleness is a schedule** below.
 
 ## The second source: a book of positions
 
@@ -275,12 +279,12 @@ healthy while winning. Nothing about that failure is visible in a screenshot.
 
 **The source is shut most of the time.** Staleness exists so silence never reads
 as health, and an exchange is silent every night and all weekend with nothing
-wrong. The threshold is therefore sized to the longest *legitimate* gap — a
-Friday close with a Monday holiday, computed in `session.ts` rather than picked —
-which is the league's bye argument restated. The cost is real and is not hidden:
-a feed that dies on Friday evening is not called stale until midweek. Sharpening
-that needs staleness to become session-aware, which is a change to the
-`staleness` contract rather than to any adapter, and it is not done.
+wrong. The first answer was the league's bye argument restated: size a single
+threshold to the longest *legitimate* gap — a Friday close with a Monday holiday,
+computed in `session.ts` rather than picked. It worked, and it cost nearly four
+days of detection latency, because one number has to cover both *shut* and
+*dead*. That cost is what made staleness session-aware; see **Staleness is a
+schedule** below.
 
 The state is still reachable honestly, and by the market's own mechanism: a
 **trading halt** stops the bars on one symbol while the rest of the book keeps
@@ -310,6 +314,67 @@ computations, because each one is far cheaper: a club's reading walks its whole
 season of games, while an instrument's is a binary search into a sorted bar list
 plus a couple of short window scans. The lesson is that the memo was never the
 load-bearing part — the derivations being O(log n) in the record is.
+
+## Staleness is a schedule, not a duration
+
+Silence must never read as health. The hard part is that most silence is
+innocent — an exchange overnight, a club on its bye — and a garden that greys
+through all of it is crying wolf, which destroys the state just as thoroughly as
+never greying at all.
+
+The original model was a ratio, `(now - updatedAt) / threshold`. One lever, so a
+source with long legitimate silences forces the threshold wide, and a wide
+threshold cannot see a death. The market's came out at nearly four days.
+
+`StaleSchedule` splits that one lever into two, because two different questions
+were hiding in it:
+
+```ts
+interface StaleSchedule {
+  dueAfter(lastUpdate: number): number;  // when should I next have heard something
+  graceMs: number;                       // how late is late, once something is owed
+}
+```
+
+`dueAfter` is a fact about the source's calendar, and only the adapter knows it.
+It may be arbitrarily far out at no cost: silence before the due time scores
+exactly zero, not a fraction of the way up the ramp. `graceMs` only starts
+running once the source has missed something it said it would produce, so it can
+be tight. The market's is two bars — one late print is a slow publish, two is a
+pattern, which is the same reasoning as the `for` clause on any sane alerting
+rule.
+
+Measured against the flat threshold it replaced, on the same tape:
+
+```
+feed dies…              flat threshold   schedule
+mid-session                     95.7h       3.2h
+at a session's last bar         95.7h      20.7h   (nothing due until tomorrow)
+at Friday's close               95.7h      68.7h   (nothing due until Monday)
+```
+
+The Friday figure is the one to read carefully, because it looks like the weakest
+result and is actually the tightest. No rule can flag a Friday death before the
+market reopens, and the reopen is 66.5 hours out; the schedule adds 2.2 hours to
+that floor where the flat threshold added 29.
+
+**A bare number is still a valid policy**, and is the degenerate schedule —
+nothing is ever due, so the whole duration is tolerance. The league is registered
+that way on purpose. Its feed carries games already *played*, so there is no
+fixture list to point `dueAfter` at, and more importantly the league *wants* the
+flat behaviour: a bye is legitimate silence, so a schedule would clear it, and
+clearing it would take the greying off exactly the two clubs a week that make the
+state reachable in that garden. A market reader needs to know the vendor is
+alive; a league reader needs to know whether what they are looking at is current.
+Same contract, opposite answers, which is the argument for it being per-source.
+
+**What this exposes.** Both real sources take their snapshot once at module load
+and never poll, so under the sharpened rule the market garden correctly greys
+about three hours into a trading session — the feed genuinely is dead, and the
+old threshold was only hiding it behind four days of slack. That is the state
+working, and it turns the collector below from a nice-to-have into the thing
+standing between these gardens and a true reading. The league is unaffected: its
+due time is a week out.
 
 ## Time and history
 
@@ -622,6 +687,13 @@ produces a history full of holes exactly across the gaps you most want to
 inspect. Recording therefore implies a collector that runs continuously and a
 viewer that reads from it, rather than one application that does both.
 
+Session-aware staleness sharpened the point considerably. A garden whose source
+publishes a calendar now flags a dead feed within hours, and the two real sources
+here snapshot once at load and never poll — so they are dead feeds, and the
+garden now says so out loud. The same `dueAfter` that answers "should I have
+heard something by now" is also the answer to "when should I ask again", which is
+the collector's schedule handed over for free.
+
 Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports
 results all answer range queries. Notes and task systems mostly cannot, and
@@ -640,17 +712,6 @@ dry-run, and the audit record belong server side where a hand-tracking misfire
 cannot reach them.
 
 ## Open risks
-
-**Staleness cannot tell a shut source from a dead one.** It is a ratio,
-`(now - updatedAt) / threshold`, so the only lever is the threshold, and a
-source that is legitimately silent for long stretches forces that threshold
-wide. The market's is nearly four days, which means a feed dying on a Friday
-evening is not flagged until midweek — the exact failure the state exists to
-prevent, arrived at by honestly accommodating a source that is shut every night.
-The fix is for staleness to consume a source-supplied "when should I next have
-heard something" rather than a flat duration; the adapter is the only layer that
-knows. It changes the contract for every source, which is why it is here and not
-in a translator. This is the largest piece of unfinished design in the project.
 
 **The sun is harder to reach from inside the greenhouse.** An orbit control aims
 at its target, so the upper sky was never pointable; standing indoors did not
