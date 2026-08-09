@@ -99,10 +99,6 @@ export const NFL_TEAMS: NflTeam[] = CONFERENCES.flatMap((conference) =>
   ),
 );
 
-export const TEAMS_BY_ID: Record<string, NflTeam> = Object.fromEntries(
-  NFL_TEAMS.map((team) => [team.id, team]),
-);
-
 /** 'AFC East' — the division's name as anyone says it, and the bed's label. */
 export function divisionLabel(team: {
   conference: Conference;
@@ -119,19 +115,3 @@ export function divisionKey(team: {
   return `${team.conference.toLowerCase()}-${team.division.toLowerCase()}`;
 }
 
-/** The four clubs of one division, in table order. */
-export function teamsInDivision(
-  conference: Conference,
-  division: DivisionName,
-): NflTeam[] {
-  return NFL_TEAMS.filter(
-    (t) => t.conference === conference && t.division === division,
-  );
-}
-
-/** Every division key in alignment order, for iterating beds. */
-export function divisionKeys(): string[] {
-  return CONFERENCES.flatMap((conference) =>
-    DIVISION_NAMES.map((division) => divisionKey({ conference, division })),
-  );
-}

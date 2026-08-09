@@ -11,7 +11,7 @@
  */
 
 export * from './types';
-export { NFL_TEAMS, TEAMS_BY_ID, CONFERENCES, DIVISION_NAMES, divisionKey, divisionKeys, divisionLabel, teamsInDivision } from './teams';
-export { DEPTH_CHART, TOTAL_IMPORTANCE, importanceOf, slotSpec, type SlotSpec } from './roster';
+export { NFL_TEAMS, CONFERENCES, DIVISION_NAMES, divisionKey, divisionLabel } from './teams';
+export { DEPTH_CHART, TOTAL_IMPORTANCE, importanceOf, type SlotSpec } from './roster';
 export { GAME_DURATION_MS, generateNflSnapshot, seasonYear, syntheticNflSource } from './season';
 export * from './derive';

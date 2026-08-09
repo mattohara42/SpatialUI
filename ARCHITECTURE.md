@@ -21,6 +21,7 @@ src/
       derive.ts      Standings, stat sheets, and roster availability, all as
                      of an arbitrary timestamp. Converts NFL into NFL.
       derive.test.ts
+      index.ts       The barrel, and the note on what a live adapter replaces.
   translation/       Raw records to EcosystemNode and EcosystemEdge. The only
                      place domain knowledge and plant archetypes meet, and
                      where trend and polarity are decided.
@@ -60,7 +61,12 @@ src/
   hooks/
     useLSystem.ts    Memoized React wrapper. The only React import in the
                      generation path.
-  state/             Zustand store. Holds EcosystemState, nothing derived.
+  state/             Zustand store, and where the gardens are composed. Holds
+                     EcosystemState and nothing derived from it, with one
+                     deliberate exception: `scrubWindowMs`, which the scrub
+                     gesture asks for on every pointer move and which only
+                     changes when the garden does. Recomputing it per move
+                     would walk every node's archive at pointer rate.
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
     daylight.ts      Timestamp to sun direction and full palette, and the
@@ -93,7 +99,6 @@ src/
                      reachable without hand-editing data. The tick moves only
                      the gardens this module generated, so it can never drift
                      a translated one.
-docs/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
@@ -217,6 +222,22 @@ scrub, 15 plants       naive rebuild every step   5.8ms per step
 cold jump              0.47ms per plant, one hitch, amortizable over frames
 compare two timestamps 0.93ms per plant
 ```
+
+And on the league, which is the largest garden and the one with a real adapter
+behind it:
+
+```
+storage, archive       2.9KB per node per season (daily, 140 slots)
+snapshot generation    6ms       272 games, 32 rosters, 32 injury reports
+translation            48ms      32 clubs to nodes, plus both grains of history
+                                 backfilled — a week of hours and a season of
+                                 days, 5,824 samples in all
+```
+
+Both grains come from the same as-of derivation, so the cost is not in the
+sampling but in how often it has to be recomputed: memoized on games played and
+injuries active, a club's season of dailies collapses to about twenty real
+computations. It runs once at module load and never again.
 
 Storage was never the expensive part. Rebuilding geometry on every scrub step
 is, and quantized vitality is what defuses it: a week of hourly history collapses

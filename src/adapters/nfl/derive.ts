@@ -331,23 +331,6 @@ export function seasoningOf(roster: RosterSlot[]): Seasoning {
   };
 }
 
-/** When this team's data last changed: the end of its most recent finished game. */
-export function lastFinalAt(games: TeamGame[], asOf: number): number | null {
-  const played = gamesThrough(games, asOf);
-  return played.length === 0 ? null : played[played.length - 1].finalAt;
-}
-
-/**
- * True when a team has not played in over a week and a half — a bye, or the
- * feed having stopped. The garden cannot tell those apart and should not
- * pretend to: both mean the same thing, which is that what you are looking at
- * is old.
- */
-export function idleSince(games: TeamGame[], asOf: number): number {
-  const last = lastFinalAt(games, asOf);
-  return last === null ? 0 : asOf - last;
-}
-
 function sum(lines: TeamBoxScore[]): TeamBoxScore {
   const total: TeamBoxScore = {
     points: 0,

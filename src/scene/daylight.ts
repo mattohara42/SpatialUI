@@ -144,16 +144,16 @@ export function yearAngleAt(timestamp: number): number {
   return ((dayOfYear - SUMMER_SOLSTICE_DAY) / 365.25) * TAU;
 }
 
-/** The sun's declination at a moment: `+TILT` at midsummer, `−TILT` at midwinter. */
+/**
+ * The sun's declination at a moment: `+TILT` at midsummer, `−TILT` at midwinter.
+ *
+ * There is deliberately no inverse. A declination maps to two dates a year, so
+ * reading a date off the sun's height would be ambiguous at best and would jam
+ * at the solstices, where the height stops changing — which is why the season
+ * gesture tracks the angle it has travelled instead.
+ */
 export function declinationAt(timestamp: number): number {
   return SEASON_TILT * Math.cos(yearAngleAt(timestamp));
-}
-
-/** The declination a year angle stands at. The inverse is deliberately absent:
- *  a declination maps to two dates a year, which is why the gesture tracks the
- *  angle it has travelled rather than reading a date off the sun's height. */
-export function declinationFor(yearAngle: number): number {
-  return SEASON_TILT * Math.cos(yearAngle);
 }
 
 /**

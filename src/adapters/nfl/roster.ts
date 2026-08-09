@@ -107,11 +107,6 @@ const BY_SLOT: Record<string, SlotSpec> = Object.fromEntries(
   DEPTH_CHART.map((spec) => [spec.slot, spec]),
 );
 
-/** The spec for a slot, or undefined if a feed reports one we do not model. */
-export function slotSpec(slot: string): SlotSpec | undefined {
-  return BY_SLOT[slot];
-}
-
 /**
  * How much of a team is missing when this slot is. Unknown slots weigh a token
  * amount rather than zero, so a feed that invents a position still moves the

@@ -66,8 +66,8 @@ src/
                staleness, scrub window rules, planting types
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
-  state/       Zustand store (holds state, nothing derived) and the composition
-               point where the gardens are assembled
+  state/       Zustand store (holds state, near enough nothing derived) and the
+               composition point where the gardens are assembled
   scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
                Sky, SunScrub, Horizon, plus the pure sway and daylight modules
   mock/        Mock ecosystem + drift tick
