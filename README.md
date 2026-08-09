@@ -57,6 +57,9 @@ in pure code with no React or three.js so it can move to a worker later.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the layer contracts, the time/history
 model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 (which signal gets which visual channel) and the open design questions.
+[HANDOFF.md](HANDOFF.md) is the shortest path in if you are picking this up
+cold: where it stands, which decisions are easy to undo by accident, what is
+unfinished, and what is worth building next.
 
 ## Layout
 

@@ -641,6 +641,25 @@ cannot reach them.
 
 ## Open risks
 
+**Staleness cannot tell a shut source from a dead one.** It is a ratio,
+`(now - updatedAt) / threshold`, so the only lever is the threshold, and a
+source that is legitimately silent for long stretches forces that threshold
+wide. The market's is nearly four days, which means a feed dying on a Friday
+evening is not flagged until midweek — the exact failure the state exists to
+prevent, arrived at by honestly accommodating a source that is shut every night.
+The fix is for staleness to consume a source-supplied "when should I next have
+heard something" rather than a flat duration; the adapter is the only layer that
+knows. It changes the contract for every source, which is why it is here and not
+in a translator. This is the largest piece of unfinished design in the project.
+
+**The sun is harder to reach from inside the greenhouse.** An orbit control aims
+at its target, so the upper sky was never pointable; standing indoors did not
+cause that but did remove the workaround of backing away until the sky came into
+frame. Shift-drag is the stand-in and the gesture the whole concept rests on
+deserves better: a look control that can pitch up without orbiting. The glass is
+already clear of it — panes carry no pointer handlers, so R3F never raycasts
+them.
+
 Pruning shears firing a webhook means a hand gesture triggers a destructive
 production action, and hand tracking misfires. Before that touches a real
 backend it needs a dry-run mode, a confirmation affordance, and a server-side
