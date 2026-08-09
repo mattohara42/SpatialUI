@@ -70,12 +70,13 @@ export default function App() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#14110e' }}>
-      {/* Far enough back to hold the widest garden. The league is eight beds in
-          two rows, about twenty metres across, and a camera framed for a three
-          bed garden cuts a conference off at both ends. Scroll to close in. */}
+      {/* A starting position only. The garden frames itself once it knows how
+          big a house it needs (see scene/Garden.tsx), because the league's
+          twenty metres and a three bed garden want very different distances.
+          Scroll to close in; drag to walk round it. */}
       <Canvas
         shadows
-        camera={{ position: [0, 5.5, 15], fov: 50 }}
+        camera={{ position: [0, 4, 22], fov: 50 }}
         gl={{ toneMappingExposure: 1.1 }}
       >
         <Garden />

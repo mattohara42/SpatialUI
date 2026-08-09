@@ -209,6 +209,57 @@ sick one, a lighter berry like a riper one. Small enough to be felt rather than
 seen is the same guardrail from the other direction: at the amplitudes used, no
 reader could mistake one bright leaf for a statement about that leaf.
 
+## Under glass
+
+The garden now stands in a greenhouse, and that is a decision about how much
+world has to exist rather than a change of backdrop.
+
+Outdoors, the answer to "how much" is *all of it*. Grass to the horizon, hills,
+a tree line, and every one of them a surface that has to hold up from any angle
+the camera can reach — none of which anybody is meant to look at. A wall three
+metres away answers the same question and stops asking it. The field and the
+ridges are still out there and still lit by the same sun, but they have become
+weather rather than scenery: seen through a pane, softened, no longer
+load-bearing. That is the horizon's own bargain taken one step further, and the
+first real cost saving the scene has made.
+
+The sky is the one thing the glass may not take. Time is dragged on the sun, so
+a roof that hid it, dimmed it, or swallowed the pointer aimed at it would have
+cost the whole gesture — which is why the panes cast no shadow and write no
+depth, and why the sun, the moon, and the stars read through the roof exactly as
+they did in the open. Everything the light does, it still does.
+
+What the house adds beyond enclosure is the same three rules the horizon keeps:
+static, signal-free, no colour logic of its own. It carries no reading, so it
+can be as detailed as it likes. The one place it touches the reading at all is a
+gain — a glasshouse **diffuses**, and diffused light is exactly what a scene
+read at a glance from three metres wants.
+
+**Raised beds are the part that reads.** The soil was a slab lying on the
+ground, which is a patch of a different colour rather than an object in a room:
+that is most of why the beds looked like regions on a map. Four boards, corner
+posts, and a cap rail give the soil an edge, a thickness, and a shadow, and that
+is the whole difference between ground somebody coloured in and ground somebody
+built. The trick is which way it was built: the beds are raised by *lowering the
+floor*, so the soil surface stays exactly where the plants already stood and
+nothing that measures from a plant had to learn about it.
+
+**The props are for tense.** A hose on its hook, a bench on castors, a watering
+can set down beside a pair of gloves, pots waiting to be filled. None of it
+means anything and none of it may ever appear to. What it buys is that beds and
+glass say a garden *exists*, while a can next to a pair of gloves says somebody
+was here this morning and is coming back — which is the reading the whole
+product wants, a place you keep an eye on rather than a dashboard you open. It
+is also the cheapest thing in the scene, because unlike a plant, none of it has
+to be true.
+
+Two rules hold it in place, and they are the ones any future decoration should
+inherit. It lives **against the walls**, in the path the shell leaves around the
+beds, so it never stands between the camera and a plant. And it is **still**:
+motes, dust, and sway are the only things that move here and all three carry
+signal, so a rocking watering can would be motion that meant nothing — which is
+worse in this scene than it would be in one where motion means nothing anyway.
+
 ## The moment of use
 
 Desk Bonsai is the primary mode and Greenhouse is the occasional deep dive.

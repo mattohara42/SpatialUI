@@ -6,7 +6,9 @@ import {
   TEXTURE_SIZE,
   barkPixels,
   grain,
+  gravelPixels,
   liftForTexture,
+  plankPixels,
   SOIL_FURROWS,
   soilPixels,
   surfaceTexture,
@@ -17,6 +19,8 @@ const GENERATORS = [
   ['turf', turfPixels],
   ['soil', soilPixels],
   ['bark', barkPixels],
+  ['plank', plankPixels],
+  ['gravel', gravelPixels],
 ] as const;
 
 /** Mean brightness of a map, in multiplier units (0..1). */
@@ -160,6 +164,23 @@ describe('generated surface maps', () => {
     // u runs around the trunk, v along it, so grain means rough across, smooth
     // along.
     expect(roughness(pixels, 'x')).toBeGreaterThan(roughness(pixels, 'y') * 2);
+  });
+
+  it('timber grains along the board: the transpose of bark', () => {
+    const pixels = plankPixels();
+    // A box face's u runs along its longest edge, so grain means smooth across
+    // u and rough along v — exactly the other way round from a cylinder.
+    expect(roughness(pixels, 'y')).toBeGreaterThan(roughness(pixels, 'x') * 2);
+  });
+
+  it('gravel has no direction and is finer than turf', () => {
+    const grit = gravelPixels();
+    const across = roughness(grit, 'x');
+    const down = roughness(grit, 'y');
+    expect(Math.abs(across - down) / Math.max(across, down)).toBeLessThan(0.35);
+    // Busier pixel to pixel than the grass it replaces underfoot, which is what
+    // makes a path read as a path rather than as bare ground.
+    expect(across).toBeGreaterThan(roughness(turfPixels(), 'x'));
   });
 
   it('soil bands into furrows, at the spacing it claims to', () => {

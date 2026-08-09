@@ -15,13 +15,19 @@ const FLOOR = 0.4;
  *
  * Spawned across the garden footprint, so this sits inside the same translated
  * group as the plants.
+ *
+ * The ceiling is now the eaves, because there is a roof: motes that rose through
+ * the glass would say the building is not there, and specks gathering under the
+ * ridge is what warm air in a greenhouse actually does.
  */
 export function Motes({
   size,
   activity,
+  ceiling = CEILING,
 }: {
   size: [number, number];
   activity: number;
+  ceiling?: number;
 }) {
   const points = useRef<THREE.Points>(null);
   const phase = useMemo(() => {
@@ -34,13 +40,13 @@ export function Motes({
     const positions = new Float32Array(COUNT * 3);
     for (let i = 0; i < COUNT; i++) {
       positions[i * 3] = Math.random() * size[0];
-      positions[i * 3 + 1] = FLOOR + Math.random() * (CEILING - FLOOR);
+      positions[i * 3 + 1] = FLOOR + Math.random() * (ceiling - FLOOR);
       positions[i * 3 + 2] = Math.random() * size[1];
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     return g;
-  }, [size[0], size[1]]);
+  }, [size[0], size[1], ceiling]);
 
   useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime;
@@ -49,7 +55,7 @@ export function Motes({
     for (let i = 0; i < COUNT; i++) {
       arr[i * 3 + 1] += rise * delta;
       arr[i * 3] += Math.sin(t * 0.3 + phase[i]) * 0.0009;
-      if (arr[i * 3 + 1] > CEILING) {
+      if (arr[i * 3 + 1] > ceiling) {
         arr[i * 3 + 1] = FLOOR;
         arr[i * 3] = Math.random() * size[0];
         arr[i * 3 + 2] = Math.random() * size[1];

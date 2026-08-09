@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { OrbitControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
+import type * as THREE from 'three';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
@@ -10,6 +12,9 @@ import { Motes } from './Motes';
 import { Dust } from './Dust';
 import { Sky } from './Sky';
 import { Horizon } from './Horizon';
+import { Greenhouse } from './Greenhouse';
+import { Props } from './Props';
+import { FLOOR_Y, shellFor, type Shell } from './greenhouse';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -39,7 +44,13 @@ const SHADOW_EXTENT = 12;
 
 /** Edge length of the ground sheet, and metres of it per turf tile. Two metres
  *  is a compromise: tighter and the tiling repeats visibly underfoot, wider and
- *  the grain coarsens into blotches that stop reading as grass. */
+ *  the grain coarsens into blotches that stop reading as grass.
+ *
+ *  The field outside matters much less now that the garden is under glass. It is
+ *  still lit and fogged by the same rig, and still runs out to meet the sky so
+ *  there is no plate edge floating in fog, but it is weather rather than
+ *  scenery: seen through a pane from three metres inside, it only has to be a
+ *  soft green distance. */
 const GROUND_SIZE = 1000;
 const TURF_TILE = 2;
 
@@ -133,6 +144,55 @@ function hashString(id: string): number {
   return h >>> 0;
 }
 
+/**
+ * Where you stand when you walk into a garden.
+ *
+ * The house is sized from what is planted, so the camera has to be: a fixed
+ * position framed for the league leaves a three-bed garden a speck, and framed
+ * for three beds it puts the league's near wall through the lens. The distance
+ * is solved rather than picked — far enough back that the whole width subtends
+ * the horizontal field of view, plus the depth of the house, plus a hand's
+ * breadth of margin — so every garden arrives at the same apparent size.
+ *
+ * It fires on the house's dimensions and on nothing else. Those change when you
+ * enter a garden and never on a telemetry tick, which is the difference between
+ * a camera that frames what you walked into and one that snatches itself back
+ * every two seconds while you are trying to look at something.
+ */
+function Framing({ shell }: { shell: Shell }) {
+  const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
+  const controls = useThree((state) => state.controls) as {
+    target: THREE.Vector3;
+    update: () => void;
+  } | null;
+  const viewport = useThree((state) => state.size);
+
+  const { width, depth, eaves } = shell;
+
+  useEffect(() => {
+    const aspect = viewport.width / Math.max(1, viewport.height);
+    const halfVertical = ((camera.fov * Math.PI) / 180) / 2;
+    const halfHorizontal = Math.atan(Math.tan(halfVertical) * aspect);
+    const distance = depth / 2 + (width / 2 / Math.tan(halfHorizontal)) * FRAMING_MARGIN;
+
+    // Eaves height, looking at the beds rather than down on them. A view from
+    // the ridge would show the roof, and the roof is not the thing.
+    camera.position.set(0, eaves, distance);
+    if (controls) {
+      controls.target.set(0, 1.1, 0);
+      controls.update();
+    }
+    // The aspect ratio is read once here rather than tracked: a window resize
+    // must not yank the camera back to where it started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, depth, eaves, controls, camera]);
+
+  return null;
+}
+
+/** How much room to leave around the house at that distance. */
+const FRAMING_MARGIN = 1.02;
+
 export function Garden() {
   const nodes = useEcosystem((s) => s.nodes);
   const edges = useEcosystem((s) => s.edges);
@@ -150,6 +210,10 @@ export function Garden() {
   );
 
   const layout = useMemo(() => layoutGarden(gardenNodes), [gardenNodes]);
+
+  // The house the garden stands in, sized from what is planted rather than
+  // fixed, so the league gets a bigger building and not a cramped one.
+  const shell = useMemo(() => shellFor(layout.size), [layout]);
 
   const gardenEdges = useMemo(
     () => (activeGardenId ? edgesInGarden(state, activeGardenId) : []),
@@ -300,23 +364,37 @@ export function Garden() {
         <Foliage plants={plants} />
         <Produce plants={plants} />
         <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
-        {plants.length > 0 && <Motes size={layout.size} activity={activity} />}
+        {plants.length > 0 && (
+          <Motes size={layout.size} activity={activity} ceiling={shell.eaves - 0.3} />
+        )}
         {/* Dust falls only on plants that have gone silent, so this draws
             nothing at all in a garden that is reporting. */}
         <Dust plants={plants} night={daylight.stars} />
       </group>
+      {/* The house, and the things left lying about in it. Both stand outside
+          the translated group: the garden is centred on the origin by that
+          offset, so the shell is centred there too, and neither knows anything
+          about where a particular bed landed. */}
+      <Greenhouse shell={shell} />
+      <Props shell={shell} />
+
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
           fog. Only the garden-sized centre receives shadows (the shadow camera
           covers a few metres), but the whole sheet is lit and fogged, which is
-          what carries it to the horizon. The hills and tree line stand on it. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
+          what carries it to the horizon. The hills and tree line stand on it.
+          Everything outdoors sits at the house's floor level, because raising
+          the beds was done by lowering the world (see greenhouse.ts). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]} receiveShadow>
         <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
         <meshStandardMaterial map={turf} color={liftForTexture('#5c6e3a')} roughness={1} />
       </mesh>
-      <Horizon />
+      <group position={[0, FLOOR_Y, 0]}>
+        <Horizon />
+      </group>
       {/* makeDefault so the sun drag can find these and suspend them; without
           it, grabbing the sun would orbit the camera at the same time. */}
       <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.05} />
+      <Framing shell={shell} />
     </>
   );
 }

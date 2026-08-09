@@ -68,8 +68,9 @@ src/
   hooks/       useLSystem — memoized geometry generation
   state/       Zustand store (holds state, near enough nothing derived) and the
                composition point where the gardens are assembled
-  scene/       R3F components: Garden, Branches, Foliage, Grafts, Beds, Motes,
-               Sky, SunScrub, Horizon, plus the pure sway and daylight modules
+  scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
+               Grafts, Beds, Motes, Sky, SunScrub, Horizon, plus the pure sway,
+               daylight, dust, and greenhouse modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -133,6 +134,20 @@ not a rebuild.
   a healthy plant reads as a full canopy — or a full bloom — and a sick one sheds
   to bare twigs or a bare stem. Petal colour is decorative and varietal, never a
   health signal.
+- **The garden is under glass.** A greenhouse — dwarf wall, painted frame,
+  glazing bars, a pitched roof with a vent propped open, and a door standing
+  ajar — sized from whatever is planted, so the league gets a bigger house rather
+  than a cramped one. It answers "how much world has to exist" with a wall three
+  metres away: the field and the hills are still out there and still lit by the
+  same sun, but they are weather now rather than scenery. The sky is the one
+  thing it may not take, so the panes cast no shadow and write no depth and the
+  sun, moon, and stars read straight through the roof — you can still grab the
+  sun to scrub time. **Beds are raised**, held in timber with corner posts and a
+  cap rail; they are raised by lowering the floor, so the soil surface never
+  moved and nothing that measures from a plant had to change. And the house is
+  furnished: a hose on its hook with a length left on the floor, a potting bench
+  on castors, a watering can, shears, gloves, twine, and stacks of terracotta
+  pots. All of it signal-free, against the walls, and still.
 - **A landscape behind the garden** — layered hills, distant mountains, and a
   conifer tree line receding into fog. Static and signal-free by design; it is
   lit and fogged by the same rig as the garden, so it tracks the day/night scrub

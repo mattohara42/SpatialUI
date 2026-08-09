@@ -79,6 +79,15 @@ src/
     Trellis.tsx      Static posts and wires for vineyard beds. Signal-free, like
                      the horizon; the vines are trained to it.
     Horizon.tsx      Static hills, mountains, and tree line. Signal-free depth.
+    greenhouse.ts    The house as arithmetic: floor level, proportions, bay
+                     spacing, roof height at a distance in from the wall. Pure,
+                     no three.js, like daylight and dust.
+    greenhouse.test.ts
+    Greenhouse.tsx   Draws it — dwarf wall, frame, glazing, roof, vent, door —
+                     from one unit cube and one unit quad.
+    Props.tsx        The hose, the rolling bench, the can, the shears, the
+                     gloves, the pots. Decoration, against the walls, still.
+    Beds.tsx         Raised beds: soil in a timber box with a cap rail.
     planting.ts      The render half of the planting concept: which L-system
                      forms each PlantingType is drawn with.
     textures.ts      Surface grain at two scales: generated achromatic maps
@@ -102,7 +111,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-307 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
+342 tests across seventeen files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -359,6 +368,37 @@ hit rate and scrubbing costs less than a frame.
     drag's *direction* is latched at the grab for the same reason: whether
     pulling the sun up means earlier or later depends on which side of a solstice
     the cursor is on, and dragging across one must not reverse under the hand.
+
+18. The garden is under glass, and the beds are raised by **lowering the
+    world**. A plant is placed at y = 0 by `layout.ts`; grafts run between those
+    points, dust settles from them, sway is measured up from them. Lifting the
+    soil would have made every one of those learn a bed height, so the floor
+    drops to `FLOOR_Y` instead and the timber sides fall away beneath a soil
+    surface that never moved. Nothing above the ground changed. The consequence
+    to keep straight is that the building's own heights — knee, eaves, ridge,
+    door — are measured **from the floor**, not from the soil, and `Greenhouse`
+    puts that datum in place with one group offset.
+
+19. Glass casts no shadow and writes no depth. Not casting is a light decision:
+    the shadow map is 2048 texels over twenty-four metres, so a glazing bar is
+    three or four of them and would shimmer as the sun moved, and a hard lattice
+    over the beds would compete with the plants' own shadows for the glance the
+    product is built around. Not writing depth is a correctness one: the panes
+    are blended over everything opaque, so plants behind glass are never sorted
+    away — and neither are the sky, the sun, the moon, or the invisible sixteen
+    metre grab handles the last two carry. Scrubbing time *is* grabbing the sun,
+    so a roof that swallowed the pointer would have cost the whole gesture.
+    (R3F only dispatches pointer events to objects that have handlers, so the
+    panes are not in the way either.)
+
+20. The camera frames itself from the house. The house is sized from what is
+    planted, so a fixed camera is wrong for every garden but one: framed for the
+    league it loses a three-bed garden, framed for three beds it puts the
+    league's near wall through the lens. `Framing` solves the distance instead —
+    far enough that the width subtends the horizontal field of view, plus the
+    depth of the house — and fires on the house's dimensions only, never on a
+    telemetry tick, or the camera would snatch itself back every two seconds
+    while somebody was looking at something.
 
 ## Collection
 
