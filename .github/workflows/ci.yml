@@ -25,11 +25,15 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      # v4 of both actions still targets the Node 20 runtime, which the runners
+      # now force onto Node 24 with a deprecation warning. setup-node made that
+      # move in v5; these are the current majors of each.
+      - uses: actions/checkout@v7
 
       # Pinned to the version the suite is actually verified on. There is no
       # `engines` field to honour, so this is the claim rather than a guess.
-      - uses: actions/setup-node@v4
+      # Unrelated to the runtime the actions themselves run on, above.
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
