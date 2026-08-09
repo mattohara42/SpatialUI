@@ -164,8 +164,19 @@ export interface EcosystemEdge {
 export interface EcosystemState {
   nodes: Record<string, EcosystemNode>;
   edges: Record<string, EcosystemEdge>;
-  /** Vitals over time, keyed by node id. See `history.ts`. */
+  /** Vitals over time at the fine grain — hourly for a week. See `history.ts`. */
   history: Record<string, VitalsHistory>;
+  /**
+   * The same, at the coarse grain: daily for a season. Kept as its own
+   * collection rather than as a second field on each buffer, for the reason
+   * edges are kept apart from nodes — the two are written at different rates by
+   * different code, and a fine-grain tick has no business touching a season.
+   *
+   * A node may be absent from it. An adapter that cannot backfill months has
+   * nothing to put here, and the reader falls through to live rather than
+   * inventing a past.
+   */
+  archive: Record<string, VitalsHistory>;
   /** Null before the user picks a garden. The scene renders nothing until set. */
   activeGardenId: string | null;
   /**

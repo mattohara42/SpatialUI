@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DAY_MS,
   HOUR_MS,
   createHistory,
   historyBytes,
@@ -172,5 +173,93 @@ describe('mock history', () => {
       plant.vitality,
       5,
     );
+  });
+});
+
+describe('the archive tier', () => {
+  const node = (): EcosystemNode => ({
+    id: 'n',
+    parentId: null,
+    gardenId: 'g',
+    label: 'n',
+    domain: 'devops',
+    kind: 'plant',
+    polarity: 'nurture',
+    vitality: 0.9,
+    activity: 0.5,
+    maturity: 0.5,
+    trend: 0,
+    blights: [],
+    updatedAt: 0,
+  });
+
+  const NOW = 1_700_000_000_000;
+
+  const filled = (stepMs: number, steps: number, vitality: number) => {
+    const buffer = createHistory(stepMs, steps);
+    for (let i = 0; i < steps; i++) {
+      record(buffer, NOW - i * stepMs, {
+        vitality,
+        activity: 0.5,
+        maturity: 0.5,
+        trend: 0,
+      });
+    }
+    return buffer;
+  };
+
+  it('prefers the fine grain wherever it has an answer', () => {
+    const fine = filled(HOUR_MS, 168, 0.2);
+    const coarse = filled(DAY_MS, 140, 0.8);
+    expect(vitalsAt(node(), fine, NOW - 3 * HOUR_MS, coarse).vitality).toBeCloseTo(0.2, 5);
+  });
+
+  it('falls through to the archive once the week runs out', () => {
+    const fine = filled(HOUR_MS, 168, 0.2);
+    const coarse = filled(DAY_MS, 140, 0.8);
+    expect(vitalsAt(node(), fine, NOW - 40 * DAY_MS, coarse).vitality).toBeCloseTo(0.8, 5);
+  });
+
+  it('falls back to live rather than inventing a past neither tier holds', () => {
+    const fine = filled(HOUR_MS, 168, 0.2);
+    const coarse = filled(DAY_MS, 140, 0.8);
+    // Two years back is beyond both buffers.
+    expect(vitalsAt(node(), fine, NOW - 730 * DAY_MS, coarse).vitality).toBe(0.9);
+  });
+
+  it('works with no archive at all, which is what most adapters will have', () => {
+    const fine = filled(HOUR_MS, 168, 0.2);
+    expect(vitalsAt(node(), fine, NOW - 40 * DAY_MS).vitality).toBe(0.9);
+  });
+
+  it('is live at a null cursor whatever either tier holds', () => {
+    const coarse = filled(DAY_MS, 140, 0.8);
+    expect(vitalsAt(node(), filled(HOUR_MS, 168, 0.2), null, coarse).vitality).toBe(0.9);
+  });
+
+  it('costs a fraction of what hourly would over the same span', () => {
+    // The reason for two grains rather than one long fine buffer: a season at a
+    // day a slot is a rounding error next to a season of hours.
+    const season = historyBytes(createHistory(DAY_MS, 140));
+    const hourly = historyBytes(createHistory(HOUR_MS, 140 * 24));
+    expect(season * 20).toBeLessThan(hourly);
+    expect(season).toBeLessThan(3000);
+  });
+});
+
+describe('the mock gardens archive too', () => {
+  it('backfills a season of dailies alongside the week of hours', () => {
+    const state = generateMockEcosystem({ historyHours: 48, archiveDays: 90 });
+    const plant = Object.values(state.nodes).find((n) => n.kind === 'plant')!;
+    expect(state.archive[plant.id].stepMs).toBe(DAY_MS);
+    expect(sampleAt(state.archive[plant.id], Date.now() - 60 * DAY_MS)).not.toBeNull();
+  });
+
+  it('drifts further over a season than over a week, so the walk is not a flat line', () => {
+    const state = generateMockEcosystem({ archiveDays: 120 });
+    const plant = Object.values(state.nodes).find((n) => n.kind === 'plant')!;
+    const now = sampleAt(state.archive[plant.id], Date.now())!;
+    const then = sampleAt(state.archive[plant.id], Date.now() - 100 * DAY_MS)!;
+    expect(Math.abs(now.vitality - then.vitality)).toBeGreaterThan(0.05);
   });
 });

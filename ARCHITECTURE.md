@@ -4,13 +4,30 @@
 
 ```
 src/
-  adapters/          Planned, not yet created. Input sources, one folder per
-                     source, each returning raw domain records. Nothing here
-                     will know what a plant is.
-  translation/       Planned, not yet created. Raw records to EcosystemNode and
-                     EcosystemEdge. The only place domain knowledge and plant
-                     archetypes will meet, and where trend and polarity are
-                     decided.
+  adapters/          Input sources, one folder per source, each returning raw
+                     domain records. Nothing here knows what a plant is.
+    nfl/
+      types.ts       The feed contract: franchises, games holding two box
+                     scores each, depth-chart slots with age and service,
+                     injuries with an onset. Plus `NflSource`, the one method
+                     a live feed implements.
+      teams.ts       The thirty-two franchises, their alignment, founding
+                     years, and colours. Real, unlike the season.
+      roster.ts      The fifty-three slot depth chart and what each slot is
+                     worth, which is what makes an injury report weigh
+                     something instead of counting bodies.
+      season.ts      The synthetic source: a seeded season in feed shape.
+      season.test.ts
+      derive.ts      Standings, stat sheets, and roster availability, all as
+                     of an arbitrary timestamp. Converts NFL into NFL.
+      derive.test.ts
+      index.ts       The barrel, and the note on what a live adapter replaces.
+  translation/       Raw records to EcosystemNode and EcosystemEdge. The only
+                     place domain knowledge and plant archetypes meet, and
+                     where trend and polarity are decided.
+    nfl.ts           The league as a garden: the four axes, injuries as
+                     blights, division rivalries as grafts, history backfill.
+    nfl.test.ts
   ecosystem/
     types.ts         Node, edge, and state contracts. Read by every layer.
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
@@ -44,7 +61,12 @@ src/
   hooks/
     useLSystem.ts    Memoized React wrapper. The only React import in the
                      generation path.
-  state/             Zustand store. Holds EcosystemState, nothing derived.
+  state/             Zustand store, and where the gardens are composed. Holds
+                     EcosystemState and nothing derived from it, with one
+                     deliberate exception: `scrubWindowMs`, which the scrub
+                     gesture asks for on every pointer move and which only
+                     changes when the garden does. Recomputing it per move
+                     would walk every node's archive at pointer rate.
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
     daylight.ts      Timestamp to sun direction and full palette, and the
@@ -74,12 +96,13 @@ src/
   mock/
     mockEcosystemData.ts  Four gardens, edges, and a drift tick. One plant per
                      garden has a dead adapter, so the staleness state is
-                     reachable without hand-editing data.
-docs/
+                     reachable without hand-editing data. The tick moves only
+                     the gardens this module generated, so it can never drift
+                     a translated one.
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-191 tests across thirteen files, `tsc --noEmit` clean, `vite build` succeeds.
+307 tests across sixteen files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -117,14 +140,75 @@ Edges live in their own collection, never on the node. A vitality tick then
 cannot invalidate edge geometry, and a topology change cannot rebuild plants.
 Both endpoints must sit in the same garden.
 
+The gardens are assembled in one place — `composeEcosystem` in the store — which
+is the only code that knows more than one source exists. Adding a source is a
+translator and a line there.
+
+## The first real source: the NFL
+
+The league exercises the layering end to end, and the shape it settled is worth
+stating because the next adapter should copy it.
+
+**The adapter stores events, not summaries.** A game holds both teams' box
+scores; a season stat is a sum over them. An injury holds an onset. Nothing in
+`adapters/nfl/` stores a standings table or a yards-per-game figure, because a
+feed that hands you totals has already thrown away when each number changed.
+
+**Every derivation takes an `asOf`.** `recordOf`, `statsOf`, and
+`availabilityAt` answer for any moment in the season, so the live view and the
+history are the same function called at different times and cannot disagree.
+Backfilling a week of hourly vitals is that function in a loop; because a club's
+numbers only move when a game goes final or an injury is reported, the loop is
+memoized on the count of each and collapses to two or three real computations
+per club. The whole league — thirty-two clubs, 48 edges, 168 hourly samples each
+— translates in about 25ms at module load.
+
+**A container level can be a row rather than a bed.** The model has exactly one
+grouping level between garden and plant, and the NFL has two (conference,
+division). Divisions are the beds; conference is expressed by ordering — bed ids
+are conference-prefixed and `layout.ts` sorts by id, so the AFC fills one row and
+the NFC the other. Nested beds would have bought a label and cost the layout its
+flat structure.
+
+**Staleness is per source, and it can be true rather than staged.** A club plays
+every seven days, so the league's threshold is seven days rather than the fifteen
+minute fallback, and the clubs that cross it are exactly the ones on a bye. The
+garden cannot distinguish a bye from a dead feed, and should not: both mean what
+you are looking at is old.
+
 ## Time and history
 
-State is a snapshot of now plus a ring buffer of vitals per node, keyed by
-absolute hour so gaps stay explicit rather than silently shifting older samples
-forward. The scene must read vitals through `vitalsAt(node, history, cursor)`
-rather than off the node. That single indirection is why scrubbing, comparison,
-and playback are changes to one function instead of changes to every component
-that touches a plant.
+State is a snapshot of now plus ring buffers of vitals per node, keyed by
+absolute slot so gaps stay explicit rather than silently shifting older samples
+forward. The scene must read vitals through
+`vitalsAt(node, history, cursor, archive)` rather than off the node. That single
+indirection is why scrubbing, comparison, and playback are changes to one
+function instead of changes to every component that touches a plant.
+
+History is kept at **two grains**, in two collections:
+
+```
+history   hourly, 168 slots     a week      3.4KB per node
+archive   daily,  140 slots     20 weeks    2.9KB per node
+```
+
+The split is the downsampling the storage note below always said this would need,
+but the reason to prefer it over one long fine buffer is not storage: the grains
+answer different questions. Inside a day you want the hour a thing broke; across
+a season you want the week it started sliding. `vitalsAt` asks the fine grain
+first, falls through to the coarse one when the cursor is older than the week
+kept in detail, and falls back to live when neither holds it — never
+interpolating a past nobody recorded.
+
+A node may be absent from the archive. An adapter that cannot backfill months has
+nothing to put there, and `windowFor` then keeps that garden's scrub at the two
+day window rather than letting the cursor run out past the data.
+
+Two gestures move the cursor and they are the same object: the sun's arc. Along
+it is the day at a turn per day; across it — the arc's own height, which is what
+a season physically is — is the year at half a year per full sweep. See
+`scene/daylight.ts` for why the two cannot interfere, and DESIGN.md for what the
+gesture settled.
 
 Measured on the mock ecosystem:
 
@@ -138,6 +222,22 @@ scrub, 15 plants       naive rebuild every step   5.8ms per step
 cold jump              0.47ms per plant, one hitch, amortizable over frames
 compare two timestamps 0.93ms per plant
 ```
+
+And on the league, which is the largest garden and the one with a real adapter
+behind it:
+
+```
+storage, archive       2.9KB per node per season (daily, 140 slots)
+snapshot generation    6ms       272 games, 32 rosters, 32 injury reports
+translation            48ms      32 clubs to nodes, plus both grains of history
+                                 backfilled — a week of hours and a season of
+                                 days, 5,824 samples in all
+```
+
+Both grains come from the same as-of derivation, so the cost is not in the
+sampling but in how often it has to be recomputed: memoized on games played and
+injuries active, a club's season of dailies collapses to about twenty real
+computations. It runs once at module load and never again.
 
 Storage was never the expensive part. Rebuilding geometry on every scrub step
 is, and quantized vitality is what defuses it: a week of hourly history collapses
@@ -168,12 +268,17 @@ hit rate and scrubbing costs less than a frame.
    static mesh, so a strength wobble costs nothing.
 6. Desktop browser is the first target. XR is not wired, but no HUD or control
    is head-locked and `src/xr/` exists to keep that honest.
-7. The sun travels a tilted great circle rather than an almanac position. A real
-   solar position needs a latitude and a date and would buy nothing: what has to
-   be true is that it rises on one side, crosses high, sets on the other, and
-   that the shadows agree with the disc. A plane circle does that and stays
-   invertible, which is what the drag needs — the gesture is the inverse of the
-   path, so the path has to be a shape a direction can be projected back onto.
+7. The sun travels a tilted circle with a declination. This was a plane great
+   circle, on the reasoning that an almanac position "needs a latitude and a date
+   and would buy nothing" — right about the latitude, wrong about the date. Tilt
+   the daily circle by the sun's declination and the seasons arrive with no new
+   machinery: the arc rides high in summer and low in winter, and since every
+   palette and light already keys off the sun's height, the days get shorter on
+   their own. The latitude then falls out rather than being chosen — a 58° noon
+   sun at equinox is 32° north, whose winter day is ten hours against summer's
+   fourteen. Both the hour and the declination stay invertible from a direction,
+   which is what the two drag gestures need, and they are measured on
+   perpendicular axes so neither gesture can disturb the other.
 8. Time reaches the sky quantized to thirty seconds. The sun crosses a full
    circle in a day, so that is a hundredth of a degree: invisible mid-drag, and
    it keeps a two second telemetry tick from rebuilding the lighting for a sun
@@ -224,6 +329,37 @@ hit rate and scrubbing costs less than a frame.
     at any distance, and it carries no colour space — right for grain, wrong for
     any real albedo map, which is the same trap as assumption 9.
 
+14. Beds wrap into rows once there are more than four of them. A garden of eight
+    beds in one line is a thirty-five metre strip that cannot be stood in front
+    of, and the wrap keeps the footprint near square (the league is 20m by 8m).
+    Gardens with four beds or fewer are laid out exactly as before, so this
+    changed nothing about the mock gardens. The row a bed lands in is a function
+    of its sorted id, which is what lets a grouping above the bed be expressed
+    without adding a container level.
+
+15. The synthetic NFL season is anchored to load time, not to the calendar. Its
+    most recent kickoff is always 26 hours ago, which puts it inside the 47 hour
+    scrub window with room either side — otherwise the scrub would run out of
+    window before it reached a game and time travel in that garden would be a
+    flat line. The cost is that the season and week numbers will not agree with
+    the real calendar, which the snapshot's provenance says out loud. A live
+    adapter has real kickoff times and this problem inverts: most of the week
+    there is no game inside the window at all, which is an argument for seasons
+    as a second, coarser scrub rather than for faking the clock.
+
+16. The season scrub's window is bounded by what was actually archived, not by
+    the archive's capacity. The NFL's dailies start at week one, so the cursor
+    stops at the season's start rather than running back into a stretch where
+    every club is identical because none had played — a flat line that looks like
+    data is the one thing a scrub window exists to keep off the end of.
+
+17. A drag latches its axis on the first movement that clearly means one or the
+    other, and keeps it. Deciding per frame would let a diagonal drag switch
+    between hours and months halfway through, which is unaimable. The season
+    drag's *direction* is latched at the grab for the same reason: whether
+    pulling the sun up means earlier or later depends on which side of a solstice
+    the cursor is on, and dragging across one must not reverse under the hand.
+
 ## Collection
 
 History is recorded, not just backfilled. That has a consequence worth stating
@@ -236,6 +372,13 @@ Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports
 results all answer range queries. Notes and task systems mostly cannot, and
 those are the ones that depend on the collector.
+
+The NFL adapter is the worked example and it goes further than backfill: because
+every derivation takes an `asOf`, the whole season is addressable, not just the
+window someone thought to record. A source built this way needs the collector
+only for the things it genuinely cannot reconstruct — which for a league is the
+injury report, since a feed publishes who is hurt now and not who was hurt in
+week four.
 
 The collector is also the right home for the pruning webhook. The confirmation
 affordance belongs in the headset, but the allowlist of what is prunable, the

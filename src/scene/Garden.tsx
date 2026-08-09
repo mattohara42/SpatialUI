@@ -33,7 +33,8 @@ import { liftForTexture, surfaceTexture, turfPixels } from './textures';
  */
 const LIGHT_DISTANCE = 30;
 
-/** Half-width of the shadow frustum. The garden footprint is about 15m by 3m. */
+/** Half-width of the shadow frustum. The largest garden — the league, eight beds
+ *  in two rows — is about 20m by 8m, so ±12m covers it centred. */
 const SHADOW_EXTENT = 12;
 
 /** Edge length of the ground sheet, and metres of it per turf tile. Two metres
@@ -136,11 +137,12 @@ export function Garden() {
   const nodes = useEcosystem((s) => s.nodes);
   const edges = useEcosystem((s) => s.edges);
   const history = useEcosystem((s) => s.history);
+  const archive = useEcosystem((s) => s.archive);
   const cursor = useEcosystem((s) => s.cursor);
   const activeGardenId = useEcosystem((s) => s.activeGardenId);
   const revision = useEcosystem((s) => s.revision);
 
-  const state = { nodes, edges, history, cursor, activeGardenId, revision };
+  const state = { nodes, edges, history, archive, cursor, activeGardenId, revision };
 
   const gardenNodes = useMemo(
     () => (activeGardenId ? nodesInGarden(state, activeGardenId) : []),
@@ -170,8 +172,10 @@ export function Garden() {
       if (!node) return [];
 
       // Everything reads vitals through the cursor. Nothing in the scene may
-      // touch node.vitality directly, or scrubbing silently stops working.
-      const vitals = vitalsAt(node, history[node.id], cursor);
+      // touch node.vitality directly, or scrubbing silently stops working. The
+      // archive is the coarse tier: hours come from the week, months from the
+      // season, and this one call is the whole of the scene knowing that.
+      const vitals = vitalsAt(node, history[node.id], cursor, archive[node.id]);
       const stale = staleness(node, now, threshold);
 
       // Memoized on the quantized vitals, so a tick that does not step a plant
@@ -207,7 +211,7 @@ export function Garden() {
         },
       ];
     });
-  }, [layout, nodes, history, cursor, activeGardenId, revision]);
+  }, [layout, nodes, history, archive, cursor, activeGardenId, revision]);
 
   // One number for the whole mote field: how busy the garden is on average.
   const activity = plants.length

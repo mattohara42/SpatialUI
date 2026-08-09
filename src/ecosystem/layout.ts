@@ -43,26 +43,55 @@ export interface LayoutOptions {
   bedGap?: number;
   /** Plant height at maturity 0 and 1, before the planting's height scale. */
   heightRange?: [number, number];
+  /**
+   * Beds per row before wrapping to the next one back. 0 picks a default: up to
+   * four beds stand in a single row, more wrap into two. A garden of eight beds
+   * in one line is a thirty-five metre strip nobody can stand in front of, and
+   * the wrap is also what lets a grouping above the bed — an NFL conference, a
+   * cluster of clusters — read as *which row you are looking at* without adding
+   * a container level the model does not have.
+   */
+  bedsPerRow?: number;
 }
 
 export function layoutGarden(
   nodes: EcosystemNode[],
   options: LayoutOptions = {},
 ): GardenLayout {
-  const { bedPadding = 0.7, bedGap = 1.2, heightRange = [0.8, 2.6] } = options;
+  const {
+    bedPadding = 0.7,
+    bedGap = 1.2,
+    heightRange = [0.8, 2.6],
+    bedsPerRow = 0,
+  } = options;
 
   const beds = nodes
     .filter((n) => n.kind === 'bed')
     .sort((a, b) => a.id.localeCompare(b.id));
+
+  const perRow =
+    bedsPerRow > 0
+      ? bedsPerRow
+      : beds.length <= 4
+        ? Math.max(1, beds.length)
+        : Math.ceil(beds.length / 2);
 
   const bedPlacements: BedPlacement[] = [];
   const plants: PlantPlacement[] = [];
   const positionOf: Record<string, Vec3> = {};
 
   let cursorX = 0;
-  let maxDepth = 0;
+  let cursorZ = 0;
+  let rowDepth = 0;
+  let maxWidth = 0;
 
-  for (const bed of beds) {
+  beds.forEach((bed, index) => {
+    if (index > 0 && index % perRow === 0) {
+      maxWidth = Math.max(maxWidth, cursorX - bedGap);
+      cursorX = 0;
+      cursorZ += rowDepth + bedGap;
+      rowDepth = 0;
+    }
     const arr = arrangementFor(plantingOf(bed));
     const children = nodes
       .filter((n) => n.parentId === bed.id && n.kind === 'plant')
@@ -82,7 +111,7 @@ export function layoutGarden(
 
     bedPlacements.push({
       nodeId: bed.id,
-      center: [centerX, 0, depth / 2],
+      center: [centerX, 0, cursorZ + depth / 2],
       size: [width, depth],
     });
 
@@ -96,7 +125,7 @@ export function layoutGarden(
       const position: Vec3 = [
         cursorX + bedPadding + col * arr.spacing + jx,
         0,
-        bedPadding + row * arr.rowSpacing + jz,
+        cursorZ + bedPadding + row * arr.rowSpacing + jz,
       ];
       positionOf[plant.id] = position;
       plants.push({
@@ -109,14 +138,16 @@ export function layoutGarden(
     });
 
     cursorX += width + bedGap;
-    maxDepth = Math.max(maxDepth, depth);
-  }
+    rowDepth = Math.max(rowDepth, depth);
+  });
+
+  maxWidth = Math.max(maxWidth, cursorX - bedGap);
 
   return {
     beds: bedPlacements,
     plants,
     positionOf,
-    size: [Math.max(0, cursorX - bedGap), maxDepth],
+    size: [Math.max(0, maxWidth), cursorZ + rowDepth],
   };
 }
 

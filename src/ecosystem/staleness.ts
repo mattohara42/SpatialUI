@@ -44,6 +44,17 @@ export function staleThresholdFor(gardenId: string): number {
   return DEFAULT_STALE_AFTER_MS[gardenId] ?? FALLBACK_STALE_AFTER_MS;
 }
 
+/**
+ * Register a garden's threshold. Whoever composes the ecosystem calls this,
+ * because what counts as late is a fact about the source and this module has no
+ * business knowing that a league plays weekly and a scrape runs every fifteen
+ * seconds. Keeping it a function rather than a mutable export means the write
+ * happens somewhere you can find it.
+ */
+export function setStaleThreshold(gardenId: string, thresholdMs: number): void {
+  DEFAULT_STALE_AFTER_MS[gardenId] = thresholdMs;
+}
+
 export interface Change {
   nodeId: string;
   /** Vitality then and now. */
