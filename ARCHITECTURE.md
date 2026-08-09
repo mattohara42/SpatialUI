@@ -22,12 +22,33 @@ src/
                      of an arbitrary timestamp. Converts NFL into NFL.
       derive.test.ts
       index.ts       The barrel, and the note on what a live adapter replaces.
+    market/
+      types.ts       The feed contract: instruments, closed bars, fills as
+                     lots, and halts. Plus `MarketSource`, the one method a
+                     live feed implements.
+      instruments.ts The thirty-two symbols, their sectors, listing years, and
+                     colours. Real, unlike the prices.
+      session.ts     When the exchange is open, and the arithmetic behind the
+                     staleness threshold: the longest gap it legitimately
+                     produces is a holiday weekend, computed not chosen.
+      session.test.ts
+      tape.ts        The synthetic source: a seeded walk in feed shape, printing
+                     only during sessions, with one instrument halted.
+      derive.ts      Price, position, drawdown, volume and momentum, all as of
+                     an arbitrary timestamp. Logarithmic in the record.
+      derive.test.ts
+      index.ts       The barrel, and what a live adapter would not have to
+                     supply.
   translation/       Raw records to EcosystemNode and EcosystemEdge. The only
                      place domain knowledge and plant archetypes meet, and
                      where trend and polarity are decided.
     nfl.ts           The league as a garden: the four axes, injuries as
                      blights, division rivalries as grafts, history backfill.
     nfl.test.ts
+    market.ts        The book as a garden: sectors as beds, shorts as weeds —
+                     the first real use of polarity — drawdown as blight, and
+                     correlation as grafts.
+    market.test.ts
   ecosystem/
     types.ts         Node, edge, and state contracts. Read by every layer.
     graph.ts         Pure helpers: garden filtering, adjacency, reachability,
@@ -161,7 +182,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-407 tests across twenty-one files, `tsc --noEmit` clean, `vite build` succeeds.
+476 tests across twenty-four files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -235,6 +256,61 @@ minute fallback, and the clubs that cross it are exactly the ones on a bye. The
 garden cannot distinguish a bye from a dead feed, and should not: both mean what
 you are looking at is old.
 
+## The second source: a book of positions
+
+The market source exists because it *disagrees* with the league. The NFL
+satisfied every assumption the design had quietly been making, which is pleasant
+and proves nothing. A market breaks three of them, and this section is mostly
+the record of what broke.
+
+**Polarity finally does something.** A short position is the first thing in any
+source that is genuinely `suppress`: you hold it and you want it to go down. So
+`vitality` here is *not* the position's profit — it is how far the instrument has
+moved since it was taken on, unsigned by side, and `signalHealth` inverts it for
+the shorts. A short on a stock that has run away grows into the largest, lushest
+weed in the greenhouse, which is exactly what it is. The pre-signing bug is the
+one to watch for and there is a test named for it: if translation signed the
+return by side, polarity would invert it *back* and every short would read as
+healthy while winning. Nothing about that failure is visible in a screenshot.
+
+**The source is shut most of the time.** Staleness exists so silence never reads
+as health, and an exchange is silent every night and all weekend with nothing
+wrong. The threshold is therefore sized to the longest *legitimate* gap — a
+Friday close with a Monday holiday, computed in `session.ts` rather than picked —
+which is the league's bye argument restated. The cost is real and is not hidden:
+a feed that dies on Friday evening is not called stale until midweek. Sharpening
+that needs staleness to become session-aware, which is a change to the
+`staleness` contract rather than to any adapter, and it is not done.
+
+The state is still reachable honestly, and by the market's own mechanism: a
+**trading halt** stops the bars on one symbol while the rest of the book keeps
+printing. Nothing edits a timestamp — `updatedAt` is the last close on the tape,
+so the halted plant greys itself.
+
+**Prices move constantly, so the memo stops paying.** The league's history
+backfill collapses a season to about fourteen real computations per club because
+a club's numbers only move when a game goes final. The identical memo is here,
+keyed on how many bars have closed instead of how many games have been played,
+and it earns far less:
+
+```
+                          per club (NFL)   per instrument (market)
+daily grain, a season          14                  70
+hourly grain, a week            3.3                35
+```
+
+Five to ten times the work, and the shape of it is exactly what the domain
+predicts: the cache absorbs the nights and weekends, when no bar closes and the
+reading genuinely cannot change, and pays full price for every session hour.
+
+What did *not* happen is a blow-up in total cost, and the reason is worth
+recording because it is the argument for the whole as-of design. Translation
+runs in about the same time as the league's despite doing five times the
+computations, because each one is far cheaper: a club's reading walks its whole
+season of games, while an instrument's is a binary search into a sorted bar list
+plus a couple of short window scans. The lesson is that the memo was never the
+load-bearing part — the derivations being O(log n) in the record is.
+
 ## Time and history
 
 State is a snapshot of now plus ring buffers of vitals per node, keyed by
@@ -305,6 +381,30 @@ sampling but in how often it has to be recomputed: memoized on games played and
 injuries active, a club's season of dailies collapses to about fourteen real
 computations, and its week of hours to three or four. It runs once at module
 load and never again.
+
+And on the book, which is the source that stops the memo working:
+
+```
+storage                same buffers, same two grains
+snapshot generation    25ms      5,920 bars across 32 instruments — 130 daily
+                                 sessions plus hourly bars for the last eight
+translation            32ms      32 instruments to nodes, 48 correlation edges,
+                                 both grains backfilled, 8,531 samples written
+memo, daily grain      70 real computations per instrument   (the league: 14)
+memo, hourly grain     35                                    (the league: 3.3)
+```
+
+Five to ten times the computations for about the same wall clock, which is the
+measurement that matters here: it says the memo was never what made this
+affordable. The derivations being logarithmic in the record is. A club's reading
+walks a whole season of games; an instrument's is a binary search plus two short
+window scans, so it survives losing the cache.
+
+The 48 edges are real Pearson correlations of daily returns over the shared
+closes, computed once at module load. Only bars that share a close time are
+paired, so the halted instrument contributes nothing after it stops rather than
+being lined up against the wrong days — which is the mistake that makes two
+unrelated things look perfectly correlated.
 
 Storage was never the expensive part. Rebuilding geometry on every scrub step
 is, and quantized vitality is what defuses it: a week of hourly history collapses

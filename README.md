@@ -30,9 +30,11 @@ All three run in CI on every push to `main` and every pull request
 a claim in a commit message.
 
 The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
-built through the real adapter → translation pipeline — alongside four mock
-gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It
-runs with no backend: the league's season is generated (see below), not fetched.
+built through the real adapter → translation pipeline — alongside **Markets**,
+thirty-two holdings in eight sector beds through the same pipeline, and four
+mock gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick.
+It runs with no backend: both real sources are generated (see below), not
+fetched.
 
 > **Dev note:** Vite HMR on this project often serves stale code (component
 > state, memoized shader uniforms). If an edit doesn't show, hard-reload the
@@ -60,12 +62,14 @@ model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
 
 ```
 src/
-  adapters/    Input sources. `nfl/` is the first: feed-shaped records (games
-               with box scores, depth charts, injury reports) plus the
-               derivations that turn them into standings and stats as of any
-               moment. Knows nothing about plants.
+  adapters/    Input sources. `nfl/` is feed-shaped records (games with box
+               scores, depth charts, injury reports); `market/` is closed bars,
+               fills as lots, halts, and a trading calendar. Both come with the
+               derivations that answer as of any moment. Neither knows what a
+               plant is.
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
-               the garden, and the only place the mapping is decided.
+               the garden and `market.ts` where a portfolio does — the only
+               places the mappings are decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types, labels and
                emblems, history-as-a-series, and the raw-payload flattener
@@ -87,6 +91,39 @@ not a rebuild.
 
 ## What's built
 
+- **A book of positions, as the second real source — and the one that argues
+  back.** Eight sectors are the beds, thirty-two holdings are the plants, and
+  the adapter's records are bars and fills rather than a price and a P&L: every
+  number is derived from them as of a timestamp, so the whole book scrubs the
+  way the league does. It was chosen because it *breaks* things the league had
+  satisfied for free.
+
+  **A short position is the first real weed.** `polarity` has existed since the
+  beginning and until now only mock threat data used it. Vitality here is how
+  far the instrument has moved since you took it on — deliberately not your
+  profit, and deliberately unsigned — so a short on a stock that has run away
+  from you grows into the biggest, lushest thing in the greenhouse, which is
+  exactly what it is.
+
+  **The market is shut most of the time**, which is a problem for a garden whose
+  first rule is that silence must never look like health. The threshold is sized
+  to the longest gap the exchange legitimately produces — a holiday weekend,
+  computed from the calendar rather than picked — so an ordinary Saturday greys
+  nothing. The genuine staleness case is a **trading halt**: one symbol stops
+  printing while the rest of the book carries on, and it greys itself because
+  `updatedAt` is the last close on the tape and nothing edits it.
+
+  **And it costs more.** The league's history backfill collapses a season to
+  about fourteen real computations per club, because a club only moves when a
+  game ends. A price moves every bar, so the same memo earns five to ten times
+  less here (measured: 70 and 35 against 14 and 3.3). Total time barely changed,
+  which is the interesting part — the derivations are logarithmic in the record,
+  so losing the cache was survivable. The numbers are in ARCHITECTURE.md.
+
+  Symbols, names, sectors and listing years are real; prices, volumes, fills and
+  the halt are seeded fiction standing in for a live feed, and the snapshot says
+  so in its provenance. There is no outbound network access to a market data
+  vendor from here, which is the same reason the league's season is generated.
 - **The NFL as the first real data source.** The league is the garden, the eight
   divisions are the beds, and the thirty-two clubs are the plants. Vitality is
   the record, the point differential, and how much of the roster is available;

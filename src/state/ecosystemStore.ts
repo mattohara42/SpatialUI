@@ -5,6 +5,12 @@ import { changedSince, setStaleThreshold, type Change } from '../ecosystem/stale
 import { SCRUB_WINDOW_MS, windowFor } from '../ecosystem/scrub';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
 import { syntheticNflSource } from '../adapters/nfl';
+import { syntheticMarketSource } from '../adapters/market';
+import {
+  MARKET_GARDEN_ID,
+  MARKET_STALE_AFTER_MS,
+  translateMarketSnapshot,
+} from '../translation/market';
 import {
   NFL_GARDEN_ID,
   NFL_STALE_AFTER_MS,
@@ -53,10 +59,11 @@ interface EcosystemStore extends EcosystemState {
  *
  * This is the composition point, and the only place that knows more than one
  * source exists: the mock gardens, which are shapes to tune the renderer
- * against, and the NFL league, which comes through the real pipeline — an
- * adapter emitting feed-shaped records, a translator turning them into nodes.
- * Adding a source means adding a translator and a line here, which is the claim
- * the layering has been making since before either existed.
+ * against, and two real ones that come through the pipeline — an adapter
+ * emitting feed-shaped records, a translator turning them into nodes. Adding a
+ * source means adding a translator and a line here, which is the claim the
+ * layering has been making since before any of them existed, and which the
+ * market source is the first independent test of.
  *
  * The league opens the app because it is the one garden made of something that
  * happened, and because thirty-two clubs across eight beds is the first scene
@@ -65,17 +72,21 @@ interface EcosystemStore extends EcosystemState {
 function composeEcosystem(): EcosystemState {
   const mock = generateMockEcosystem();
   const league = translateNflSnapshot(syntheticNflSource().snapshot());
+  const markets = translateMarketSnapshot(syntheticMarketSource().snapshot());
 
-  // What counts as late is a fact about the source: a club plays weekly, so a
-  // fifteen minute threshold would paint the entire league grey.
+  // What counts as late is a fact about the source, and the two real ones
+  // disagree about it by an order of magnitude for good reasons: a club plays
+  // weekly, and an exchange is shut every night and all weekend. A fifteen
+  // minute threshold would paint either of them entirely grey.
   setStaleThreshold(NFL_GARDEN_ID, NFL_STALE_AFTER_MS);
+  setStaleThreshold(MARKET_GARDEN_ID, MARKET_STALE_AFTER_MS);
 
   return {
     ...mock,
-    nodes: { ...mock.nodes, ...league.nodes },
-    edges: { ...mock.edges, ...league.edges },
-    history: { ...mock.history, ...league.history },
-    archive: { ...mock.archive, ...league.archive },
+    nodes: { ...mock.nodes, ...league.nodes, ...markets.nodes },
+    edges: { ...mock.edges, ...league.edges, ...markets.edges },
+    history: { ...mock.history, ...league.history, ...markets.history },
+    archive: { ...mock.archive, ...league.archive, ...markets.archive },
     activeGardenId: NFL_GARDEN_ID,
   };
 }
