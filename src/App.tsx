@@ -76,13 +76,14 @@ export default function App() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#14110e' }}>
-      {/* A starting position only. The garden frames itself once it knows how
-          big a house it needs (see scene/Garden.tsx), because the league's
-          twenty metres and a three bed garden want very different distances.
-          Scroll to close in; drag to walk round it. */}
+      {/* A starting position only, and deliberately one already inside the
+          house: the garden places the viewer properly once it knows how big a
+          house it needs (see scene/Garden.tsx), and a first frame out in the
+          field would read as walking in rather than as being there. Drag to
+          look round; the scroll stops at the glass. */}
       <Canvas
         shadows
-        camera={{ position: [0, 4, 22], fov: 50 }}
+        camera={{ position: [0, 1.2, 4.5], fov: 50 }}
         gl={{ toneMappingExposure: 1.1 }}
       >
         <Garden />

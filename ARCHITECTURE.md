@@ -450,14 +450,30 @@ hit rate and scrubbing costs less than a frame.
     (R3F only dispatches pointer events to objects that have handlers, so the
     panes are not in the way either.)
 
-20. The camera frames itself from the house. The house is sized from what is
-    planted, so a fixed camera is wrong for every garden but one: framed for the
-    league it loses a three-bed garden, framed for three beds it puts the
-    league's near wall through the lens. `Framing` solves the distance instead —
-    far enough that the width subtends the horizontal field of view, plus the
-    depth of the house — and fires on the house's dimensions only, never on a
-    telemetry tick, or the camera would snatch itself back every two seconds
-    while somebody was looking at something.
+20. The viewer stands inside the house. The camera used to solve for a distance
+    that fit the whole width in frame, which is arithmetic that can only ever
+    put it outside the building — for the league, sixteen metres past the back
+    wall, looking at a greenhouse with a garden shut inside it. The house was
+    never the subject. `viewpointFor` places a body on the path instead: eye
+    height above the floor, at the near wall, looking at the middle of the
+    planting.
+
+    Being inside is not a starting position but a constraint, and the clamps are
+    the substance of it. A wheel that carried the camera out through the glass
+    would undo the whole thing in one gesture, so the orbit is bounded by the
+    nearer of the two walls, by the nearest plant coming in, and by the eaves
+    going up. The arithmetic lives in `scene/greenhouse.ts` with the rest of the
+    proportions, because the failure mode is a camera inside a wall and that is
+    a claim a test can settle.
+
+    What it costs: the apparent size of a garden is no longer constant. A three
+    bed garden and the league now differ by how much house is around you rather
+    than by how far away you stand, which is the honest difference and the one a
+    person walking in would get.
+
+    `Framing` still fires on the house's dimensions only, never on a telemetry
+    tick, or the camera would snatch itself back every two seconds while
+    somebody was looking at something.
 
 21. Identity is a channel of its own, entered by walking. Labels do not exist at
     a distance: a plant tag fades in inside about nine metres and is fully

@@ -139,6 +139,14 @@ not a rebuild.
   a healthy plant reads as a full canopy — or a full bloom — and a sick one sheds
   to bare twigs or a bare stem. Petal colour is decorative and varietal, never a
   health signal.
+- **You stand inside it.** The viewer is on the path under the glass at eye
+  height, not outside looking in — the beds are either side, the glazing bars
+  are overhead, and the hills are seen through the wall. The orbit is clamped by
+  the walls, the nearest plant, and the eaves, so you cannot scroll back out
+  into the field by accident: being indoors is a constraint rather than a
+  starting position. The cost is that a garden's apparent size is no longer
+  fixed — a three-bed garden and the league differ by how much house is around
+  you, which is the difference a person walking in would get.
 - **The garden is under glass.** A greenhouse — dwarf wall, painted frame,
   glazing bars, a pitched roof with a vent propped open, and a door standing
   ajar — sized from whatever is planted, so the league gets a bigger house rather
@@ -211,14 +219,22 @@ not a rebuild.
 ### Reaching the sun
 
 Dragging the sun is the gesture the concept is about, and on desktop it is only
-half reachable: the camera orbits a target at knee height and is clamped at the
-horizon, so sky above roughly 25 degrees cannot be pointed at with a mouse, and
-the sun is up there for most of the day. Swing the camera toward a low sun and
-you can take hold of the disc directly. Otherwise **shift-drag anywhere** does
-the same thing, and the sun still visibly moves under the drag. Left and right
-arrows step an hour (shift, six); up and down step a day (shift, a week); escape
-returns to live. A drag commits to hours or to seasons on its first movement and
-holds it, so a diagonal never means both.
+half reachable. The camera stands inside the house and orbits a target at plant
+height, so it is always looking somewhat down at the beds: the sky is visible
+through the roof and the walls, but the upper sky where the sun spends most of
+the day cannot be pointed at with a mouse. Standing inside did not cause this —
+the old outdoor camera had the same limit for the same reason — but it does not
+fix it either, and it removes the one workaround the field allowed, which was
+backing away until the sky came into frame.
+
+The glass itself is not in the way: it carries no pointer handlers, so R3F never
+raycasts it and the sun, the moon, and their grab handles stay reachable straight
+through the roof. Swing the camera toward a low sun and you can take hold of the
+disc directly. Otherwise **shift-drag anywhere** does the same thing, and the sun
+still visibly moves under the drag. Left and right arrows step an hour (shift,
+six); up and down step a day (shift, a week); escape returns to live. A drag
+commits to hours or to seasons on its first movement and holds it, so a diagonal
+never means both.
 
 In a headset you look up and grab it, which is the interaction the shift-drag is
 standing in for.

@@ -356,11 +356,19 @@ checks, so the moon takes the key light when the sun is down rather than the
 scene simply going dark, and shape and droop survive in silhouette. Colour does
 not, which is another reason colour is not load-bearing.
 
-**The sun is often unreachable.** With the camera clamped at the horizon, most
-of the day the sun is somewhere a mouse cannot point. Shift-drag anywhere is the
-desktop stand-in, and it is a stand-in: the gesture assumes you can look up,
-which is true in a headset and false on a desk. Worth remembering before this is
-judged on a monitor.
+**The sun is often unreachable.** The camera looks down at the beds from inside
+the house, so most of the day the sun is somewhere a mouse cannot point.
+Shift-drag anywhere is the desktop stand-in, and it is a stand-in: the gesture
+assumes you can look up, which is true in a headset and false on a desk. Worth
+remembering before this is judged on a monitor.
+
+Moving indoors sharpened this rather than causing it. The outdoor camera had the
+same limit for the same reason — an orbit control aims at its target — but out
+in the field you could at least back away until the sky came into frame, and
+inside the glass you cannot. The honest fix is a control that can look up
+without also orbiting, which is a real piece of work and not yet done; the glass
+is already out of the way for it, since the panes carry no pointer handlers and
+so never intercept a ray.
 
 Seasons are now built too, and the league is what forced them: a football season
 is eighteen weeks and the sun's window was two days, so the whole gesture reached

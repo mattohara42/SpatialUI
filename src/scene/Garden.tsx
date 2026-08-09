@@ -16,7 +16,7 @@ import { Greenhouse } from './Greenhouse';
 import { Props } from './Props';
 import { Tags } from './Tags';
 import { Detail } from './Detail';
-import { FLOOR_Y, shellFor, type Shell } from './greenhouse';
+import { FLOOR_Y, shellFor, viewpointFor, type Viewpoint } from './greenhouse';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -149,51 +149,38 @@ function hashString(id: string): number {
 /**
  * Where you stand when you walk into a garden.
  *
- * The house is sized from what is planted, so the camera has to be: a fixed
- * position framed for the league leaves a three-bed garden a speck, and framed
- * for three beds it puts the league's near wall through the lens. The distance
- * is solved rather than picked — far enough back that the whole width subtends
- * the horizontal field of view, plus the depth of the house, plus a hand's
- * breadth of margin — so every garden arrives at the same apparent size.
+ * You stand *in* it. The camera used to solve for a distance that fit the whole
+ * width in frame, which necessarily put it outside the house — for the league,
+ * some sixteen metres past the back wall, looking at a building with a garden
+ * inside it. The house is not the subject and never was; being under the glass
+ * with the plants is the entire reason for having built it.
+ *
+ * The position comes from `viewpointFor`, so the arithmetic that decides where a
+ * body can stand lives with the rest of the proportions and is tested there.
+ * This component only applies it.
  *
  * It fires on the house's dimensions and on nothing else. Those change when you
  * enter a garden and never on a telemetry tick, which is the difference between
  * a camera that frames what you walked into and one that snatches itself back
  * every two seconds while you are trying to look at something.
  */
-function Framing({ shell }: { shell: Shell }) {
+function Framing({ view }: { view: Viewpoint }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
   const controls = useThree((state) => state.controls) as {
     target: THREE.Vector3;
     update: () => void;
   } | null;
-  const viewport = useThree((state) => state.size);
-
-  const { width, depth, eaves } = shell;
 
   useEffect(() => {
-    const aspect = viewport.width / Math.max(1, viewport.height);
-    const halfVertical = ((camera.fov * Math.PI) / 180) / 2;
-    const halfHorizontal = Math.atan(Math.tan(halfVertical) * aspect);
-    const distance = depth / 2 + (width / 2 / Math.tan(halfHorizontal)) * FRAMING_MARGIN;
-
-    // Eaves height, looking at the beds rather than down on them. A view from
-    // the ridge would show the roof, and the roof is not the thing.
-    camera.position.set(0, eaves, distance);
+    camera.position.set(...view.position);
     if (controls) {
-      controls.target.set(0, 1.1, 0);
+      controls.target.set(...view.target);
       controls.update();
     }
-    // The aspect ratio is read once here rather than tracked: a window resize
-    // must not yank the camera back to where it started.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, depth, eaves, controls, camera]);
+  }, [view, controls, camera]);
 
   return null;
 }
-
-/** How much room to leave around the house at that distance. */
-const FRAMING_MARGIN = 1.02;
 
 export function Garden() {
   const nodes = useEcosystem((s) => s.nodes);
@@ -216,6 +203,7 @@ export function Garden() {
   // The house the garden stands in, sized from what is planted rather than
   // fixed, so the league gets a bigger building and not a cramped one.
   const shell = useMemo(() => shellFor(layout.size), [layout]);
+  const view = useMemo(() => viewpointFor(shell), [shell]);
 
   const gardenEdges = useMemo(
     () => (activeGardenId ? edgesInGarden(state, activeGardenId) : []),
@@ -399,9 +387,21 @@ export function Garden() {
         <Horizon />
       </group>
       {/* makeDefault so the sun drag can find these and suspend them; without
-          it, grabbing the sun would orbit the camera at the same time. */}
-      <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.05} />
-      <Framing shell={shell} />
+          it, grabbing the sun would orbit the camera at the same time.
+
+          The limits are what keep you indoors. Starting inside is only a
+          position, and a wheel that carries the camera out through the wall
+          would undo it in one gesture — so the far clamp is the glass, the near
+          one is the nearest plant, and the upward one is the eaves. */}
+      <OrbitControls
+        makeDefault
+        target={view.target}
+        minDistance={view.minRadius}
+        maxDistance={view.maxRadius}
+        minPolarAngle={view.minPolar}
+        maxPolarAngle={view.maxPolar}
+      />
+      <Framing view={view} />
     </>
   );
 }

@@ -34,12 +34,19 @@ import { useEcosystem } from '../state/ecosystemStore';
  * leave nothing to take hold of.
  *
  * Shift and drag anywhere does the same thing, and it is not a convenience. The
- * camera orbits around a target at knee height and is clamped at the horizon, so
- * the sky above about 25 degrees cannot be pointed at with a mouse at all: for
- * most of the day the sun is a real object in the world that a desktop pointer
- * simply cannot reach. In a headset you look up and take hold of it, which is
- * the interaction this is a stand-in for. The sun still moves under the drag, so
- * what the gesture means stays visible either way.
+ * camera stands inside the greenhouse and orbits a target at plant height, so it
+ * looks somewhat down at the beds and the upper sky cannot be pointed at with a
+ * mouse at all: for most of the day the sun is a real object in the world that a
+ * desktop pointer simply cannot reach. Moving indoors neither caused that nor
+ * cured it — the outdoor camera had the same limit — but it did take away the
+ * one escape, which was backing off until the sky came into frame.
+ *
+ * The roof is not the obstacle. Glass carries no pointer handlers, and R3F only
+ * raycasts objects that have them, so the panes are not in the way: both bodies
+ * and their handles out at 160 metres are grabbable straight through it. In a
+ * headset you look up and take hold of it, which is the interaction this is a
+ * stand-in for. The sun still moves under the drag, so what the gesture means
+ * stays visible either way.
  *
  * ## Seasons: the same object's other axis
  *

@@ -4,12 +4,14 @@ import {
   BED_HEIGHT,
   DOOR,
   EAVES,
+  EYE,
   FLOOR_Y,
   KNEE,
   PATH,
   bayPositions,
   roofHeightAt,
   shellFor,
+  viewpointFor,
 } from './greenhouse';
 
 /**
@@ -163,5 +165,90 @@ describe('the floor', () => {
     expect(roofHeightAt(shell, shell.depth / 2)).toBeCloseTo(shell.ridge, 10);
     // Past the ridge is still the ridge rather than an ever-climbing roof.
     expect(roofHeightAt(shell, shell.depth)).toBeCloseTo(shell.ridge, 10);
+  });
+});
+
+/**
+ * Every garden the app can open, smallest to largest: an empty one, a three bed
+ * mock, and the league's eight beds in two rows.
+ */
+const FOOTPRINTS = [
+  [0, 0],
+  [6, 2],
+  [12, 2],
+  [20, 8],
+  [24, 11],
+] as const;
+
+describe('standing inside the house', () => {
+  it('puts the viewer inside the glass, for every garden', () => {
+    // The whole point, and the one that regressed before: a camera solved to
+    // fit the width in frame stands outside the building looking in.
+    for (const size of FOOTPRINTS) {
+      const shell = shellFor(size);
+      const { position } = viewpointFor(shell);
+      expect(Math.abs(position[0])).toBeLessThan(shell.width / 2);
+      expect(Math.abs(position[2])).toBeLessThan(shell.depth / 2);
+    }
+  });
+
+  it('stands a body on the floor rather than floating a camera', () => {
+    for (const size of FOOTPRINTS) {
+      const { position } = viewpointFor(shellFor(size));
+      expect(position[1]).toBeCloseTo(FLOOR_Y + EYE, 10);
+    }
+    // Eye height is a person's, not a vantage point's.
+    expect(EYE).toBeGreaterThan(1.4);
+    expect(EYE).toBeLessThan(1.8);
+  });
+
+  it('cannot be scrolled back out through the wall', () => {
+    // The far clamp is the wall itself. Orbiting sweeps the full circle at that
+    // radius, so it has to clear the nearest wall in *either* axis, not just
+    // the one the viewer happens to start facing down.
+    for (const size of FOOTPRINTS) {
+      const shell = shellFor(size);
+      const { maxRadius, minRadius } = viewpointFor(shell);
+      expect(maxRadius).toBeLessThan(shell.width / 2);
+      expect(maxRadius).toBeLessThan(shell.depth / 2);
+      expect(minRadius).toBeLessThan(maxRadius);
+      expect(minRadius).toBeGreaterThan(0);
+    }
+  });
+
+  it('cannot be orbited up through the roof', () => {
+    for (const size of FOOTPRINTS) {
+      const shell = shellFor(size);
+      const { minPolar, maxPolar, maxRadius, target } = viewpointFor(shell);
+      // Highest the camera can get: fully raised, at the far clamp.
+      const highest = target[1] + maxRadius * Math.cos(minPolar);
+      expect(highest).toBeLessThanOrEqual(FLOOR_Y + shell.eaves);
+      // And it never drops below the target, which would look up through soil.
+      expect(maxPolar).toBeLessThanOrEqual(Math.PI / 2);
+      expect(minPolar).toBeLessThan(maxPolar);
+    }
+  });
+
+  it('starts at the wall it is clamped to, so the first scroll out does nothing', () => {
+    // Standing short of the clamp would mean an outward scroll moved the viewer
+    // for no reason before stopping.
+    for (const size of FOOTPRINTS) {
+      const { position, target, maxRadius } = viewpointFor(shellFor(size));
+      const radius = Math.hypot(
+        position[0] - target[0],
+        position[1] - target[1],
+        position[2] - target[2],
+      );
+      expect(radius).toBeCloseTo(maxRadius, 6);
+    }
+  });
+
+  it('looks at the planting, not at the floor or the roof', () => {
+    const { target } = viewpointFor(shellFor([20, 8]));
+    expect(target[0]).toBe(0);
+    expect(target[2]).toBe(0);
+    // Above the soil, well under the eaves.
+    expect(target[1]).toBeGreaterThan(0);
+    expect(target[1]).toBeLessThan(EAVES / 2);
   });
 });

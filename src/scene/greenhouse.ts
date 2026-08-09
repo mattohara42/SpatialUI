@@ -168,6 +168,107 @@ export function roofHeightAt(shell: Shell, fromWall: number): number {
   return shell.eaves + shell.rise * clamp(fromWall / (shell.depth / 2), 0, 1);
 }
 
+/**
+ * Eye height above the floor. A person standing on the path, not a camera at a
+ * convenient altitude — the whole point of the house is that it is a room you
+ * are in, and the give-away that you are not is a viewpoint no body could hold.
+ */
+export const EYE = 1.62;
+
+/**
+ * Clear metres kept between the viewer and the glass, and the closest the orbit
+ * may pull in to a plant.
+ *
+ * The far clamp is what actually keeps you indoors. Standing inside once is a
+ * starting position and nothing more: the first scroll of a wheel would put the
+ * camera through the wall and back out in the field, and a room you can leave by
+ * accident is not a room. The near clamp stops the same wheel burying the lens
+ * in a trunk.
+ */
+const WALL_CLEARANCE = 0.6;
+const NEAREST = 1.2;
+
+/** Headroom left under the eaves, so rising never clips through the roof. */
+const ROOF_CLEARANCE = 0.3;
+
+/**
+ * What the viewer looks at: the middle of the planting, a plant's own height up.
+ * Aiming at the floor would tip the whole house downward and fill the view with
+ * soil; aiming at the ridge would make a building the subject, and the building
+ * is not the thing being read.
+ */
+const TARGET_Y = 1.0;
+
+/** Where a person stands in the house, and how far they may move without leaving it. */
+export interface Viewpoint {
+  /** Camera position, world space — soil surface is y = 0, floor is below it. */
+  position: [number, number, number];
+  /** Orbit target: the middle of the planting. */
+  target: [number, number, number];
+  /** Orbit radius limits. The far one is the wall. */
+  minRadius: number;
+  maxRadius: number;
+  /** Polar limits: `min` is stopped by the roof, `max` by standing height. */
+  minPolar: number;
+  maxPolar: number;
+}
+
+/**
+ * Standing inside the house, looking at what is planted in it.
+ *
+ * The camera used to solve for a distance that fit the whole width in frame,
+ * which put it out in the field looking at a building — the garden was a thing
+ * on the other side of some glass. Standing in the aisle inverts that: the glass
+ * is overhead and around, the far wall is a few metres past the last bed, and
+ * the plants are at the height they would be if you had walked in.
+ *
+ * The radius is the near path rather than a chosen number, so the viewer stands
+ * where a person would — on the walkway, not in the soil — and every garden puts
+ * them the same distance off the first bed regardless of how big the house it
+ * needed was. What changes between a three-bed garden and the league is how much
+ * house there is around you, which is the honest difference.
+ *
+ * Pure, and tested, because these are proportions and not rendering: the failure
+ * mode of getting them wrong is a camera inside a wall, and that is arithmetic
+ * anyone should be able to argue with in a test.
+ */
+export function viewpointFor(shell: Shell): Viewpoint {
+  const eyeY = FLOOR_Y + EYE;
+
+  // The wall you would back into first. Width is the ridge's axis and usually
+  // the long one, so on most gardens this is the depth — but a garden that
+  // wraps into two short rows can invert that, and taking the smaller of the
+  // two is what keeps the clamp honest either way.
+  const maxRadius = Math.max(
+    NEAREST + 0.1,
+    Math.min(shell.width, shell.depth) / 2 - WALL_CLEARANCE,
+  );
+
+  // Standing at the back of the near path, which is the far clamp itself: it is
+  // the same wall in both cases, and starting anywhere short of it would mean
+  // the first scroll outward moved the viewer for no reason.
+  const rise = eyeY - TARGET_Y;
+  const ground = Math.sqrt(Math.max(0, maxRadius * maxRadius - rise * rise));
+
+  // How far up the orbit may swing before the camera meets the glass. Measured
+  // against the eaves rather than the ridge, because the eaves are the low edge
+  // and a viewer who cleared the ridge would still be through the roof at the
+  // side where it comes down.
+  const headroom = FLOOR_Y + shell.eaves - ROOF_CLEARANCE - TARGET_Y;
+  const minPolar = Math.acos(clamp(headroom / maxRadius, 0, 1));
+
+  return {
+    position: [0, eyeY, ground],
+    target: [0, TARGET_Y, 0],
+    minRadius: NEAREST,
+    maxRadius,
+    minPolar,
+    // Just short of level, so the orbit never drops under the target and looks
+    // up at the garden through the floor.
+    maxPolar: Math.PI / 2.05,
+  };
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return n < lo ? lo : n > hi ? hi : n;
 }
