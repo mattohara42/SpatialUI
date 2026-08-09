@@ -606,8 +606,8 @@ function rawFor(
  * Two things make this cheap. A club's vitals only move when a game goes final
  * or an injury is reported, so a reading is keyed on how many of each have
  * happened; and the injuries are sorted by onset, so "how many are active" is
- * exactly which ones are. A week of hourly samples collapses to two or three
- * computations per club, and a season of daily ones to about twenty.
+ * exactly which ones are. A week of hourly samples collapses to three or four
+ * computations per club, and a season of daily ones to about fourteen.
  */
 function backfill(
   team: NflTeamSeason,
