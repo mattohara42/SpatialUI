@@ -218,18 +218,25 @@ is free; on the latter it has a deformation bill attached.
 
 ---
 
-## Recommended first PR
+## The first PR — shipped
 
-Small, low-risk, and it lands the two effects with the highest ratio of "looks
-transformed" to "lines changed", both channel-safe:
+Small, low-risk, and it landed the two effects with the highest ratio of "looks
+transformed" to "lines changed", both channel-safe. Both are now built:
 
-1. **Leaf translucency** — a backlit-transmission term on the leaf material, so
-   the canopy glows when the sun is behind it.
-2. **A tilt-shift depth of field on the bonsai table** — add a post-processing
-   composer, enabled in table mode, focused on the miniature.
+1. **Leaf translucency** (`scene/translucency.ts`) — a backlit-transmission term
+   folded into the leaf material via `onBeforeCompile`, aimed at the sun each
+   frame and riding its intensity, so the canopy glows when the sun is behind it
+   and fades to nothing at dusk. Instancing, per-instance colour, and shadows are
+   untouched. The response shape is pure and tested (`backlight`).
+2. **A tilt-shift depth of field on the bonsai table** (`scene/TiltShift.tsx`) —
+   a two-pass separable blur whose radius rises with distance from a sharp
+   central band, built on three's own `EffectComposer` rather than a new
+   dependency, and mounted *only* in table mode so the room view keeps the
+   default render. The band function is pure and tested (`blurAmount`).
 
-Optionally fold in **PBR normal/roughness maps** on bark and leaves, generated in
-`textures.ts` under the achromatic rule it already enforces.
+Still open from this rung: **PBR normal/roughness maps** on bark and leaves,
+generated in `textures.ts` under the achromatic rule it already enforces. That is
+the natural next commit.
 
 What to hold back from that PR, deliberately: colour grading (spends the colour
 channel), authored assets (carry a deformation bill), and anything on the

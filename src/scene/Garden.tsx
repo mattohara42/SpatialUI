@@ -20,6 +20,7 @@ import { Detail } from './Detail';
 import { FLOOR_Y, shellFor, viewpointFor } from './greenhouse';
 import { tableViewFor } from './bonsai';
 import { ease, FLIGHT_MS, progress } from './fly';
+import { TiltShift } from './TiltShift';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -378,7 +379,7 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           <Beds beds={layout.beds} />
           <Trellis beds={vineyardBeds} />
           <Branches plants={plants} />
-          <Foliage plants={plants} />
+          <Foliage plants={plants} daylight={daylight} />
           <Produce plants={plants} />
           <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
           {/* Names, and the panel behind them. Only in the room: at table
@@ -440,6 +441,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
       ) : (
         <StandControl view={view} flyIn={flyingIntoStand} />
       )}
+
+      {/* Tilt-shift, only on the table: the shallow-focus band is what tells the
+          eye the miniature is a model. Mounted here so it exists only in the
+          mode that wants it — the room view keeps the default, cheaper render.
+          See scene/TiltShift.tsx for why it is off the headset's hot path. */}
+      {viewMode === 'table' && <TiltShift />}
     </>
   );
 }
