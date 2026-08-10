@@ -1,7 +1,13 @@
 import { useLayoutEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { FLOOR_Y, type Shell } from './greenhouse';
-import { liftForTexture, normalTexture, plankPixels, surfaceTexture } from './textures';
+import {
+  liftForTexture,
+  normalTexture,
+  plankPixels,
+  roughnessTexture,
+  surfaceTexture,
+} from './textures';
 
 /**
  * The things a gardener leaves lying about.
@@ -55,10 +61,12 @@ export function Props({ shell }: { shell: Shell }) {
   // Relief from the same grain, so the props' sawn timber catches the light
   // the way the beds' does.
   const plankRelief = useMemo(() => normalTexture(plankPx, plankTiles, 4), [plankPx]);
+  const plankRough = useMemo(() => roughnessTexture(plankPx, plankTiles, 0.86, 1.1), [plankPx]);
   useLayoutEffect(() => () => {
     plank.dispose();
     plankRelief.dispose();
-  }, [plank, plankRelief]);
+    plankRough.dispose();
+  }, [plank, plankRelief, plankRough]);
   const wood = useMemo(() => liftForTexture(WOOD), []);
 
   /** The hose: three turns hanging on a hook, and a length left on the floor. */
@@ -115,18 +123,18 @@ export function Props({ shell }: { shell: Shell }) {
       <group position={[benchX, 0, benchZ]}>
         <mesh position={[0, BENCH.height, 0]} castShadow receiveShadow>
           <boxGeometry args={[BENCH.length, BENCH.top, BENCH.depth]} />
-          <meshStandardMaterial map={plank} normalMap={plankRelief} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={plank} normalMap={plankRelief} roughnessMap={plankRough} color={wood} roughness={1} />
         </mesh>
         {/* A lip along the back, so potting compost stays on the bench. */}
         <mesh position={[0, BENCH.height + 0.07, -BENCH.depth / 2 + 0.03]} castShadow>
           <boxGeometry args={[BENCH.length, 0.1, 0.05]} />
-          <meshStandardMaterial map={plank} normalMap={plankRelief} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={plank} normalMap={plankRelief} roughnessMap={plankRough} color={wood} roughness={1} />
         </mesh>
         {/* Slatted lower shelf. */}
         {[-0.22, 0, 0.22].map((z) => (
           <mesh key={z} position={[0, 0.32, z]} castShadow receiveShadow>
             <boxGeometry args={[BENCH.length - 0.16, 0.03, 0.17]} />
-            <meshStandardMaterial map={plank} normalMap={plankRelief} color={wood} roughness={0.9} />
+            <meshStandardMaterial map={plank} normalMap={plankRelief} roughnessMap={plankRough} color={wood} roughness={1} />
           </mesh>
         ))}
         {/* Legs, and the castors that make it a bench you can move to the light. */}
@@ -142,7 +150,7 @@ export function Props({ shell }: { shell: Shell }) {
             >
               <mesh position={[0, 0.55, 0]} castShadow>
                 <boxGeometry args={[0.07, 0.74, 0.07]} />
-                <meshStandardMaterial map={plank} normalMap={plankRelief} color={wood} roughness={0.9} />
+                <meshStandardMaterial map={plank} normalMap={plankRelief} roughnessMap={plankRough} color={wood} roughness={1} />
               </mesh>
               <mesh position={[0, 0.14, 0]} castShadow>
                 <boxGeometry args={[0.06, 0.1, 0.06]} />

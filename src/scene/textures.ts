@@ -443,6 +443,67 @@ export function normalTexture(
 }
 
 /**
+ * The same grain, as roughness.
+ *
+ * An albedo map darkens the crevices and a normal map tilts them; this makes
+ * them *rougher*, so a highlight breaks up across a surface instead of sliding
+ * over it as one uniform sheen. It is the third reading of the one height field:
+ * the low ground is worn and matte, the high ground catches a little more light.
+ *
+ * Channel-safe like its siblings, and for the plainest reason of the three — a
+ * roughness map is a single scalar per texel, not a colour at all, so there is no
+ * hue for it to move. It is baked absolute here (the material sets `roughness` to
+ * 1 and lets the map carry the whole value), centred on `base` and spread by
+ * `gain` around the field's own mean, then clamped so it never goes mirror-smooth
+ * or flat-dead.
+ */
+export function roughnessPixels(
+  source: Uint8Array,
+  base: number,
+  gain: number,
+  size = TEXTURE_SIZE,
+): Uint8Array {
+  const out = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const luminance = source[i * 4] / 255;
+    // Below the mean is a crevice and rougher; above it is a worn high spot and
+    // a touch smoother.
+    let r = base + (TEXTURE_MEAN - luminance) * gain;
+    r = r < 0.4 ? 0.4 : r > 1 ? 1 : r;
+    const byte = Math.round(r * 255);
+    const p = i * 4;
+    out[p] = out[p + 1] = out[p + 2] = byte;
+    out[p + 3] = 255;
+  }
+  return out;
+}
+
+/**
+ * A roughness map ready to hang on a material, from the same pixels as its albedo
+ * `map`. Raw linear data with no colour space, like the normal map and for the
+ * same reason: the byte is a material parameter, not a colour to be gamma-curved.
+ */
+export function roughnessTexture(
+  source: Uint8Array,
+  repeat: readonly [number, number],
+  base: number,
+  gain: number,
+  size = TEXTURE_SIZE,
+): THREE.DataTexture {
+  const pixels = roughnessPixels(source, base, gain, size);
+  const texture = new THREE.DataTexture(pixels as BufferSource, size, size);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeat[0], repeat[1]);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 8;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Grain between instances.
  *
  * Every leaf on a plant is handed the same colour, and a few hundred instances

@@ -5,6 +5,7 @@ import {
   liftForTexture,
   normalTexture,
   plankPixels,
+  roughnessTexture,
   soilPixels,
   surfaceTexture,
 } from './textures';
@@ -89,10 +90,15 @@ function Bed({ bed }: { bed: BedPlacement }) {
     () => normalTexture(soilPx, soilTiles, 4),
     [soilPx, width, depth],
   );
+  const soilRough = useMemo(
+    () => roughnessTexture(soilPx, soilTiles, 0.97, 1),
+    [soilPx, width, depth],
+  );
   useLayoutEffect(() => () => {
     soil.dispose();
     soilRelief.dispose();
-  }, [soil, soilRelief]);
+    soilRough.dispose();
+  }, [soil, soilRelief, soilRough]);
 
   // One plank map per board direction. A box face's u runs along its longest
   // edge, so repeating by that edge's length is what keeps the grain the same
@@ -102,14 +108,18 @@ function Bed({ bed }: { bed: BedPlacement }) {
   const acrossTiles: [number, number] = [depth / PLANK_METRES, 1];
   const along = useMemo(() => surfaceTexture(alongPx, alongTiles), [alongPx, width]);
   const alongRelief = useMemo(() => normalTexture(alongPx, alongTiles, 4), [alongPx, width]);
+  const alongRough = useMemo(() => roughnessTexture(alongPx, alongTiles, 0.86, 1.1), [alongPx, width]);
   const across = useMemo(() => surfaceTexture(acrossPx, acrossTiles), [acrossPx, depth]);
   const acrossRelief = useMemo(() => normalTexture(acrossPx, acrossTiles, 4), [acrossPx, depth]);
+  const acrossRough = useMemo(() => roughnessTexture(acrossPx, acrossTiles, 0.86, 1.1), [acrossPx, depth]);
   useLayoutEffect(() => () => {
     along.dispose();
     alongRelief.dispose();
+    alongRough.dispose();
     across.dispose();
     acrossRelief.dispose();
-  }, [along, alongRelief, across, acrossRelief]);
+    acrossRough.dispose();
+  }, [along, alongRelief, alongRough, across, acrossRelief, acrossRough]);
 
   const wood = useMemo(() => liftForTexture(WOOD), []);
 
@@ -129,6 +139,7 @@ function Bed({ bed }: { bed: BedPlacement }) {
         <meshStandardMaterial
           map={soil}
           normalMap={soilRelief}
+          roughnessMap={soilRough}
           color={liftForTexture('#3d342b')}
           roughness={1}
         />
@@ -139,13 +150,13 @@ function Bed({ bed }: { bed: BedPlacement }) {
       {[-z, z].map((at) => (
         <mesh key={`z${at}`} position={[0, sideY, at]} castShadow receiveShadow>
           <boxGeometry args={[outer(width), sideHeight, BOARD]} />
-          <meshStandardMaterial map={along} normalMap={alongRelief} color={wood} roughness={0.9} />
+          <meshStandardMaterial map={along} normalMap={alongRelief} roughnessMap={alongRough} color={wood} roughness={1} />
         </mesh>
       ))}
       {[-x, x].map((at) => (
         <mesh key={`x${at}`} position={[at, sideY, 0]} castShadow receiveShadow>
           <boxGeometry args={[BOARD, sideHeight, depth]} />
-          <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.9} />
+          <meshStandardMaterial map={across} normalMap={acrossRelief} roughnessMap={acrossRough} color={wood} roughness={1} />
         </mesh>
       ))}
 
@@ -159,7 +170,7 @@ function Bed({ bed }: { bed: BedPlacement }) {
             receiveShadow
           >
             <boxGeometry args={[POST, sideHeight, POST]} />
-            <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.9} />
+            <meshStandardMaterial map={across} normalMap={acrossRelief} roughnessMap={acrossRough} color={wood} roughness={1} />
           </mesh>
         )),
       )}
@@ -169,13 +180,13 @@ function Bed({ bed }: { bed: BedPlacement }) {
       {[-z, z].map((at) => (
         <mesh key={`cz${at}`} position={[0, capY, at]} castShadow receiveShadow>
           <boxGeometry args={[outer(width) + OVERSAIL * 2, CAP, BOARD + OVERSAIL * 2]} />
-          <meshStandardMaterial map={along} normalMap={alongRelief} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={along} normalMap={alongRelief} roughnessMap={alongRough} color={wood} roughness={1} />
         </mesh>
       ))}
       {[-x, x].map((at) => (
         <mesh key={`cx${at}`} position={[at, capY, 0]} castShadow receiveShadow>
           <boxGeometry args={[BOARD + OVERSAIL * 2, CAP, depth]} />
-          <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={across} normalMap={acrossRelief} roughnessMap={acrossRough} color={wood} roughness={1} />
         </mesh>
       ))}
     </group>
