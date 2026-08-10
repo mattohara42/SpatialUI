@@ -1,5 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import type { Group } from 'three';
 import { StandControl } from './StandControl';
+import { TableControl } from './TableControl';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
@@ -15,6 +18,8 @@ import { Props } from './Props';
 import { Tags } from './Tags';
 import { Detail } from './Detail';
 import { FLOOR_Y, shellFor, viewpointFor } from './greenhouse';
+import { tableViewFor } from './bonsai';
+import { ease, FLIGHT_MS, progress } from './fly';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -144,7 +149,14 @@ function hashString(id: string): number {
   return h >>> 0;
 }
 
-export function Garden() {
+/**
+ * The two grains of *space*. `stand` is the body on the path (see StandControl);
+ * `table` is the whole garden shrunk to a miniature and looked down at (see
+ * bonsai.ts). The switch is a flight between them, not a cut.
+ */
+export type ViewMode = 'stand' | 'table';
+
+export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   const nodes = useEcosystem((s) => s.nodes);
   const edges = useEcosystem((s) => s.edges);
   const history = useEcosystem((s) => s.history);
@@ -166,6 +178,52 @@ export function Garden() {
   // fixed, so the league gets a bigger building and not a cramped one.
   const shell = useMemo(() => shellFor(layout.size), [layout]);
   const view = useMemo(() => viewpointFor(shell), [shell]);
+
+  // The same garden as a miniature: the scale that shrinks it and where the
+  // camera stands to look down at it. Derived from the layout's `size`, the field
+  // that was reserved for exactly this from the start.
+  const tableView = useMemo(() => tableViewFor(layout.size), [layout]);
+
+  // The garden assembly — planting, house, and the things left about in it — is
+  // scaled and dropped to become the miniature. The scale and drop are animated
+  // imperatively on the group rather than through React state, so shrinking to
+  // the table is a smooth motion synced with the camera's flight and not a pop,
+  // and so a telemetry tick that re-renders the scene does not interrupt it.
+  const assembly = useRef<Group>(null);
+  const scaleAnim = useRef({ from: 1, to: 1, fromY: 0, toY: 0, since: 0, active: false });
+  const targetScale = viewMode === 'table' ? tableView.scale : 1;
+  const targetY = viewMode === 'table' ? tableView.groundY : 0;
+
+  useEffect(() => {
+    const group = assembly.current;
+    scaleAnim.current = {
+      from: group ? group.scale.x : targetScale,
+      to: targetScale,
+      fromY: group ? group.position.y : targetY,
+      toY: targetY,
+      since: performance.now(),
+      active: true,
+    };
+  }, [targetScale, targetY]);
+
+  useFrame(() => {
+    const anim = scaleAnim.current;
+    const group = assembly.current;
+    if (!group || !anim.active) return;
+    const e = ease(progress(performance.now() - anim.since, FLIGHT_MS));
+    group.scale.setScalar(anim.from + (anim.to - anim.from) * e);
+    group.position.y = anim.fromY + (anim.toY - anim.fromY) * e;
+    if (e >= 1) anim.active = false;
+  });
+
+  // The flight down from the table only when arriving from it. Previous mode is
+  // read the render the switch happens — before the effect below advances it — so
+  // StandControl mounts knowing it should ease in rather than cut.
+  const prevMode = useRef<ViewMode>(viewMode);
+  const flyingIntoStand = viewMode === 'stand' && prevMode.current === 'table';
+  useEffect(() => {
+    prevMode.current = viewMode;
+  }, [viewMode]);
 
   const gardenEdges = useMemo(
     () => (activeGardenId ? edgesInGarden(state, activeGardenId) : []),
@@ -309,31 +367,47 @@ export function Garden() {
         color="#bcd2ec"
       />
 
-      <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
-        <Beds beds={layout.beds} />
-        <Trellis beds={vineyardBeds} />
-        <Branches plants={plants} />
-        <Foliage plants={plants} />
-        <Produce plants={plants} />
-        <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
-        {/* Names, and the panel behind them. Inside the translated group
-            because both are placed at a plant, and a plant's position is in the
-            garden's own coordinates. */}
-        <Tags plants={plants} />
-        <Detail plants={plants} />
-        {plants.length > 0 && (
-          <Motes size={layout.size} activity={activity} ceiling={shell.eaves - 0.3} />
-        )}
-        {/* Dust falls only on plants that have gone silent, so this draws
-            nothing at all in a garden that is reporting. */}
-        <Dust plants={plants} night={daylight.stars} />
+      {/* The whole garden assembly — planting, house, and props — as one group,
+          so the table view can scale and drop all of it together to become the
+          miniature while the world around it (ground, hills, sky, light) stays
+          the size it is. In the room this group rests at scale one, y zero, and
+          nothing about it differs from before; the shrink is applied
+          imperatively by the animator above (see the useFrame). */}
+      <group ref={assembly}>
+        <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
+          <Beds beds={layout.beds} />
+          <Trellis beds={vineyardBeds} />
+          <Branches plants={plants} />
+          <Foliage plants={plants} />
+          <Produce plants={plants} />
+          <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
+          {/* Names, and the panel behind them. Only in the room: at table
+              distance you are far from every plant, so the fade radius keeps
+              every label absent anyway (labels.ts), and a whole-garden overview
+              is meant to have no text in it, exactly as the room's far view does
+              not. So they are simply not drawn here rather than special-cased —
+              nothing turns them back on, which is the rule the mode must keep. */}
+          {viewMode === 'stand' && (
+            <>
+              <Tags plants={plants} />
+              <Detail plants={plants} />
+            </>
+          )}
+          {plants.length > 0 && (
+            <Motes size={layout.size} activity={activity} ceiling={shell.eaves - 0.3} />
+          )}
+          {/* Dust falls only on plants that have gone silent, so this draws
+              nothing at all in a garden that is reporting. */}
+          <Dust plants={plants} night={daylight.stars} />
+        </group>
+        {/* The house, and the things left lying about in it. Inside the assembly
+            group so they shrink with the planting, but outside the translated
+            group: the garden is centred on the origin by that offset, so the
+            shell is centred there too, and neither knows anything about where a
+            particular bed landed. */}
+        <Greenhouse shell={shell} />
+        <Props shell={shell} />
       </group>
-      {/* The house, and the things left lying about in it. Both stand outside
-          the translated group: the garden is centred on the origin by that
-          offset, so the shell is centred there too, and neither knows anything
-          about where a particular bed landed. */}
-      <Greenhouse shell={shell} />
-      <Props shell={shell} />
 
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
           fog. Only the garden-sized centre receives shadows (the shadow camera
@@ -348,16 +422,24 @@ export function Garden() {
       <group position={[0, FLOOR_Y, 0]}>
         <Horizon />
       </group>
-      {/* Standing, turning and walking, rather than orbiting a point. It
-          registers itself as the default controls so the sun drag can still
-          find it and suspend it; without that, grabbing the sun would swing the
-          camera at the same time.
+      {/* The camera, in whichever grain of space is live. Exactly one is mounted
+          at a time, because both register themselves as the scene's `controls`
+          for the sun scrub to find and suspend, and two claiming that role would
+          fight over it. Switching mounts the other, which flies in from wherever
+          the last one left the camera.
 
-          The limits are what keep you indoors. Starting inside is only a
-          position, and a walk that carried you out through the wall would undo
-          it in one gesture — so the outer clamp is the glass and the inner one
-          is the planting, which together are the path. */}
-      <StandControl view={view} />
+          Standing: a body on the path, turning and walking rather than orbiting.
+          The limits are what keep you indoors — the outer clamp is the glass, the
+          inner one the planting, which together are the path.
+
+          Table: an orbit above the miniature, the gesture `look` argued against
+          for the room and which is right here, where the whole garden has become
+          the object you are examining. */}
+      {viewMode === 'table' ? (
+        <TableControl view={tableView} />
+      ) : (
+        <StandControl view={view} flyIn={flyingIntoStand} />
+      )}
     </>
   );
 }

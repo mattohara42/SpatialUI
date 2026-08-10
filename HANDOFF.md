@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 652 tests across 32 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 675 tests across 34 files, `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
 Seven gardens. Three are real, in the sense that they come through the
@@ -35,6 +35,28 @@ that a live feed can be dropped into with nothing downstream changing. That swap
 is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
+
+- **The bonsai table — the second grain of space**, which was the chosen next
+  piece of work. History has two grains of time; the garden now has two grains of
+  space, the body on the path and the whole garden as a miniature looked down at
+  from outside (`t`, or the overview button). It answers traversal: the world
+  garden's 35 × 46 metres are takeable at a glance instead of by scrolling a path.
+
+  Three decisions worth knowing before you touch it. **It shrinks, it does not fly
+  the camera back** — the scene is lit through exponential fog (`fogExp2`, 0.02),
+  so framing a big garden at true scale would put the camera eighty metres out
+  where the fog has eaten it; bonsai scale keeps the model near and in clear air.
+  The math is `scene/bonsai.ts`, pure and tested, hung on the `size` field
+  `layout.ts` reserved for it from the start. **The overview has no text, for
+  free** — the near zoom clamp is held just beyond the label fade radius
+  (`TABLE_MIN_DISTANCE = LABEL_FAR + 0.6`), so the existing distance rule keeps
+  every tag absent with nothing special-cased on; the components are simply not
+  rendered on the table. **The switch is a flight, not a cut** (`scene/fly.ts`):
+  both controls capture the camera where the other left it and ease to their pose,
+  so the room and the table read as the same garden. On the table the camera
+  *orbits*, which `look.ts` argued against for the room and which is right here,
+  where the whole garden is the object being examined. v1 is one garden on the
+  table; several is cross-garden comparison in disguise and stays out.
 
 - **The world as a third source**, which was the item at the top of this list,
   and it was taken deliberately unlike the other two rather than as a third
@@ -267,49 +289,39 @@ addition to the current path rather than a replacement for it.
 
 Roughly in order of value for effort, with the reason rather than just the idea.
 
-### Start here: the bonsai table
+### Built: the bonsai table
 
-**This is the chosen next piece of work, decided with the owner.** It is the
-answer to traversal — the largest open question in the project — rather than a
-parallel nicety, so the two are now one item.
-
-The problem it solves is concrete. The world garden is 193 plants across roughly
-35 × 46 metres, and the only way to see them is to walk, a scroll along a path.
-Standing inside works beautifully for a bed you are among and not at all for a
-garden you want to take in at once. History already has two grains of *time*
-(hourly, daily); the garden has one grain of *space*, and this is the second:
-a **tabletop view of a whole garden at bonsai scale**, seen from above and
-outside, as an alternative to standing on the path.
-
-The seam is already there. `layout.ts` produces a `size` for every garden and
-its own comment says that field is "for Bonsai mode scaling" — the layout was
-built to be shrunk to a table, and nothing has ever shrunk it. So this is a new
-camera and a new frame, not a new layout.
-
-Constraints, because this bumps into three decisions that are deliberate and
-must survive it:
+This was the chosen next piece of work, and it shipped — see "what shipped in the
+most recent session" above for the summary, `scene/bonsai.ts` and `scene/fly.ts`
+for the code, and the three constraints below for what any future work on it must
+keep. It is left here rather than deleted because the constraints outlive the
+building of it.
 
 - **It is a change of *distance*, not of reading.** The tabletop plant is the
   same plant, smaller. Health still reads through droop, colour, and density —
   the tabletop must not earn a second visual language (a pin, a heat tint, a
   badge) that says the same thing the plant already says. That would spend the
-  channel budget twice.
+  channel budget twice. v1 holds this: nothing is added on the table that the
+  plant does not already say.
 - **Tags stay gone, and for free.** At tabletop distance you are far from every
   plant, so the fade radius (`labels.ts`) keeps every label absent — which is
   correct: a whole-world overview has no text in it, exactly as the room view
-  does not. Do not special-case labels back in; the existing rule already does
-  the right thing.
+  does not. The near zoom clamp is held just past `LABEL_FAR` so this stays true
+  at every distance a zoom can reach, and the label components are not rendered on
+  the table at all — the rule is honoured, never special-cased back on.
 - **One garden at a time, still.** Showing several gardens on one table is the
   obvious next thought and it is the *cross-garden comparison* constraint below
   in disguise — green means two different things across two gardens, which is the
   one rule the whole environment model exists to hold. v1 is one garden on the
   table. Several is a separate design with a real problem to solve first.
 
-The genuinely new design question, and the thing to settle before code: **the
-transition.** How you go from standing on the path to looking down at the table
-and back — whether it is a mode toggle, a pull-back-and-up of the same camera, or
-a gesture — is the whole of the UX here, and it is the part `layout.ts` cannot
-hand you. Everything else is plumbing the seam that already exists.
+**Where it could go next.** The transition is a flight between two fixed poses;
+it is not yet reachable in XR (no controller or gaze gesture bound to it), and
+the table does not yet tilt to meet a real surface in passthrough. Both are the
+natural continuation once the XR path opens. And the season/time scrub still
+lives on the sun, which on the table is often out of frame — the keyboard and the
+timeline still scrub, but a sun you cannot see is a gesture you cannot reach, so
+a scrub that works from the table view is worth a thought.
 
 ### The rest, roughly by value for effort
 
@@ -327,8 +339,8 @@ Two things to settle before it ships: the outlets' terms on storing their text,
 and whether the keyword classifier is good enough on real copy — it was tuned
 against generated headlines, which is a much easier problem than a real wire.
 
-**Traversal** is folded into "the bonsai table" above — the tabletop view is the
-answer to it, so they are one piece of work rather than two.
+**Traversal** was answered by the bonsai table above — the tabletop view is how
+you take a whole garden in without walking it, so the two were one piece of work.
 
 Note what is *not* on this list any more: tag textures. They were built for
 every plant on entering a garden — about 95MB for 193 — and are now built when a
@@ -362,8 +374,8 @@ doing against the NFC North" and "how are my energy holdings against my tech"
 are the questions people actually ask, and neither is currently answerable. This
 needs design before code — the constraint it bumps into is deliberate.
 
-**A second grain of *space*** is "the bonsai table" above — promoted out of this
-list to the chosen next piece of work.
+**A second grain of *space*** was "the bonsai table" above — now built, so it has
+left this list.
 
 **Sound.** `Blight` and `Vitals` both carry fields whose comments mention
 spatial audio, and there is none. Peripheral awareness is exactly the case where
