@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Garden } from './scene/Garden';
+import { Garden, type ViewMode } from './scene/Garden';
+import { CAMERA_FOV } from './scene/bonsai';
 import { useEcosystem, markVisited, flushObservations } from './state/ecosystemStore';
 import { DAY_MS, HOUR_MS } from './ecosystem/history';
 import { scrubBy } from './ecosystem/scrub';
@@ -30,6 +31,12 @@ export default function App() {
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
 
   const [live, setLive] = useState(true);
+
+  // Which grain of space is live: the body on the path, or the whole garden on a
+  // table. See scene/bonsai.ts. Held here, next to the other bits of chrome,
+  // rather than in the store, because it is how the scene is being looked at and
+  // not anything about the ecosystem itself.
+  const [viewMode, setViewMode] = useState<ViewMode>('stand');
 
   const gardens = useMemo(
     () => Object.values(nodes).filter((n) => n.kind === 'garden'),
@@ -98,6 +105,10 @@ export default function App() {
         // would lose the scrub for anyone who only wanted the panel shut.
         if (useEcosystem.getState().selectedId) select(null);
         else setCursor(null);
+      } else if (event.key === 't' || event.key === 'T') {
+        // Step back to take the whole garden in at once, or step back down onto
+        // the path. The switch is a flight, not a cut (see scene/bonsai.ts).
+        setViewMode((mode) => (mode === 'stand' ? 'table' : 'stand'));
       } else return;
       event.preventDefault();
     };
@@ -116,10 +127,10 @@ export default function App() {
           look round; the scroll stops at the glass. */}
       <Canvas
         shadows
-        camera={{ position: [0, 1.2, 4.5], fov: 50 }}
+        camera={{ position: [0, 1.2, 4.5], fov: CAMERA_FOV }}
         gl={{ toneMappingExposure: 1.1 }}
       >
-        <Garden />
+        <Garden viewMode={viewMode} />
       </Canvas>
 
       <div style={panel}>
@@ -141,6 +152,18 @@ export default function App() {
           ))}
         </div>
 
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <button
+            onClick={() => setViewMode((m) => (m === 'stand' ? 'table' : 'stand'))}
+            style={{
+              ...button,
+              background: viewMode === 'table' ? '#3f5a44' : '#242b30',
+            }}
+          >
+            {viewMode === 'table' ? 'walk in' : 'overview'}
+          </button>
+        </div>
+
         <label style={row}>
           <input
             type="checkbox"
@@ -160,7 +183,9 @@ export default function App() {
         <Timeline />
 
         <div style={{ opacity: 0.4, marginTop: 8, fontSize: 11 }}>
-          drag to look · scroll to walk · look up for the sun
+          {viewMode === 'table'
+            ? 'drag to turn the table · scroll to zoom · t to walk in'
+            : 'drag to look · scroll to walk · look up for the sun · t for overview'}
         </div>
         <div style={{ opacity: 0.4, marginTop: 2, fontSize: 11 }}>
           drag the sun along its arc for hours, across it for seasons

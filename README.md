@@ -85,8 +85,10 @@ src/
                collector that writes down what was observed so a reload does not
                throw the past away
   scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
-               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, plus
-               the pure sway, daylight, dust, greenhouse, and label modules
+               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, and the
+               two cameras — StandControl on the path, TableControl above the
+               bonsai table — plus the pure sway, daylight, dust, greenhouse,
+               label, bonsai (table framing), and fly (transition) modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -97,6 +99,38 @@ so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
 not a rebuild.
 
 ## What's built
+
+- **The garden on a table — a second grain of space.** History has two grains of
+  *time* (hourly for a week, daily for twenty); the garden had one grain of
+  *space*, standing on the path, and this is the second. Press `t` (or the
+  **overview** button) and the whole garden shrinks to a miniature on the grass,
+  seen from above and outside, as an alternative to walking a scroll along the
+  aisle. It answers the world garden, which is 193 plants across some 35 × 46
+  metres — a strip whose far end you could never see from its near one — by
+  making the whole of it takeable at a glance.
+
+  It is a change of *distance*, not of reading: the tabletop plant is the same
+  plant, smaller, and health still reads through droop, colour and density with
+  no second visual language added. **It shrinks rather than flying the camera
+  back** because the scene is lit through exponential fog — framing a thirty-metre
+  garden would mean standing eighty metres off, where the fog has swallowed it —
+  so bonsai scale keeps the model an arm's length away in clear air, the way you
+  build a model instead of photographing the building from orbit. The seam was
+  already there: `layout.ts` has always returned a `size` "for Bonsai mode
+  scaling", and nothing had ever shrunk it, so this is a new camera and a new
+  frame, not a new layout (`scene/bonsai.ts`).
+
+  The overview has **no text in it**, and for free: at table distance every plant
+  is beyond the label fade radius, so the existing rule draws no tags without a
+  line of special-casing — the same silence the room's far view keeps. The switch
+  is a **flight, not a cut** (`scene/fly.ts`): the camera eases out to the table
+  and back down to the path, so a second view of the same garden reads as the
+  same garden because you watched the eye travel there. On the table the camera
+  *orbits* — the gesture `look.ts` argued against for the room, and which is right
+  here, where the whole garden has become the one object you are examining. One
+  garden at a time, still: several on a table is cross-garden comparison in
+  disguise, where green would mean two things at once, and that is a separate
+  design.
 
 - **The world, as the third source — and the first one where a number can be
   revised.** 193 UN member states, twenty-two UN subregions as beds, and the
