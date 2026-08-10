@@ -35,7 +35,7 @@ import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets'
 import { plantingOf } from '../ecosystem/planting';
 import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
-import { liftForTexture, surfaceTexture, turfPixels } from './textures';
+import { liftForTexture, normalTexture, surfaceTexture, turfPixels } from './textures';
 
 /**
  * How far out the key lights sit. A directional light only needs a direction,
@@ -305,11 +305,16 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   // Turf, generated once for the life of the garden. The ground is the largest
   // surface in the scene and was a single flat green, which is what made it read
   // as a plane rather than as a field.
-  const turf = useMemo(
-    () => surfaceTexture(turfPixels(), [GROUND_SIZE / TURF_TILE, GROUND_SIZE / TURF_TILE]),
-    [],
-  );
-  useEffect(() => () => turf.dispose(), [turf]);
+  const turfTiles: [number, number] = [GROUND_SIZE / TURF_TILE, GROUND_SIZE / TURF_TILE];
+  const turfPx = useMemo(() => turfPixels(), []);
+  const turf = useMemo(() => surfaceTexture(turfPx, turfTiles), [turfPx]);
+  // Relief on the ground so the lawn catches the low sun as a surface, not a
+  // painted plane, at the grazing angle it is seen across all the way out.
+  const turfRelief = useMemo(() => normalTexture(turfPx, turfTiles, 5), [turfPx]);
+  useEffect(() => () => {
+    turf.dispose();
+    turfRelief.dispose();
+  }, [turf, turfRelief]);
 
   const sunPosition = useMemo(
     () => scaled(daylight.sunDirection, LIGHT_DISTANCE),
@@ -418,7 +423,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           the beds was done by lowering the world (see greenhouse.ts). */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]} receiveShadow>
         <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
-        <meshStandardMaterial map={turf} color={liftForTexture('#5c6e3a')} roughness={1} />
+        <meshStandardMaterial
+          map={turf}
+          normalMap={turfRelief}
+          color={liftForTexture('#5c6e3a')}
+          roughness={1}
+        />
       </mesh>
       <group position={[0, FLOOR_Y, 0]}>
         <Horizon />

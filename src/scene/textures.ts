@@ -357,6 +357,92 @@ export function surfaceTexture(
 }
 
 /**
+ * The same grain, as relief.
+ *
+ * An albedo map lightens and darkens a surface; a normal map tilts it, so the
+ * sun catches the ridges of the bark and the crumb of the soil instead of
+ * washing over a smooth pipe. It is derived from the very same achromatic field
+ * the albedo map is — the bright pixels are the high ground — so the two agree by
+ * construction: where the map says a ridge, the relief raises one.
+ *
+ * It is channel-safe for the same reason the maps are, arrived at from the other
+ * side. A normal map's r, g, b are not a colour at all — they are a direction —
+ * so it cannot tint what it textures and cannot start carrying the health signal
+ * that lives in the surface's actual colour. It is geometry, and geometry is
+ * decoration here as much as grain is.
+ *
+ * The slope is a central difference of the luminance, wrapped like the sampler so
+ * the relief tiles as seamlessly as the map, and scaled by `strength` — baked in
+ * here rather than left to `normalScale`, so a material only has to hang the map.
+ */
+export function normalPixels(
+  source: Uint8Array,
+  strength: number,
+  size = TEXTURE_SIZE,
+): Uint8Array {
+  const at = (x: number, y: number): number => {
+    const ix = ((x % size) + size) % size;
+    const iy = ((y % size) + size) % size;
+    return source[(iy * size + ix) * 4] / 255;
+  };
+
+  const out = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Central differences: bright is high, so the slope points downhill from a
+      // ridge, and the surface normal leans away from it.
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      let nx = -dx;
+      let ny = -dy;
+      let nz = 1;
+      const length = Math.hypot(nx, ny, nz);
+      nx /= length;
+      ny /= length;
+      nz /= length;
+
+      const p = (y * size + x) * 4;
+      // Pack a unit vector in [-1,1] into a byte in [0,1]. Green is +Y up, the
+      // OpenGL convention three expects.
+      out[p] = Math.round((nx * 0.5 + 0.5) * 255);
+      out[p + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      out[p + 2] = Math.round((nz * 0.5 + 0.5) * 255);
+      out[p + 3] = 255;
+    }
+  }
+  return out;
+}
+
+/**
+ * A normal map ready to hang on a material, built from the same pixels as its
+ * albedo `map` so the two describe one surface.
+ *
+ * Kept as raw linear data with no colour space, which is the whole point and the
+ * same trap `surfaceTexture` documents from the other direction: an albedo map
+ * would want `SRGBColorSpace`, but a normal map is a direction field and running
+ * it through the sRGB curve would bend every slope. The `DataTexture` default is
+ * exactly right here, so it is left alone deliberately, not by oversight.
+ */
+export function normalTexture(
+  source: Uint8Array,
+  repeat: readonly [number, number],
+  strength: number,
+  size = TEXTURE_SIZE,
+): THREE.DataTexture {
+  const pixels = normalPixels(source, strength, size);
+  const texture = new THREE.DataTexture(pixels as BufferSource, size, size);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeat[0], repeat[1]);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 8;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Grain between instances.
  *
  * Every leaf on a plant is handed the same colour, and a few hundred instances

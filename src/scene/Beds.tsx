@@ -1,7 +1,13 @@
 import { useLayoutEffect, useMemo } from 'react';
 import type { BedPlacement } from '../ecosystem/layout';
 import { BED_HEIGHT, FLOOR_Y } from './greenhouse';
-import { liftForTexture, plankPixels, soilPixels, surfaceTexture } from './textures';
+import {
+  liftForTexture,
+  normalTexture,
+  plankPixels,
+  soilPixels,
+  surfaceTexture,
+} from './textures';
 
 /**
  * Raised beds: soil held in a timber box.
@@ -71,27 +77,39 @@ function Bed({ bed }: { bed: BedPlacement }) {
   // the furrows to keep a constant spacing from one bed to the next. The pixel
   // buffer is regenerated with it, which costs a fraction of a millisecond for
   // the handful of beds a garden has.
-  const soil = useMemo(
-    () => surfaceTexture(soilPixels(), [tiles(width), tiles(depth)]),
-    [width, depth],
+  // Pixel buffers are seed-only and constant; only the repeat changes per bed,
+  // so the grain and its matching relief are generated once and re-hung.
+  const soilPx = useMemo(() => soilPixels(), []);
+  const alongPx = useMemo(() => plankPixels(), []);
+  const acrossPx = useMemo(() => plankPixels(0x91a5), []);
+
+  const soilTiles: [number, number] = [tiles(width), tiles(depth)];
+  const soil = useMemo(() => surfaceTexture(soilPx, soilTiles), [soilPx, width, depth]);
+  const soilRelief = useMemo(
+    () => normalTexture(soilPx, soilTiles, 4),
+    [soilPx, width, depth],
   );
-  useLayoutEffect(() => () => soil.dispose(), [soil]);
+  useLayoutEffect(() => () => {
+    soil.dispose();
+    soilRelief.dispose();
+  }, [soil, soilRelief]);
 
   // One plank map per board direction. A box face's u runs along its longest
   // edge, so repeating by that edge's length is what keeps the grain the same
-  // size on a two metre side and on a six metre one.
-  const along = useMemo(
-    () => surfaceTexture(plankPixels(), [outer(width) / PLANK_METRES, 1]),
-    [width],
-  );
-  const across = useMemo(
-    () => surfaceTexture(plankPixels(0x91a5), [depth / PLANK_METRES, 1]),
-    [depth],
-  );
+  // size on a two metre side and on a six metre one. Each carries a relief map
+  // built from the same grain, so the sawn timber catches the light.
+  const alongTiles: [number, number] = [outer(width) / PLANK_METRES, 1];
+  const acrossTiles: [number, number] = [depth / PLANK_METRES, 1];
+  const along = useMemo(() => surfaceTexture(alongPx, alongTiles), [alongPx, width]);
+  const alongRelief = useMemo(() => normalTexture(alongPx, alongTiles, 4), [alongPx, width]);
+  const across = useMemo(() => surfaceTexture(acrossPx, acrossTiles), [acrossPx, depth]);
+  const acrossRelief = useMemo(() => normalTexture(acrossPx, acrossTiles, 4), [acrossPx, depth]);
   useLayoutEffect(() => () => {
     along.dispose();
+    alongRelief.dispose();
     across.dispose();
-  }, [along, across]);
+    acrossRelief.dispose();
+  }, [along, alongRelief, across, acrossRelief]);
 
   const wood = useMemo(() => liftForTexture(WOOD), []);
 
@@ -108,7 +126,12 @@ function Bed({ bed }: { bed: BedPlacement }) {
       {/* Soil, filling the box to the surface plants stand on. */}
       <mesh position={[0, FLOOR_Y + BED_HEIGHT / 2, 0]} receiveShadow>
         <boxGeometry args={[width, BED_HEIGHT, depth]} />
-        <meshStandardMaterial map={soil} color={liftForTexture('#3d342b')} roughness={1} />
+        <meshStandardMaterial
+          map={soil}
+          normalMap={soilRelief}
+          color={liftForTexture('#3d342b')}
+          roughness={1}
+        />
       </mesh>
 
       {/* The four sides. The long pair oversails the ends, the way boards are
@@ -116,13 +139,13 @@ function Bed({ bed }: { bed: BedPlacement }) {
       {[-z, z].map((at) => (
         <mesh key={`z${at}`} position={[0, sideY, at]} castShadow receiveShadow>
           <boxGeometry args={[outer(width), sideHeight, BOARD]} />
-          <meshStandardMaterial map={along} color={wood} roughness={0.9} />
+          <meshStandardMaterial map={along} normalMap={alongRelief} color={wood} roughness={0.9} />
         </mesh>
       ))}
       {[-x, x].map((at) => (
         <mesh key={`x${at}`} position={[at, sideY, 0]} castShadow receiveShadow>
           <boxGeometry args={[BOARD, sideHeight, depth]} />
-          <meshStandardMaterial map={across} color={wood} roughness={0.9} />
+          <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.9} />
         </mesh>
       ))}
 
@@ -136,7 +159,7 @@ function Bed({ bed }: { bed: BedPlacement }) {
             receiveShadow
           >
             <boxGeometry args={[POST, sideHeight, POST]} />
-            <meshStandardMaterial map={across} color={wood} roughness={0.9} />
+            <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.9} />
           </mesh>
         )),
       )}
@@ -146,13 +169,13 @@ function Bed({ bed }: { bed: BedPlacement }) {
       {[-z, z].map((at) => (
         <mesh key={`cz${at}`} position={[0, capY, at]} castShadow receiveShadow>
           <boxGeometry args={[outer(width) + OVERSAIL * 2, CAP, BOARD + OVERSAIL * 2]} />
-          <meshStandardMaterial map={along} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={along} normalMap={alongRelief} color={wood} roughness={0.85} />
         </mesh>
       ))}
       {[-x, x].map((at) => (
         <mesh key={`cx${at}`} position={[at, capY, 0]} castShadow receiveShadow>
           <boxGeometry args={[BOARD + OVERSAIL * 2, CAP, depth]} />
-          <meshStandardMaterial map={across} color={wood} roughness={0.85} />
+          <meshStandardMaterial map={across} normalMap={acrossRelief} color={wood} roughness={0.85} />
         </mesh>
       ))}
     </group>
