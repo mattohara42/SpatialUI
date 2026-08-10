@@ -4,7 +4,9 @@ import {
   decodeRecord,
   emptyRecord,
   encodeRecord,
+  mergeRecord,
   observe,
+  peekSavedAt,
   pruneRecord,
   recordBytes,
   restoreRecord,
@@ -45,7 +47,7 @@ export interface CollectorStorage {
 export const STORAGE_KEY = 'spatialui.observed.v1';
 
 /**
- * How often the record is written out.
+ * The floor on how often the record is written out.
  *
  * The observation itself is a couple of array writes per plant and happens on
  * every commit; serializing a season is not, so it is thrown to a schedule
@@ -56,13 +58,45 @@ export const STORAGE_KEY = 'spatialui.observed.v1';
 export const WRITE_INTERVAL_MS = 30_000;
 
 /**
+ * How much of the main thread a write is allowed to be, as a divisor.
+ *
+ * `localStorage` is synchronous and main-thread by definition, so a write is a
+ * frame nobody gets. Measured in Chromium at the budget — 124 plants, a season
+ * of days and a week of hours, 1.8MB — encoding and writing came to about 21ms
+ * median and 28ms at worst. That is one dropped frame every thirty seconds at
+ * the very top of the range, and unmeasurable for the first weeks of use, which
+ * is the kind of cost a constant cannot express.
+ *
+ * So the interval is the measured cost times this, floored at
+ * `WRITE_INTERVAL_MS` and capped at `MAX_WRITE_INTERVAL_MS`. At 1/2000 of the
+ * main thread, a sub-millisecond write keeps the thirty-second floor and the
+ * 21ms worst case above backs off to a little over forty seconds — deliberately
+ * a mild correction on this hardware, because that is what the measurement
+ * justifies. It earns its keep on hardware that is not this: a phone three to
+ * five times slower lands at two or three minutes without anyone choosing a
+ * number for it.
+ *
+ * Backing off costs nothing worth having. The finest grain in the record is an
+ * hour, so a few minutes of "last seen inside the current hour" is not
+ * information, and the page going away flushes regardless.
+ */
+export const WRITE_DUTY = 2000;
+export const MAX_WRITE_INTERVAL_MS = 600_000;
+
+/**
  * What the record is allowed to occupy.
  *
- * `localStorage` is about 5MB for the whole origin and this app is not the only
- * thing entitled to it. Two megabytes is roughly a full season observed across
- * every plant in every garden — measured in `collector.test.ts` — and leaves
- * most of the quota alone. Going over sheds rather than fails; see `shedRecord`
- * for which end goes.
+ * Two megabytes is a full season observed across every plant in every garden,
+ * measured rather than guessed — see `collector.test.ts`, and the real record at
+ * that size encodes to 1.84MB.
+ *
+ * It is a large share of what there is. The origin quota is about 5MB, and it
+ * was confirmed the blunt way while benchmarking: three copies of a full record
+ * would not fit. Nothing else lives on this origin, so taking 40% of it for the
+ * one thing the app is for is the right trade — but it is a deliberate 40%, not
+ * a rounding error, and a second consumer here would need this number revisited
+ * rather than assumed to have headroom behind it. Going over sheds rather than
+ * fails; see `shedRecord` for which end goes.
  */
 export const RECORD_BUDGET_BYTES = 2_000_000;
 
@@ -80,6 +114,8 @@ export interface Collector {
   flush(at?: number): boolean;
   /** Bytes the last successful write occupied, or 0 if there has not been one. */
   readonly writtenBytes: number;
+  /** The current gap between scheduled writes, grown from what one costs. */
+  readonly intervalMs: number;
 }
 
 export interface CollectorOptions {
@@ -125,6 +161,38 @@ export function createCollector(options: CollectorOptions = {}): Collector {
   const record = load(storage, key, now);
   let lastWriteAt = now;
   let writtenBytes = 0;
+  /** Grown from the measured cost of the last write. See `WRITE_DUTY`. */
+  let currentIntervalMs = intervalMs;
+  /**
+   * What this collector last put in the key, as `savedAt:length`. Its only job
+   * is to answer "has anyone else written since I did" without parsing what is
+   * there, which is the difference between a free check and a JSON.parse of a
+   * megabyte every thirty seconds.
+   */
+  let lastWritten: string | null = null;
+
+  /**
+   * Take in whatever another tab has written since our last write.
+   *
+   * Skipped entirely when the stored value is the one we put there, which is
+   * every write in the ordinary single-tab case.
+   */
+  const absorb = (at: number): void => {
+    if (!storage) return;
+    let text: string | null = null;
+    try {
+      text = storage.getItem(key);
+    } catch {
+      return;
+    }
+    if (!text) return;
+    if (lastWritten !== null && `${peekSavedAt(text)}:${text.length}` === lastWritten) return;
+
+    const theirs = decodeRecord(text);
+    if (!theirs) return;
+    pruneRecord(theirs, at);
+    mergeRecord(record, theirs);
+  };
 
   /**
    * Prune, shed, encode, store — and if the store refuses, halve the budget and
@@ -139,8 +207,12 @@ export function createCollector(options: CollectorOptions = {}): Collector {
    * unwriteable record does not sit there blocking every future write.
    */
   const write = (at: number): boolean => {
-    pruneRecord(record, at);
+    const started = clock();
     lastWriteAt = at;
+    // Before pruning or shedding, so another tab's slots are subject to the same
+    // budget as ours rather than arriving after the decision about what fits.
+    absorb(at);
+    pruneRecord(record, at);
     // Bounded even with nowhere to put it: without storage this is the only
     // thing standing between a long-lived tab and a record that grows all day.
     shedRecord(record, budgetBytes);
@@ -152,6 +224,11 @@ export function createCollector(options: CollectorOptions = {}): Collector {
       try {
         storage.setItem(key, text);
         writtenBytes = text.length;
+        lastWritten = `${record.savedAt}:${text.length}`;
+        currentIntervalMs = Math.min(
+          MAX_WRITE_INTERVAL_MS,
+          Math.max(intervalMs, (clock() - started) * WRITE_DUTY),
+        );
         return true;
       } catch {
         // Fall through to the smaller budget, then give up.
@@ -163,6 +240,7 @@ export function createCollector(options: CollectorOptions = {}): Collector {
       // Nothing left to try. The record stays in memory for this session.
     }
     writtenBytes = 0;
+    lastWritten = null;
     return false;
   };
 
@@ -171,7 +249,7 @@ export function createCollector(options: CollectorOptions = {}): Collector {
 
     note(nodes, at) {
       observe(record, nodes, at);
-      if (at - lastWriteAt >= intervalMs) write(at);
+      if (at - lastWriteAt >= currentIntervalMs) write(at);
     },
 
     restore(history, archive) {
@@ -185,7 +263,20 @@ export function createCollector(options: CollectorOptions = {}): Collector {
     get writtenBytes() {
       return writtenBytes;
     },
+
+    get intervalMs() {
+      return currentIntervalMs;
+    },
   };
+}
+
+/**
+ * A monotonic millisecond clock with sub-millisecond resolution, or `Date.now`
+ * where there is none. Used only to measure how long a write took, so a coarse
+ * fallback costs nothing but a duty cycle that reads zero and keeps the floor.
+ */
+function clock(): number {
+  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 /**

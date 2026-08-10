@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { generatePlant, type GeneratePlantInput } from '../lsystem/generate';
+import { createLru } from '../lsystem/lru';
 import type { PlantGeometry } from '../lsystem/types';
 
 /**
@@ -52,11 +53,16 @@ export function useLSystem(input: GeneratePlantInput): PlantGeometry {
  *
  * Returned geometry is shared and read-only; the scene never mutates it.
  *
- * ponytail: FIFO eviction, sized for a garden's worth of live buckets. If time
- * scrubbing starts churning many buckets per plant, make it LRU keyed on last use.
+ * Eviction is by last use, not by insertion. It was FIFO for a long time, which
+ * is the same thing while nothing churns and the wrong thing the moment
+ * something does: scrubbing a season walks each plant through maturity buckets
+ * it will not want again, and under FIFO every one of those inserts pushes out
+ * whatever went in first — on a garden that has been open a while, a plant
+ * standing in front of you. It rebuilds next frame and is evicted again. The
+ * bound is unchanged; only which 600 it keeps.
  */
-const CACHE_MAX = 600;
-const cache = new Map<string, PlantGeometry>();
+export const CACHE_MAX = 600;
+const cache = createLru<PlantGeometry>(CACHE_MAX);
 
 export function generatePlantMemo(input: GeneratePlantInput): PlantGeometry {
   const maturity = quantize(input.maturity ?? 1, MATURITY_STEPS);
@@ -75,8 +81,22 @@ export function generatePlantMemo(input: GeneratePlantInput): PlantGeometry {
       vitality: quantize(input.vitality, VITALITY_STEPS),
       maturity,
     });
-    if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
     cache.set(key, geometry);
   }
   return geometry;
+}
+
+/**
+ * What the cache is holding, oldest use first.
+ *
+ * Exported so the eviction policy can be asserted against the real cache rather
+ * than only against the LRU in isolation — the bug this replaced was not in the
+ * data structure, it was in which one was wired up here.
+ */
+export function geometryCacheKeys(): string[] {
+  return cache.keys();
+}
+
+export function clearGeometryCache(): void {
+  cache.clear();
 }

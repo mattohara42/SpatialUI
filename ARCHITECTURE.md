@@ -105,9 +105,15 @@ src/
                      dispatches bespoke presets, else runs the L-system.
     generate.test.ts
     foliage.test.ts  Leaf clusters, the foliage table, and every preset.
+    lru.ts           Least-recently-used map. The geometry cache's eviction
+                     policy, generic and free of geometry so it can be tested
+                     without generating a plant.
+    lru.test.ts
   hooks/
     useLSystem.ts    Memoized React wrapper. The only React import in the
                      generation path.
+    useLSystem.test.ts  The cache itself: what it keys on, what it refuses to
+                     key on, and what survives a season of scrub churn.
   state/             Zustand store, and where the gardens are composed. Holds
                      EcosystemState and nothing derived from it, with one
                      deliberate exception: the two window figures
@@ -589,6 +595,17 @@ is, and quantized vitality is what defuses it: a week of hourly history collapse
 to roughly ten distinct shapes per plant, so the geometry cache runs at a 94%
 hit rate and scrubbing costs less than a frame.
 
+The cache holds 600 entries and evicts by last use. It was FIFO for a long time,
+which is the same thing while nothing churns and the wrong thing the moment
+something does: scrubbing a season walks every plant through maturity buckets
+nobody will ask for again, and under FIFO each of those inserts pushed out
+whatever went in first — on a garden that had been open a while, a plant standing
+in front of you, which then rebuilt on the next frame and was evicted again. The
+bound never changed; only which 600 it keeps. `lsystem/lru.ts` is the policy,
+kept generic and free of geometry so it can be tested without generating a
+plant, and `useLSystem.test.ts` asserts it against the real cache — because the
+bug was never in a data structure, it was in which one was wired up.
+
 ## Recorded assumptions
 
 1. Plant geometry is deterministic, seeded off node id, so telemetry updates
@@ -848,11 +865,59 @@ those days exist nowhere else. Two megabytes holds a full season of every plant
 in every garden, measured rather than guessed — `recordBytes` estimates the
 encoded size analytically so a budget check does not serialize a megabyte to
 find out how big it is, and a test holds the estimate to within 5% of the real
-output.
+output for values that use all four decimals, erring generous for values that
+round short. Generous is the only safe direction for a budget, so it is pinned
+that way round rather than tuned to real data.
 
-`ObservedRecord` is also the shape a server-side collector would want, which is
-the point of the seam: moving the loop somewhere it can run unattended is a
-change of storage backend, not of format.
+### Pages come in multiples
+
+One key, several tabs, each holding its own copy: a plain write is one tab
+discarding everything the others saw since they loaded, silently. Every write
+therefore merges what is stored before replacing it, which makes the record the
+origin's rather than a tab's. Where two tabs hold the same slot the writer keeps
+its own — the disagreement can only be inside one in-progress slot, and the
+writer's value is the one it watched arrive.
+
+The merge costs a decode, and the ordinary case is a single tab, so a stored
+value the collector recognises as its own is skipped on `savedAt` and length
+alone. `peekSavedAt` reads that header with a regex over the first hundred
+characters rather than parsing a megabyte to find out nothing has changed. A
+collector in a process would need none of this; a collector in a page does.
+
+### What a write costs
+
+`localStorage` is synchronous and on the main thread, so a write is a frame
+nobody gets. Measured in Chromium at the budget — 124 plants, a season of days
+and a week of hours, 1.84MB — encoding is 9.7ms and the write 11.3ms, about 21ms
+median and 28ms at worst. One dropped frame every thirty seconds at the very top
+of the range, and unmeasurable for the first weeks of use.
+
+Both halves of that were tightened by what they are, not by a guess. Values are
+rounded when observed rather than when encoded, which removes a full rebuild of
+the record on every write and takes the encode from 14.8ms to 9.7ms; `savedAt`
+being second in the object is what lets the merge check be a regex. And the
+interval is no longer a constant: it is the measured cost of the last write times
+`WRITE_DUTY`, floored at thirty seconds and capped at ten minutes, so the same
+code holds a tight cadence on a fast machine and backs off on a slow one without
+anyone choosing a number for it. Backing off is nearly free — the finest grain in
+the record is an hour, and the page going away flushes regardless.
+
+Two megabytes is also a deliberate 40% of the roughly 5MB an origin gets, which
+was confirmed the blunt way while benchmarking: three copies of a full record
+would not fit. Nothing else lives on this origin, so it is the right trade, but a
+second consumer would need the number revisited rather than assumed to have
+headroom behind it.
+
+`localStorage` and not IndexedDB, deliberately. IndexedDB is asynchronous and
+would keep the encode off the critical path, but the flush that matters most is
+the one on `pagehide`, and an asynchronous write is not guaranteed to complete
+while a page is being torn down. A synchronous API is the one that can promise
+the last write lands. That trade would reverse the moment the collector moves
+into a worker, where there is no teardown to race and no main thread to block.
+
+`ObservedRecord` is the shape a server-side collector would want, which is the
+point of the seam: moving the loop somewhere it can run unattended is a change of
+storage backend, not of format.
 
 Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports
@@ -888,16 +953,6 @@ change to the node type.
 
 Completion has no vocabulary yet. Tasks and goals end, plants do not. Fruit and
 deadwood are the obvious answer, worth deciding once the scene exists.
-
-The geometry cache is bounded and this said for a long time that it was not.
-`useLSystem.ts` has held 600 entries with FIFO eviction since before the scrub
-shipped, so the risk as written — unbounded growth toward 51MB — has not been
-real for some time. What is still true is the smaller half of it: FIFO evicts by
-insertion order, not by use, so a plant you are standing in front of can be
-thrown out to make room for one you scrubbed past, and the next frame rebuilds
-it. Keyed on last use instead, the same 600 entries would not do that. The
-measured 94% hit rate is against present behaviour, so the cost of the current
-policy is a fraction of the remaining 6% rather than anything visible.
 
 Collection is no longer missing, but the limit it was named for is: a tab that
 is closed still records nothing, and a browser has nowhere to put a process that

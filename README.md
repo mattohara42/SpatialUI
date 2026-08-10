@@ -92,7 +92,9 @@ Rendering aggregates every branch across all plants into one `InstancedMesh`,
 and every leaf into one mesh per leaf shape (at most four), for a handful of
 draw calls regardless of plant count. Geometry is memoized on quantized vitals,
 so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
-not a rebuild.
+not a rebuild. The cache holds 600 shapes and evicts by last use, which is what
+keeps a plant you are looking at from being thrown out by a season scrub walking
+every other plant through buckets nobody will ask for again.
 
 ## What's built
 
@@ -113,10 +115,13 @@ not a rebuild.
   saying the same number every hour, which would be the app inventing the one
   thing the whole design is built to avoid.
 
-  It collects while a tab is open and not while one is not, which is as far as a
-  browser with no server behind it honestly goes. The stored shape is the one a
-  server-side collector would want, so moving the loop somewhere it can run
-  unattended is a change of backend rather than of format.
+  It survives a reload and it survives several tabs at once — one key shared by
+  every page means a write has to merge before it replaces, or the last tab to
+  close silently discards what the others saw. What it cannot do is collect
+  while no tab is open, which is as far as a browser with no server behind it
+  honestly goes. The stored shape is the one a server-side collector would want,
+  so moving the loop somewhere it can run unattended is a change of backend
+  rather than of format.
 
 - **A book of positions, as the second real source — and the one that argues
   back.** Eight sectors are the beds, thirty-two holdings are the plants, and

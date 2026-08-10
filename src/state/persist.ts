@@ -77,8 +77,24 @@ export const COARSE_RETAINED_SLOTS = DEFAULT_ARCHIVE_CAPACITY;
  * 20 steps the geometry quantizes to and roughly a third of the bytes of a raw
  * float's decimal expansion. The rounding is the only lossy thing here and it is
  * below the resolution of anything that reads it.
+ *
+ * Applied when a sample is observed rather than when the record is encoded.
+ * Rounding at encode time rebuilt the whole record — a fresh object per series
+ * and four fresh arrays — on every write, to redo work already done for all but
+ * the newest slot. Measured in Chromium at the budget, that took the encode from
+ * 14.8ms to 9.7ms median: worth having, not a transformation, and stated at the
+ * size it is because the first figure taken for it was a cold sample reading
+ * 70ms and that number was wrong.
+ *
+ * The better reason is not speed. Rounding at the door means the in-memory
+ * record is exactly what gets stored, so `encodeRecord` is a plain stringify and
+ * a merge cannot reintroduce a value at a precision the format does not carry.
  */
 const PRECISION = 1e4;
+
+function round(value: number): number {
+  return Math.round(value * PRECISION) / PRECISION;
+}
 
 export function emptyRecord(savedAt = Date.now()): ObservedRecord {
   return { schema: RECORD_SCHEMA, savedAt, fine: {}, coarse: {} };
@@ -149,10 +165,10 @@ function upsert(series: ObservedSeries, at: number, vitals: Vitals): boolean {
   }
   if (n === 0 || slot > series.slots[n - 1]) {
     series.slots.push(slot);
-    series.vitality.push(vitals.vitality);
-    series.activity.push(vitals.activity);
-    series.maturity.push(vitals.maturity);
-    series.trend.push(vitals.trend);
+    series.vitality.push(round(vitals.vitality));
+    series.activity.push(round(vitals.activity));
+    series.maturity.push(round(vitals.maturity));
+    series.trend.push(round(vitals.trend));
     return true;
   }
 
@@ -164,18 +180,18 @@ function upsert(series: ObservedSeries, at: number, vitals: Vitals): boolean {
     return false;
   }
   series.slots.splice(at_, 0, slot);
-  series.vitality.splice(at_, 0, vitals.vitality);
-  series.activity.splice(at_, 0, vitals.activity);
-  series.maturity.splice(at_, 0, vitals.maturity);
-  series.trend.splice(at_, 0, vitals.trend);
+  series.vitality.splice(at_, 0, round(vitals.vitality));
+  series.activity.splice(at_, 0, round(vitals.activity));
+  series.maturity.splice(at_, 0, round(vitals.maturity));
+  series.trend.splice(at_, 0, round(vitals.trend));
   return true;
 }
 
 function write(series: ObservedSeries, i: number, vitals: Vitals): void {
-  series.vitality[i] = vitals.vitality;
-  series.activity[i] = vitals.activity;
-  series.maturity[i] = vitals.maturity;
-  series.trend[i] = vitals.trend;
+  series.vitality[i] = round(vitals.vitality);
+  series.activity[i] = round(vitals.activity);
+  series.maturity[i] = round(vitals.maturity);
+  series.trend[i] = round(vitals.trend);
 }
 
 /** First index whose slot is >= `slot`, or the length. */
@@ -275,6 +291,98 @@ function restoreTier(
     }
   }
   return filled;
+}
+
+/**
+ * Folds another record into this one, keeping every slot either holds.
+ *
+ * Two tabs on the same origin share one key and each holds its own copy, so a
+ * plain write is one tab discarding everything the other saw since it loaded.
+ * Merging before writing is what makes the record the origin's rather than a
+ * tab's. A collector in a process would not need this; a collector in a page
+ * does, because pages come in multiples.
+ *
+ * Where both hold the same slot, the target keeps its own. The disagreement can
+ * only be inside a single in-progress slot — both are "last seen" for the same
+ * node at the same grain — and preferring the writer's own observation means the
+ * value that goes down is one this tab actually watched arrive.
+ *
+ * Returns the number of slots taken from `incoming`.
+ */
+export function mergeRecord(target: ObservedRecord, incoming: ObservedRecord): number {
+  return (
+    mergeTier(target.fine, incoming.fine) + mergeTier(target.coarse, incoming.coarse)
+  );
+}
+
+function mergeTier(
+  target: Record<string, ObservedSeries>,
+  incoming: Record<string, ObservedSeries>,
+): number {
+  let added = 0;
+  for (const [id, series] of Object.entries(incoming)) {
+    const mine = target[id];
+    if (!mine) {
+      target[id] = { ...series, slots: [...series.slots] };
+      added += series.slots.length;
+      continue;
+    }
+    if (mine.stepMs !== series.stepMs) continue;
+    added += mergeSeries(mine, series);
+  }
+  return added;
+}
+
+/** Both sides are sorted, so this is one walk rather than a splice per slot. */
+function mergeSeries(target: ObservedSeries, incoming: ObservedSeries): number {
+  const slots: number[] = [];
+  const vitality: number[] = [];
+  const activity: number[] = [];
+  const maturity: number[] = [];
+  const trend: number[] = [];
+  let i = 0;
+  let j = 0;
+  let added = 0;
+
+  const take = (from: ObservedSeries, at: number) => {
+    slots.push(from.slots[at]);
+    vitality.push(from.vitality[at]);
+    activity.push(from.activity[at]);
+    maturity.push(from.maturity[at]);
+    trend.push(from.trend[at]);
+  };
+
+  while (i < target.slots.length || j < incoming.slots.length) {
+    const mine = i < target.slots.length ? target.slots[i] : Infinity;
+    const theirs = j < incoming.slots.length ? incoming.slots[j] : Infinity;
+    if (mine <= theirs) {
+      take(target, i++);
+      if (mine === theirs) j++;
+    } else {
+      take(incoming, j++);
+      added++;
+    }
+  }
+
+  target.slots = slots;
+  target.vitality = vitality;
+  target.activity = activity;
+  target.maturity = maturity;
+  target.trend = trend;
+  return added;
+}
+
+/**
+ * The `savedAt` of an encoded record, without parsing it.
+ *
+ * A tab has to know whether anyone else has written since it last did, and
+ * `JSON.parse` on a megabyte to answer that would cost more than the write it is
+ * trying to avoid. The field is second in the object, so the answer is in the
+ * first few dozen characters.
+ */
+export function peekSavedAt(text: string): number | null {
+  const match = /"savedAt":(\d+)/.exec(text.slice(0, 120));
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -387,29 +495,14 @@ function shedTier(tier: Record<string, ObservedSeries>, slotsToDrop: number): nu
   return dropped;
 }
 
+/**
+ * Straight to JSON, because the values were rounded on the way in and the field
+ * order of `ObservedRecord` is the field order of the format. Both of those are
+ * load-bearing: `peekSavedAt` reads the header without parsing, so `savedAt` has
+ * to stay near the front.
+ */
 export function encodeRecord(record: ObservedRecord): string {
-  const round = (values: number[]) =>
-    values.map((v) => Math.round(v * PRECISION) / PRECISION);
-  const tier = (source: Record<string, ObservedSeries>) => {
-    const out: Record<string, ObservedSeries> = {};
-    for (const [id, series] of Object.entries(source)) {
-      out[id] = {
-        stepMs: series.stepMs,
-        slots: series.slots,
-        vitality: round(series.vitality),
-        activity: round(series.activity),
-        maturity: round(series.maturity),
-        trend: round(series.trend),
-      };
-    }
-    return out;
-  };
-  return JSON.stringify({
-    schema: record.schema,
-    savedAt: record.savedAt,
-    fine: tier(record.fine),
-    coarse: tier(record.coarse),
-  });
+  return JSON.stringify(record);
 }
 
 /**
