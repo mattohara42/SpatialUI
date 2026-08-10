@@ -331,6 +331,20 @@ change, and the cheapest, because every seam was built for it: implement
 and nothing below changes. It also converts every "seeded fiction" caveat in the
 docs into a real claim. Needs network access this environment does not have.
 
+**User-defined data sources** — letting an end user point the garden at their own
+feed (FIFA, Prometheus, political fundraising) rather than a developer writing a
+translator. Written up in `docs/sources.md`: the seam that already exists
+(`LiveSource`, the poll/staleness unification, the server-shaped observation
+record), and the two halves the sentence hides — developer extensibility, which
+is nearly there, and non-developer runtime configuration, which is the real work.
+The crux is turning the translator from *code* into a *declarative mapping*,
+because it decides things the raw data does not carry: the four axes as
+comparisons in [0, 1], and above all polarity, the one rule the whole
+environment model exists to hold. Prometheus is the archetype and the right first
+source; `Domain` being a closed enum and the completion-vocabulary gap are the
+two things to fix before the general case. Needs the same network — and, for a
+real connection past the browser's CORS wall, a backend.
+
 `NewsSource` is the one to do first if you get network, and not because it is
 the easiest. It is the only source whose generated half is *text about real
 places*, so it carries caveats the other two do not need, and it is the only one

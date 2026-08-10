@@ -80,12 +80,22 @@ carrying its detail in a normal map rather than in triangles.
 
 The stated aim is peripheral awareness in passthrough AR. A headset is 90Hz
 across two eyes — call it a ~5.5ms frame — and that is the real cap on how far
-any of this can go. **This is the fork that matters more than Blender-vs-Unreal:
-is XR still a target?** A desktop-only scene has perhaps ten times the budget and
-can afford volumetrics, heavy post, and real subsurface scattering; an XR scene
-cannot, and every choice below has an XR column and a desktop column. Decide this
-first, because it is the difference between a peripheral instrument and a
-showpiece, and they are different products wearing the same geometry.
+any of this can go. This was the fork that mattered more than Blender-vs-Unreal,
+and **it is now decided: XR stays a target.** So the constrained budget is the
+one that governs; the expensive, desktop-only tier at the bottom of the ladder
+stays off the default path, and the rungs above it are chosen for what survives a
+headset frame. Where an effect is a desktop luxury it is marked as one — it may
+still ship as a desktop-only enhancement, but it is never the baseline.
+
+That decision also settles the engine question underneath it, and settles it
+*for* three.js. **WebXR is a browser standard, not a per-vendor SDK:** the same
+build runs on Meta Quest's browser, on Apple Vision Pro (Safari, visionOS 2+),
+on Pico and other Android-based headsets, and falls back to a flat desktop window
+where there is no device — with `@react-three/xr` bridging R3F to the session.
+One codebase reaches every headset. Unreal buys photorealism at the price of
+per-platform native builds and no browser story at all, which is the opposite of
+"loads instantly, sits at the edge of the desk, works on whatever headset the
+viewer has". Cross-headset reach is a first-class reason to stay where we are.
 
 ---
 
