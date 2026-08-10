@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Garden } from './scene/Garden';
-import { useEcosystem, markVisited } from './state/ecosystemStore';
+import { useEcosystem, markVisited, flushObservations } from './state/ecosystemStore';
 import { DAY_MS, HOUR_MS } from './ecosystem/history';
 import { scrubBy } from './ecosystem/scrub';
 import { Timeline } from './Timeline';
@@ -50,6 +50,26 @@ export default function App() {
     const id = setInterval(beat, 2000);
     return () => clearInterval(id);
   }, [live, tick, poll]);
+
+  // The collector writes on a thirty-second schedule, which covers everything
+  // except the moment the page goes away — and that one is not a risk but a
+  // certainty. `pagehide` rather than `beforeunload` because the latter does not
+  // fire on mobile, where a tab is backgrounded and then reclaimed without ever
+  // being closed; `visibilitychange` catches the same thing one step earlier and
+  // costs a write nobody notices.
+  useEffect(() => {
+    const save = () => flushObservations();
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', onHidden);
+      save();
+    };
+  }, []);
 
   const nudge = useCallback(
     (deltaMs: number) => {

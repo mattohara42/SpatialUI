@@ -97,6 +97,41 @@ export function record(
   if (slot > history.latestSlot) history.latestSlot = slot;
 }
 
+/**
+ * Writes only into a slot nothing has written yet, and reports whether it wrote.
+ *
+ * This is the collector's rule, and it is a separate function rather than a flag
+ * on `record` because it is a claim about whose account of the past wins. A
+ * backfill is the source's *current* account of its own history and may carry
+ * corrections; a restored observation is only what this app happened to see. So
+ * the source wins wherever it still speaks, and the record we kept is worth
+ * something exactly where it has gone quiet — the days beyond its window, the
+ * plants it has stopped mentioning. Filling silence is the whole job.
+ *
+ * The physical index is the test rather than the slot number, because a ring
+ * index that already holds a different absolute slot holds one from inside the
+ * retained window, and overwriting it would drop a sample to add an older one.
+ */
+export function recordIfAbsent(
+  history: VitalsHistory,
+  timestamp: number,
+  vitals: Vitals,
+): boolean {
+  const slot = slotFor(history, timestamp);
+  if (slot < history.latestSlot - history.capacity) return false;
+
+  const i = ((slot % history.capacity) + history.capacity) % history.capacity;
+  if (history.slots[i] !== -1) return false;
+
+  history.slots[i] = slot;
+  history.vitality[i] = vitals.vitality;
+  history.activity[i] = vitals.activity;
+  history.maturity[i] = vitals.maturity;
+  history.trend[i] = vitals.trend;
+  if (slot > history.latestSlot) history.latestSlot = slot;
+  return true;
+}
+
 /** Vitals at a point in time, or null when that slot was never written. */
 export function sampleAt(
   history: VitalsHistory,
