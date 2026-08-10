@@ -211,7 +211,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-527 tests across twenty-seven files, `tsc --noEmit` clean, `vite build` succeeds.
+694 tests across thirty-eight files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts

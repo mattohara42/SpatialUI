@@ -234,9 +234,20 @@ transformed" to "lines changed", both channel-safe. Both are now built:
    dependency, and mounted *only* in table mode so the room view keeps the
    default render. The band function is pure and tested (`blurAmount`).
 
-Still open from this rung: **PBR normal/roughness maps** on bark and leaves,
-generated in `textures.ts` under the achromatic rule it already enforces. That is
-the natural next commit.
+Since shipped, completing this rung: **normal and roughness maps** on bark, turf,
+soil, and all timber (`normalTexture`/`roughnessTexture` in `textures.ts`), each
+derived from the same achromatic height field as the surface's albedo `map`, so
+the ridge the map darkens is the one the relief raises and the crevice it darkens
+is the one the roughness map matts. Channel-safe from both sides — a normal is a
+direction and a roughness is a scalar, neither a hue — and verified reading
+correctly under a midday sun. Both pure cores are tested (`normalPixels`,
+`roughnessPixels`).
+
+The material pass is now complete. What is *not* done, deliberately: relief and
+roughness on the **leaves** (they are tiny and flat-shaded, so the cost outruns
+the gain) and on the **metal props** (many small hand-coloured materials for a
+modest return). The next rung up the ladder is authored assets or post — mind the
+XR budget, now a settled target.
 
 What to hold back from that PR, deliberately: colour grading (spends the colour
 channel), authored assets (carry a deformation bill), and anything on the

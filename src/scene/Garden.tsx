@@ -35,7 +35,13 @@ import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets'
 import { plantingOf } from '../ecosystem/planting';
 import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
-import { liftForTexture, normalTexture, surfaceTexture, turfPixels } from './textures';
+import {
+  liftForTexture,
+  normalTexture,
+  roughnessTexture,
+  surfaceTexture,
+  turfPixels,
+} from './textures';
 
 /**
  * How far out the key lights sit. A directional light only needs a direction,
@@ -311,10 +317,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   // Relief on the ground so the lawn catches the low sun as a surface, not a
   // painted plane, at the grazing angle it is seen across all the way out.
   const turfRelief = useMemo(() => normalTexture(turfPx, turfTiles, 5), [turfPx]);
+  const turfRough = useMemo(() => roughnessTexture(turfPx, turfTiles, 0.97, 1), [turfPx]);
   useEffect(() => () => {
     turf.dispose();
     turfRelief.dispose();
-  }, [turf, turfRelief]);
+    turfRough.dispose();
+  }, [turf, turfRelief, turfRough]);
 
   const sunPosition = useMemo(
     () => scaled(daylight.sunDirection, LIGHT_DISTANCE),
@@ -426,6 +434,7 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
         <meshStandardMaterial
           map={turf}
           normalMap={turfRelief}
+          roughnessMap={turfRough}
           color={liftForTexture('#5c6e3a')}
           roughness={1}
         />

@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 675 tests across 34 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 694 tests across 38 files, `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
 Seven gardens. Three are real, in the sense that they come through the
@@ -35,6 +35,21 @@ that a live feed can be dropped into with nothing downstream changing. That swap
 is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
+
+- **The first graphics fidelity pass.** The plain look was always a choice, not a
+  ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
+  it channel-safe (nothing added competes with the health read). Leaves now
+  transmit light, so a backlit canopy glows and fades at dusk
+  (`scene/translucency.ts`); the bonsai table wears a tilt-shift depth of field
+  that makes the miniature read as a model (`scene/TiltShift.tsx`, three's own
+  compositor, no new dependency, table-mode only); and bark, turf, soil and all
+  timber carry **normal and roughness maps** derived from the same achromatic
+  height field as their albedo (`normalTexture`/`roughnessTexture` in
+  `textures.ts`), so the sun catches relief and highlights break up instead of
+  sliding over a painted plane. The material pass is complete; leaves and metal
+  props were left unmapped on purpose (they spend more than they return). The
+  settled decision recorded alongside: **XR stays a target**, so the constrained
+  frame budget governs and heavy always-on post stays off the room view.
 
 - **The bonsai table — the second grain of space**, which was the chosen next
   piece of work. History has two grains of time; the garden now has two grains of
@@ -380,7 +395,12 @@ all numeric and all publisher-fed. What is still unexercised:
 **Completion vocabulary.** Plants do not finish; tasks, goals, builds, and
 harvests do. Fruit and deadwood are the obvious candidates and `Produce.tsx`
 already draws fruit for other reasons. This is the gap that blocks a whole
-class of sources.
+class of sources — and it is now **planned in detail in `docs/completion.md`**:
+completion modelled as an *event* on the Blight pattern (a discrete terminal
+outcome carried as-of a timestamp, not a fifth health level), read as fruit for
+success and deadwood for failure, exercised first by a self-contained mock
+pipelines garden. The open decisions the owner should settle before code are
+listed there.
 
 **Cross-garden comparison.** One garden is live at a time, which is what stops
 green meaning two things at once, and that is right. But "how is the AFC West

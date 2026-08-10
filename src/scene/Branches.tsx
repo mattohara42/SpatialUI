@@ -3,7 +3,13 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
-import { barkPixels, liftForTexture, normalTexture, surfaceTexture } from './textures';
+import {
+  barkPixels,
+  liftForTexture,
+  normalTexture,
+  roughnessTexture,
+  surfaceTexture,
+} from './textures';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -62,10 +68,12 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
   const barkPx = useMemo(() => barkPixels(), []);
   const bark = useMemo(() => surfaceTexture(barkPx, [1, 2]), [barkPx]);
   const barkRelief = useMemo(() => normalTexture(barkPx, [1, 2], 7), [barkPx]);
+  const barkRough = useMemo(() => roughnessTexture(barkPx, [1, 2], 0.9, 1.1), [barkPx]);
   useLayoutEffect(() => () => {
     bark.dispose();
     barkRelief.dispose();
-  }, [bark, barkRelief]);
+    barkRough.dispose();
+  }, [bark, barkRelief, barkRough]);
 
   const scratch = useMemo(
     () => ({
@@ -154,8 +162,9 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
       <meshStandardMaterial
         map={bark}
         normalMap={barkRelief}
+        roughnessMap={barkRough}
         color={liftForTexture('#ffffff')}
-        roughness={0.9}
+        roughness={1}
         metalness={0}
       />
     </instancedMesh>
