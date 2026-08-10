@@ -33,7 +33,11 @@ export type PlantingType =
   | 'wildflower-meadow'
   | 'vegetable-rows'
   | 'vineyard'
-  | 'topiary';
+  | 'topiary'
+  // Added with the world garden, whose beds are places rather than categories
+  // and so want plantings that describe ground rather than taxonomy.
+  | 'palm-grove'
+  | 'savanna';
 
 /**
  * How plants stand within a bed. Layout reads this; it is spatial, not visual,
@@ -130,6 +134,26 @@ export const PLANTINGS: Record<PlantingType, PlantingSpec> = {
     live: true,
     // Spaced specimens on a neat grid, barely jittered — topiary is deliberate.
     arrangement: { columns: 3, spacing: 1.8, rowSpacing: 1.8, jitter: 0.03, heightScale: 0.72 },
+  },
+  'palm-grove': {
+    label: 'Palm grove',
+    invasive: false,
+    live: true,
+    // Widely spaced and tall: a palm is mostly trunk, so the crowns clear each
+    // other and the eye reads a colonnade rather than a canopy.
+    arrangement: { columns: 3, spacing: 1.95, rowSpacing: 2.05, jitter: 0.18, heightScale: 1.3 },
+  },
+  savanna: {
+    label: 'Savanna',
+    invasive: false,
+    live: true,
+    // Scattered specimens with ground between them, which is what savanna is.
+    // The heavy jitter matters more here than anywhere else: trees on a grid
+    // would read as an orchard, and the whole point is that they are not
+    // planted. Four columns rather than two, because the beds this serves hold
+    // up to eighteen — at two it was twenty metres of bed to walk down, and
+    // scattered reads from the jitter rather than from the row count.
+    arrangement: { columns: 4, spacing: 2.05, rowSpacing: 2.1, jitter: 0.55, heightScale: 1.0 },
   },
 };
 

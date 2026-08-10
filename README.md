@@ -31,10 +31,10 @@ a claim in a commit message.
 
 The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
 built through the real adapter → translation pipeline — alongside **Markets**,
-thirty-two holdings in eight sector beds through the same pipeline, and four
-mock gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick.
-It runs with no backend: both real sources are generated (see below), not
-fetched.
+thirty-two holdings in eight sector beds through the same pipeline, **World**,
+193 UN member states across twenty-two subregion beds, and four mock gardens
+(Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It runs with
+no backend: all three real sources are generated (see below), not fetched.
 
 > **Dev note:** Vite HMR on this project often serves stale code (component
 > state, memoized shader uniforms). If an edit doesn't show, hard-reload the
@@ -67,12 +67,14 @@ unfinished, and what is worth building next.
 src/
   adapters/    Input sources. `nfl/` is feed-shaped records (games with box
                scores, depth charts, injury reports); `market/` is closed bars,
-               fills as lots, halts, and a trading calendar. Both come with the
-               derivations that answer as of any moment. Neither knows what a
-               plant is.
+               fills as lots, halts, and a trading calendar; `world/` is dated
+               indicator releases, the country table, and land borders; `news/`
+               is articles, plus the extractor that turns a headline into a
+               record. All come with the derivations that answer as of any
+               moment. None knows what a plant is.
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
-               the garden and `market.ts` where a portfolio does — the only
-               places the mappings are decided.
+               the garden, `market.ts` where a portfolio does, and `world.ts`
+               where countries do — the only places the mappings are decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types, labels and
                emblems, history-as-a-series, and the raw-payload flattener
@@ -95,6 +97,50 @@ so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
 not a rebuild.
 
 ## What's built
+
+- **The world, as the third source — and the first one where a number can be
+  revised.** 193 UN member states, twenty-two UN subregions as beds, and the
+  first garden built on figures that are *published* rather than measured. It
+  was chosen because it breaks three things the first two sources had quietly
+  agreed on.
+
+  **Beds are no longer all the same size.** Both existing gardens are eight even
+  beds of four; the subregions hold between two countries and eighteen. The
+  two-row wrap that serves eight beds turns twenty-two into a sixty-metre strip
+  with the far end invisible from the near one, so past a dozen beds the layout
+  squares the garden off instead. Every existing garden's layout is untouched,
+  because in those the row *is* the reading.
+
+  **Scrubbing shows what was known, not what was true.** Growth is published
+  about seventy-five days after the quarter it describes and revised a month
+  later, so the same quarter carries two different values and which one you see
+  depends on where the cursor is. A plant therefore reads the figure that had
+  been published at the cursor, and steps on release dates rather than drifting.
+  Doing it the other way would mean the garden rewrote its own past every time a
+  statistical office changed its mind — the flat-line failure the history
+  buffers already refuse to commit, arriving by a different route.
+
+  **A headline is not a record.** Unrest and conflict do not come from the
+  generator; they come from a news feed through a new extraction layer
+  (`adapters/news/`), which is the first place in the project where the app
+  forms a *judgment* about its input rather than a calculation. It refuses to
+  guess: a headline naming two countries, or none, or reading like sport,
+  produces nothing at all. Precision over recall, because a miss costs a quiet
+  plant and a wrong attribution asserts something about a real country in a
+  panel that looks exactly like the ones showing measured numbers.
+
+  Conflict is a **blight**, never a vitality term. A country at war visibly
+  wilting reads powerfully and is the one thing this source must not do, because
+  vitality is a comparison and the app would then be ranking countries by war.
+  Every derived blight carries the dispatch it came from — headline, outlet,
+  date — and says out loud that it was simulated.
+
+  Countries, ISO codes, subregions, UN accession years, land borders and
+  approximate populations are real. Every indicator value and every event is
+  generated, the outlets are named "Simulated Wire" rather than borrowing a real
+  masthead, the links are on `.invalid`, and **which countries are shown in
+  conflict is decided by a hash** — hand-picking would mean taking a position on
+  which real places are at war, in invented data, in a public repository.
 
 - **The past stops being thrown away.** History used to be backfilled when the
   page loaded and discarded when it closed, so scrubbing back four months was a
@@ -313,10 +359,11 @@ than the one shift-drag was standing in for.
 ## What's next
 
 The design docs track the open work. Near-term candidates: a live adapter behind
-either the `NflSource` or `MarketSource` interface, which is the cheapest change
-with the largest payoff because the seam was built for it (this environment has
-no outbound network access to a sports API or a market data vendor, which is why
-both are generated); a third source deliberately unlike the two present ones,
-which are both thirty-two things in eight groups and starting to look like a
-mould; and a vocabulary for completion, since tasks and builds finish and plants
-do not.
+any of the `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource`
+interfaces, which is the cheapest change with the largest payoff because every
+one of those seams was built for it — this environment's proxy denies
+`api.worldbank.org`, `feeds.bbci.co.uk`, and `aljazeera.com` alike, which is why
+all of them are generated; **traversal**, which the world garden has now made
+urgent rather than theoretical, since 193 plants across thirty-five by forty-six
+metres is more house than anyone wants to walk; and a vocabulary for completion,
+since tasks and builds finish and plants do not.

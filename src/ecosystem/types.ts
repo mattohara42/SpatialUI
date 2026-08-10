@@ -17,7 +17,8 @@ export type Domain =
   | 'security'
   | 'markets'
   | 'sports'
-  | 'learning';
+  | 'learning'
+  | 'geopolitics';
 
 /**
  * Where the node sits in the hierarchy.

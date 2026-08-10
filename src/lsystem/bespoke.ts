@@ -170,6 +170,114 @@ function fruitingShoot(b: Builder, from: Vec3, rng: Rng, params: TurtleParams): 
   }
 }
 
+/**
+ * A palm: a bare leaning trunk with a crown of arching fronds at the top.
+ *
+ * Bespoke for the same reason the vine and the topiary are — it is not
+ * self-similar. A palm has no branches at all: one unbranched stem and a rosette
+ * of fronds, which is the opposite of what a rewriting grammar produces, and any
+ * L-system coaxed into the shape would be a grammar with the recursion turned
+ * off pretending to be a tree.
+ *
+ * The wilt read is the interesting part. A tree sheds to bare twigs; a palm
+ * loses whole fronds and the survivors droop further, so a sick palm is a short
+ * ragged crown rather than a skeleton. That keeps it clear of the grey of
+ * staleness in the same way the topiary's shagginess does, which is what a new
+ * form has to earn before it is allowed into the vocabulary.
+ */
+export function generatePalm(rng: Rng, params: TurtleParams): RawGeometry {
+  const b = new Builder();
+
+  // Tall unit space, as the vine's comment explains: generate.ts normalizes
+  // height to growthScale afterwards, so working small here would shrink the
+  // fronds rather than the plant.
+  const trunkH = 6.2;
+  const steps = 7;
+  // A palm leans, and the lean is fixed per plant rather than per segment so the
+  // trunk curves smoothly instead of wandering.
+  const lean = signed(rng) * 0.16;
+  let r = params.baseRadius * 0.85;
+  let pos: Vec3 = [0, 0, 0];
+
+  for (let i = 0; i < steps; i++) {
+    const t = (i + 1) / steps;
+    const next: Vec3 = [
+      pos[0] + lean * t * 0.9,
+      pos[1] + trunkH / steps,
+      pos[2] + lean * t * 0.35,
+    ];
+    b.segment(pos, next, r, r * 0.93, 0);
+    r *= 0.93;
+    pos = next;
+  }
+
+  const crown = pos;
+
+  // Fronds radiate evenly around the crown by the golden angle, so no amount of
+  // thinning leaves a bald side.
+  const fronds = 11;
+  for (let i = 0; i < fronds; i++) {
+    if (rng() >= params.leafSurvival) continue;
+    frond(b, crown, i * 2.399963 + signed(rng) * 0.2, rng, params);
+  }
+
+  return b.build();
+}
+
+/**
+ * One frond: a rachis arcing up and out of the crown, then falling away, with
+ * leaf instances strung along it.
+ *
+ * Drawn as several leaves along an arc rather than one stretched instance,
+ * because a frond read at four metres is a curve and a single quad is a plank.
+ */
+function frond(
+  b: Builder,
+  crown: Vec3,
+  azimuth: number,
+  rng: Rng,
+  params: TurtleParams,
+): void {
+  const out: Vec3 = [Math.cos(azimuth), 0, Math.sin(azimuth)];
+  const length = 2.5 + rng() * 0.7;
+  const segments = 4;
+
+  let p = crown;
+  let r = params.baseRadius * 0.22;
+
+  for (let i = 0; i < segments; i++) {
+    const t = (i + 1) / segments;
+    // Up out of the crown, then over and down: the arc every frond makes.
+    const rise = Math.sin(t * Math.PI * 0.62) * 1.15 - t * t * 1.5;
+    const reach = (length / segments) * (1 + t * 0.25);
+
+    const next: Vec3 = [
+      p[0] + out[0] * reach,
+      crown[1] + rise,
+      p[2] + out[2] * reach,
+    ];
+    b.segment(p, next, r, r * 0.75, 1);
+    r *= 0.75;
+
+    // Leaflets down both sides of the rachis, which is what makes it read as a
+    // frond rather than a bare rib.
+    for (const side of [1, -1]) {
+      const dir = norm([
+        out[0] * 0.55 + -out[2] * side * 0.75,
+        -0.35,
+        out[2] * 0.55 + out[0] * side * 0.75,
+      ]);
+      b.leaf(
+        [next[0] + dir[0] * 0.22, next[1] + dir[1] * 0.12, next[2] + dir[2] * 0.22],
+        dir,
+        leafSize(params, rng) * (1.25 - t * 0.4),
+        1,
+      );
+    }
+    p = next;
+  }
+}
+
 export type TopiaryShape = 'sphere' | 'cone' | 'cube' | 'spiral';
 const SHAPES: TopiaryShape[] = ['sphere', 'cone', 'cube', 'spiral'];
 

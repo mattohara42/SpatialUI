@@ -42,6 +42,10 @@ const SHAPES: Record<LeafKind, LeafShape> = {
   // A petal: rounded and slightly cupped, brighter than a leaf. A cluster of
   // these fanned around a stem tip reads as a flower head.
   bloom: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [1.0, 0.55, 1.0], roughness: 0.45 },
+  // A palm leaflet: much longer than it is wide and nearly flat. Strung in pairs
+  // down an arcing rachis (see `generatePalm`), a run of these reads as one
+  // frond rather than as a line of separate leaves.
+  frond: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.28, 2.3, 0.1], roughness: 0.6 },
 };
 
 /**

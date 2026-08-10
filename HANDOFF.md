@@ -12,26 +12,50 @@ are still open.
 
 ## State
 
-Green. 578 tests across 29 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 650 tests across 32 files, `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
-Six gardens. Two are real, in the sense that they come through the
+Seven gardens. Three are real, in the sense that they come through the
 adapter → translation pipeline from feed-shaped records:
 
 | garden | beds | plants | source |
 | --- | --- | --- | --- |
 | **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season |
 | **Markets** | 8 sectors | 32 holdings | `adapters/market` — seeded tape |
+| **World** | 22 UN subregions | 193 states | `adapters/world` + `adapters/news` |
 | Infrastructure, Vault, Threats, Portfolio | 4 mock gardens | | `mock/` — drift tick |
 
-Both real sources are generated rather than fetched. This container has no
-outbound network access to a sports API or a market data vendor — verified, and
-the agent proxy itself is healthy, so it is policy and not a broken setup. Each
-implements a one-method interface (`NflSource`, `MarketSource`) that a live
-feed can be dropped into with nothing downstream changing. That swap is the
-single highest-value thing an environment with network access could do.
+All three real sources are generated rather than fetched. This container has no
+outbound access to a sports API, a market data vendor, the World Bank, or a news
+wire — verified per host (`api.worldbank.org`, `feeds.bbci.co.uk`,
+`aljazeera.com` all answer 403 at the proxy CONNECT), and the agent proxy itself
+is healthy, so it is policy and not a broken setup. Each implements a
+one-method interface (`NflSource`, `MarketSource`, `WorldSource`, `NewsSource`)
+that a live feed can be dropped into with nothing downstream changing. That swap
+is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
+
+- **The world as a third source**, which was the item at the top of this list,
+  and it was taken deliberately unlike the other two rather than as a third
+  instance of them. 193 UN members, twenty-two uneven beds (2 to 18), indicators
+  that get revised, and events derived from news rather than generated.
+
+  Four things it settled, all written up in `DESIGN.md` and `ARCHITECTURE.md`:
+  **as-of split in two** (what was published versus what it describes, so a
+  scrub shows what was *known*); **a layer under translation** (`extract.ts`,
+  the first code here that judges rather than calculates, and the first that has
+  to keep its evidence); **conflict is a blight, never a vitality term**; and
+  **size is maturity**, which is where "a big country should be a big plant"
+  belongs without spending a channel.
+
+  Two things to be careful with if you touch it. The provenance rules are
+  load-bearing rather than decorative — `UnrestEvent.article` is a required
+  field so an event cannot exist without the sentence behind it, and the
+  simulated marker on blights derives from `provenance.live` so a live adapter
+  drops it by being live. And which countries are shown in conflict is chosen by
+  a hash on purpose; hand-picking would mean this repo taking a position on
+  which real places are at war, in invented data.
 
 - **The collector**, which was the item at the top of this list. History was
   backfilled at module load and thrown away on reload, so the archive tier could
@@ -218,25 +242,46 @@ addition to the current path rather than a replacement for it.
 
 Roughly in order of value for effort, with the reason rather than just the idea.
 
-**A live adapter behind either interface.** The highest-value single change, and
-the cheapest, because the seam was built for it: implement `NflSource` or
-`MarketSource` against a real feed and nothing below changes. It also converts
-every "seeded fiction" caveat in the docs into a real claim. Needs network
-access this environment does not have.
+**A live adapter behind any of the four interfaces.** The highest-value single
+change, and the cheapest, because every seam was built for it: implement
+`NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
+and nothing below changes. It also converts every "seeded fiction" caveat in the
+docs into a real claim. Needs network access this environment does not have.
 
-**A third source, deliberately unlike both.** The two current ones are both
-32 things in 8 groups with numeric axes, which is starting to look like a mould
-rather than a coincidence. Something with a genuinely different shape would test
-the model harder than a third instance of the same one:
+`NewsSource` is the one to do first if you get network, and not because it is
+the easiest. It is the only source whose generated half is *text about real
+places*, so it carries caveats the other two do not need, and it is the only one
+where going live improves the honesty of the app rather than only its accuracy.
+Two things to settle before it ships: the outlets' terms on storing their text,
+and whether the keyword classifier is good enough on real copy — it was tuned
+against generated headlines, which is a much easier problem than a real wire.
 
-- *Personal knowledge / notes* — a graph with real link topology rather than
-  synthetic grafts, and where "maturity" means something entirely different.
-  Tests whether the model survives a domain with no numbers in it.
+**Traversal, which is no longer theoretical.** The world garden is 193 plants
+across roughly 35 × 46 metres, and walking is a scroll along a path. There is no
+aggregation at distance and no way to stand at bed level, though the rollups
+exist in the data. This was a deferred question when the biggest garden held
+thirty-two plants; it is now the first thing you notice.
+
+The cheapest real win alongside it: **tag textures built lazily**. All 193 are
+built on entering the garden, at 588 × 210 each — about 95MB before mipmaps —
+and only a handful are ever inside the ~9m fade radius. Building on approach and
+caching would cut that to a few megabytes. Note this was *not* the CPU
+bottleneck it was predicted to be: building all 193 canvases measures 135ms.
+It is a memory and upload cost, not a stall.
+
+**A fourth source, for the shapes still untested.** The three present ones are
+all numeric and all publisher-fed. What is still unexercised:
+
+- *Personal knowledge / notes* — a graph with real link topology and where
+  "maturity" means something entirely different. Tests whether the model
+  survives a domain with no numbers in it. The world garden's land borders are
+  the closest thing to real topology so far, but they are static.
 - *CI pipelines* — where things genuinely complete, which the vocabulary has no
   word for. Recorded as an open risk: tasks end, plants do not.
 - *Prometheus* — the archetype the whole idea was built for. Deliberately not
-  chosen twice now, because the mock gardens already cover infrastructure and it
-  needs a live server to be interesting. Worth doing the moment there is one.
+  chosen three times now, because the mock gardens already cover infrastructure
+  and it needs a live server to be interesting. Worth doing the moment there is
+  one.
 
 **Completion vocabulary.** Plants do not finish; tasks, goals, builds, and
 harvests do. Fruit and deadwood are the obvious candidates and `Produce.tsx`
