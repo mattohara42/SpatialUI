@@ -377,6 +377,15 @@ needs design before code — the constraint it bumps into is deliberate.
 **A second grain of *space*** was "the bonsai table" above — now built, so it has
 left this list.
 
+**A graphics fidelity pass.** The plain look is a choice, not a ceiling: the same
+renderer can look far better with no change of engine, and the biggest jump —
+leaf translucency, PBR maps, a tilt-shift depth of field on the bonsai table — is
+a materials-and-post pass that touches none of the health reads. Written up in
+`docs/graphics.md`, including where Blender fits (authoring assets, not a
+runtime), why Unreal is a different product rather than a next step, and the one
+fork that caps everything: whether XR stays a target. The channel budget is the
+constraint it all turns on — decoration is only affordable while it means nothing.
+
 **Sound.** `Blight` and `Vitals` both carry fields whose comments mention
 spatial audio, and there is none. Peripheral awareness is exactly the case where
 sound earns its place — you notice a change without looking — and it is the one
