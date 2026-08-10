@@ -372,8 +372,8 @@ reading of a node the garden has already described. It reads everything through
 the cursor, so scrubbing with one open moves it — the numbers, the trend, and
 the end of the sparkline are the same moment the sky is showing. And it hangs in
 the air beside its plant rather than being welded to the corner of the screen,
-because `src/xr/` exists to keep this project honest and a head-locked card is
-the one interface a headset cannot have.
+because a headset is a stated target and a head-locked card is the one interface
+a headset cannot have.
 
 One rule inside it is worth stating on its own: **a gap in the data is drawn as
 a gap.** The sparkline breaks where nothing was recorded rather than joining the
@@ -401,6 +401,28 @@ for the tabletop being the default.
 
 Scrubbing is the sun moving across the sky. Longer spans are seasons. No slider,
 no scrub bar, nothing borrowed from a video player.
+
+**One thing was missing from that, and it took a while to name.** A sun is a
+superb control and a hopeless *measure*: it says the hour, the light and the
+direction of travel at once, and it cannot say how much past there is. Dragging
+back, there was no way to know whether the record ran out in an hour or in four
+months, and when it did run out the cursor simply stopped with no account of
+itself. The edge of the record is the most consequential fact about a scrub —
+past it is history nobody kept, which is the same failure as a flat line of
+plausible numbers — and it was the one thing invisible.
+
+So the strip in the corner (`Timeline.tsx`) is not the slider coming back. It
+draws an **extent**, not a transport: how far the record goes, the point where
+hours become days, and a mark for where you are standing. No play head, no
+buttons, nothing that implies a thing running along it. That it can be dragged
+is a consequence of showing a position, not the reason for it, and the sun keeps
+the gesture the design is built around.
+
+Its scale is linear in time, which leaves the hourly stretch a thin slice of a
+season-long strip. That is the honest shape and it is kept: a broken or
+piecewise axis would let the strip imply the two tiers are comparable spans, when
+the entire reason for drawing the boundary is that they are not. Hours belong to
+the sun and the arrow keys, where they already were.
 
 The day is built. `scene/daylight.ts` turns a timestamp into a sun direction and
 a full palette, and dragging the sun inverts that: the pointer ray is projected

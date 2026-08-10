@@ -3,6 +3,8 @@ import type { EcosystemNode, EcosystemState } from '../ecosystem/types';
 import { record } from '../ecosystem/history';
 import { changedSince, setStaleSchedule, type Change } from '../ecosystem/staleness';
 import { SCRUB_WINDOW_MS, windowFor } from '../ecosystem/scrub';
+import { reachOf } from '../ecosystem/timeline';
+import type { VitalsHistory } from '../ecosystem/history';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
 import { NFL_GARDEN_ID } from '../translation/nfl';
 import { SOURCES, dueSources } from './sources';
@@ -21,6 +23,12 @@ interface EcosystemStore extends EcosystemState {
    * on every pointer move and the answer only changes when the garden does.
    */
   scrubWindowMs: number;
+  /**
+   * How much of that window the *fine* buffer covers — where hours become days.
+   * Held for the same reason and computed in the same pass, because both are
+   * answers about the same garden's record and walking it twice would be silly.
+   */
+  fineWindowMs: number;
   /**
    * The plant whose detail is open, or null.
    *
@@ -95,15 +103,28 @@ function composeEcosystem(now = Date.now()): EcosystemState {
  * live, which is the failure where the garden shows you today and lets you
  * believe it is March.
  */
-function scrubWindowFor(state: EcosystemState, gardenId: string | null): number {
-  if (!gardenId) return SCRUB_WINDOW_MS;
-  const now = Date.now();
+function windowsFor(
+  state: EcosystemState,
+  gardenId: string | null,
+  now = Date.now(),
+): { scrubWindowMs: number; fineWindowMs: number } {
+  if (!gardenId) return { scrubWindowMs: SCRUB_WINDOW_MS, fineWindowMs: 0 };
+
   let window = Infinity;
+  const fine: Array<VitalsHistory | undefined> = [];
   for (const node of Object.values(state.nodes)) {
     if (node.gardenId !== gardenId || node.kind !== 'plant') continue;
     window = Math.min(window, windowFor(state.archive[node.id], now));
+    fine.push(state.history[node.id]);
   }
-  return Number.isFinite(window) ? window : SCRUB_WINDOW_MS;
+
+  return {
+    scrubWindowMs: Number.isFinite(window) ? window : SCRUB_WINDOW_MS,
+    // Same shortest-reach rule, applied to the other tier. `reachOf` returns 0
+    // for a garden where any plant keeps no hourly record, which is how the
+    // timeline says "no fine grain here" rather than guessing one.
+    fineWindowMs: fine.length ? reachOf(fine, now) : 0,
+  };
 }
 
 const initial = composeEcosystem();
@@ -111,7 +132,7 @@ const initial = composeEcosystem();
 export const useEcosystem = create<EcosystemStore>((set, get) => ({
   ...initial,
   lastViewedAt: {},
-  scrubWindowMs: scrubWindowFor(initial, initial.activeGardenId),
+  ...windowsFor(initial, initial.activeGardenId),
   selectedId: null,
 
   enterGarden: (gardenId) =>
@@ -119,7 +140,7 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
       activeGardenId: gardenId,
       cursor: null,
       selectedId: null,
-      scrubWindowMs: scrubWindowFor(state, gardenId),
+      ...windowsFor(state, gardenId),
       // Stamped on the way out rather than on the way in, so the first render
       // after entering still has the previous visit to compare against.
       lastViewedAt: { ...state.lastViewedAt },
