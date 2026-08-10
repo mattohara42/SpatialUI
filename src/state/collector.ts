@@ -225,9 +225,19 @@ export function createCollector(options: CollectorOptions = {}): Collector {
         storage.setItem(key, text);
         writtenBytes = text.length;
         lastWritten = `${record.savedAt}:${text.length}`;
-        currentIntervalMs = Math.min(
-          MAX_WRITE_INTERVAL_MS,
-          Math.max(intervalMs, (clock() - started) * WRITE_DUTY),
+        // Whole milliseconds. `clock()` is fractional, and a fractional
+        // interval compared against `at - lastWriteAt` is a coin toss: `at` is
+        // an epoch around 1.78e12, where a double's spacing is about 0.0002ms,
+        // so `(lastWriteAt + interval) - lastWriteAt` can come back a hair under
+        // `interval` and the write silently never fires. Which way it lands
+        // depends on the fraction, which is to say on nothing. Sub-millisecond
+        // precision was meaningless here anyway — the clock feeding `note` is
+        // `Date.now()`.
+        currentIntervalMs = Math.ceil(
+          Math.min(
+            MAX_WRITE_INTERVAL_MS,
+            Math.max(intervalMs, (clock() - started) * WRITE_DUTY),
+          ),
         );
         return true;
       } catch {

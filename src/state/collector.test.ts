@@ -121,6 +121,25 @@ describe('createCollector', () => {
     expect(storage.writes).toBe(writes + 1);
   });
 
+  /**
+   * Regression. The derived interval used to carry a fraction of a millisecond,
+   * and `lastWriteAt + interval` cannot represent that exactly at epoch scale —
+   * a double's spacing near 1.78e12 is about 0.0002ms — so the subtraction came
+   * back a hair under the threshold and the write never fired. It depended on
+   * the fraction, which is to say on luck, and it passed locally and failed on
+   * CI.
+   */
+  it('derives a whole number of milliseconds, so the deadline is representable', () => {
+    const storage = new FakeStorage();
+    storage.writeDelayMs = 7;
+    const collector = createCollector({ storage, now: NOW });
+    collector.flush(NOW);
+
+    expect(Number.isInteger(collector.intervalMs)).toBe(true);
+    const deadline = NOW + collector.intervalMs;
+    expect(deadline - NOW).toBeGreaterThanOrEqual(collector.intervalMs);
+  });
+
   it('never backs off past its cap, however slow the store is', () => {
     const storage = new FakeStorage();
     // Just past MAX_WRITE_INTERVAL_MS / WRITE_DUTY, which is where the cap bites.
