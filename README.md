@@ -185,9 +185,10 @@ not a rebuild.
   health signal.
 - **You stand inside it.** The viewer is on the path under the glass at eye
   height, not outside looking in — the beds are either side, the glazing bars
-  are overhead, and the hills are seen through the wall. The orbit is clamped by
-  the walls, the nearest plant, and the eaves, so you cannot scroll back out
-  into the field by accident: being indoors is a constraint rather than a
+  are overhead, and the hills are seen through the wall. You drag to look around
+  — including straight up through the roof — and scroll to walk, kept on the path
+  between the planting and the glass so you cannot wander out into the field by
+  accident: being indoors is a constraint rather than a
   starting position. The cost is that a garden's apparent size is no longer
   fixed — a three-bed garden and the league differ by how much house is around
   you, which is the difference a person walking in would get.
@@ -262,26 +263,28 @@ not a rebuild.
 
 ### Reaching the sun
 
-Dragging the sun is the gesture the concept is about, and on desktop it is only
-half reachable. The camera stands inside the house and orbits a target at plant
-height, so it is always looking somewhat down at the beds: the sky is visible
-through the roof and the walls, but the upper sky where the sun spends most of
-the day cannot be pointed at with a mouse. Standing inside did not cause this —
-the old outdoor camera had the same limit for the same reason — but it does not
-fix it either, and it removes the one workaround the field allowed, which was
-backing away until the sky came into frame.
+Dragging the sun is the gesture the concept is about, and for a long time it was
+only half reachable on a desktop. The camera orbited a target at plant height, so
+it always looked somewhat down at the beds: the upper sky, where the sun spends
+most of the day, could not be pointed at with a mouse. Standing inside did not
+cause that — the old outdoor camera had the same limit for the same reason — but
+it removed the one workaround the field allowed, which was backing away until the
+sky came into frame.
 
-The glass itself is not in the way: it carries no pointer handlers, so R3F never
-raycasts it and the sun, the moon, and their grab handles stay reachable straight
-through the roof. Swing the camera toward a low sun and you can take hold of the
-disc directly. Otherwise **shift-drag anywhere** does the same thing, and the sun
-still visibly moves under the drag. Left and right arrows step an hour (shift,
-six); up and down step a day (shift, a week); escape returns to live. A drag
-commits to hours or to seasons on its first movement and holds it, so a diagonal
-never means both.
+The camera no longer orbits. **Drag to look** around from where you stand, pitch
+included, all the way to straight up; **scroll to walk** along the path. Look up
+and the sun is there to be taken hold of, at midsummer noon as much as at dusk.
 
-In a headset you look up and grab it, which is the interaction the shift-drag is
-standing in for.
+The glass is not in the way and never was: it carries no pointer handlers, so R3F
+never raycasts it and the sun, the moon, and their grab handles are reachable
+straight through the roof. **Shift-drag anywhere** still does the same scrub
+without aiming at anything, and the sun visibly moves under it. Left and right
+arrows step an hour (shift, six); up and down step a day (shift, a week); escape
+returns to live. A drag commits to hours or to seasons on its first movement and
+holds it, so a diagonal never means both.
+
+In a headset you look up and grab it, which is now the same interaction rather
+than the one shift-drag was standing in for.
 
 ## What's next
 

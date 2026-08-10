@@ -126,6 +126,13 @@ src/
     types.ts         What the scene is handed per plant: geometry, place, tint.
     Garden.tsx       The garden itself: assembles the scene from store state
                      and owns the rig every other component draws under.
+    look.ts          Standing and turning, as arithmetic: where a drag leaves
+                     the view, and where a step lands on the path. The pitch
+                     limit reaches the zenith on purpose.
+    look.test.ts
+    StandControl.tsx The camera as a person in a greenhouse — drag to turn,
+                     scroll to walk. Registers as the default controls so the
+                     sun drag can still suspend it.
     Branches.tsx     Every branch in the garden in a single InstancedMesh, so
                      draw calls do not scale with plant count.
     Grafts.tsx       Root grafts as curves dipping under the soil. Merged per
@@ -195,7 +202,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-510 tests across twenty-six files, `tsc --noEmit` clean, `vite build` succeeds.
+527 tests across twenty-seven files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -325,6 +332,46 @@ computations, because each one is far cheaper: a club's reading walks its whole
 season of games, while an instrument's is a binary search into a sorted bar list
 plus a couple of short window scans. The lesson is that the memo was never the
 load-bearing part — the derivations being O(log n) in the record is.
+
+## Standing, rather than orbiting
+
+The scene had one camera gesture and it was an orbit. That is a good way to
+examine an object and a poor way to be somewhere, and it had one consequence
+nobody could work around: **an orbit cannot look up.** The aim is pinned to the
+target, so the upper sky is never in frame — and the sun is the time control.
+For most of the day the object you scrub time with was unreachable by a desktop
+pointer. Standing inside the greenhouse neither caused that nor cured it; it
+removed the last escape, which had been backing away until the sky came into
+view.
+
+`StandControl` changes which end is fixed. An orbit fixes the target and moves
+the eye; this fixes the eye and moves the aim, which is what a person does. Drag
+turns, scroll walks, and the pitch limit reaches the zenith on purpose —
+anything short of overhead would leave the sun unreachable on exactly the
+midsummer days it climbs highest. Verified end to end: from a look-up position
+the sun can be grabbed through the roof and dragged, and the cursor moves.
+
+Three things it had to keep working, all of them easy to break:
+
+**The controls handshake.** `SunScrub` finds the camera controls via
+`useThree(state => state.controls)` and clears `.enabled` for the length of a
+grab, so the sun drag does not also swing the camera. A replacement has to
+register in the same place and honour the same flag, or the two gestures fight
+over one pointer.
+
+**Framing on entry, and only on entry.** The old `Framing` component carried a
+comment warning against a camera that "snatches itself back every two seconds",
+and the effect keying it was `[view]` — an object rebuilt from the node map, so a
+new one arrives on every telemetry tick. The orbit tolerated that by accident:
+`update()` recomputed the camera from its own spherical state, so re-setting the
+position was a no-op. Here the position *is* the state, so the same code reset
+the view every two seconds and looking up was impossible to hold. It is keyed on
+the viewpoint's values now, not the object.
+
+**Containment.** The path — between the planting and the glass — is what keeps
+you indoors, and `walk` clamps to it. Walking into the beds slides you along
+them rather than stopping dead, and a long enough stride crosses to the far path,
+because both are things a person can do.
 
 ## Staleness is a schedule, not a duration
 
@@ -681,12 +728,14 @@ hit rate and scrubbing costs less than a frame.
     planting.
 
     Being inside is not a starting position but a constraint, and the clamps are
-    the substance of it. A wheel that carried the camera out through the glass
-    would undo the whole thing in one gesture, so the orbit is bounded by the
-    nearer of the two walls, by the nearest plant coming in, and by the eaves
-    going up. The arithmetic lives in `scene/greenhouse.ts` with the rest of the
-    proportions, because the failure mode is a camera inside a wall and that is
-    a claim a test can settle.
+    the substance of it. A walk that carried you out through the glass would undo
+    the whole thing in one gesture, so the standing position is held between the
+    nearer of the two walls and the planting — which together are the path. The
+    arithmetic lives in `scene/greenhouse.ts` with the rest of the proportions,
+    because the failure mode is a camera inside a wall and that is a claim a test
+    can settle. The upward clamp that used to be here is gone with the orbit: a
+    viewer who stands cannot rise into the roof, because walking never changes
+    eye height.
 
     What it costs: the apparent size of a garden is no longer constant. A three
     bed garden and the league now differ by how much house is around you rather
@@ -770,14 +819,6 @@ dry-run, and the audit record belong server side where a hand-tracking misfire
 cannot reach them.
 
 ## Open risks
-
-**The sun is harder to reach from inside the greenhouse.** An orbit control aims
-at its target, so the upper sky was never pointable; standing indoors did not
-cause that but did remove the workaround of backing away until the sky came into
-frame. Shift-drag is the stand-in and the gesture the whole concept rests on
-deserves better: a look control that can pitch up without orbiting. The glass is
-already clear of it — panes carry no pointer handlers, so R3F never raycasts
-them.
 
 Pruning shears firing a webhook means a hand gesture triggers a destructive
 production action, and hand tracking misfires. Before that touches a real
