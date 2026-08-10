@@ -100,6 +100,16 @@ not a rebuild.
 
 ## What's built
 
+- **The first graphics pass: light through leaves, and a model on the table.**
+  Leaves now transmit light — a backlit canopy glows toward the sun and fades at
+  dusk (`scene/translucency.ts`), a lighting response tinted by the sun rather
+  than a hue the plant carries, so it stays clear of the channel budget. And the
+  bonsai table wears a **tilt-shift depth of field** (`scene/TiltShift.tsx`),
+  the shallow-focus band that makes a shrunk garden read as a physical model —
+  mounted only in table mode, on three's own compositor with no new dependency.
+  Both are the first rung of the fidelity ladder in [docs/graphics.md](docs/graphics.md),
+  which also records the settled decision that XR stays a target.
+
 - **The garden on a table — a second grain of space.** History has two grains of
   *time* (hourly for a week, daily for twenty); the garden had one grain of
   *space*, standing on the path, and this is the second. Press `t` (or the
