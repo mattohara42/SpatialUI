@@ -12,8 +12,8 @@ are still open.
 
 ## State
 
-`main` is green. 510 tests across 26 files, `tsc --noEmit` clean, `vite build`
-clean, and CI runs all three on every push and every pull request. 90 tracked
+`main` is green. 527 tests across 27 files, `tsc --noEmit` clean, `vite build`
+clean, and CI runs all three on every push and every pull request. 92 tracked
 source files.
 
 Six gardens. Two are real, in the sense that they come through the
@@ -55,6 +55,12 @@ single highest-value thing an environment with network access could do.
   hours become days, and where you are standing in it. Deliberately a provenance
   display and not the scrub bar `SunScrub` argues against: the sun keeps the
   gesture.
+- **Standing instead of orbiting.** The last open interaction problem: an orbit
+  aims at its target, so the upper sky was never in frame and the sun — which is
+  the time control — could not be pointed at for most of the day. `StandControl`
+  fixes the eye and moves the aim instead. Drag to look, scroll to walk, pitch to
+  the zenith. Verified end to end at midsummer noon, sun 78° up: look up, grab it
+  through the roof, time scrubs.
 - **Two false claims corrected**, both found by checking the code rather than by
   a test. Open work item 2 said the inspection panel did not exist; `Detail.tsx`
   has been doing the whole job — vitals, both sparklines, blights, the flattened
@@ -116,6 +122,15 @@ those to learn a bed height. `FLOOR_Y` is negative for this reason.
 which is why the sun and moon are grabbable through the roof. Add a hover
 handler to a pane and you break the time scrub.
 
+**The framing effect is keyed on the viewpoint's values, not the object.**
+`view` is rebuilt from the node map, so a new object with identical numbers
+arrives on every telemetry tick. The orbit tolerated that by accident — its
+`update()` recomputed the camera from its own spherical state, so re-setting the
+position did nothing — but `StandControl` holds the position *as* its state, and
+keying on the object resets your view every two seconds. Looking up becomes
+impossible to hold. The old `Framing` comment warned about exactly this and the
+old code did it anyway.
+
 **An axis endpoint is the worst case that can really occur, not the arithmetic
 floor.** Half a league is below .500 by construction; mapping that straight onto
 vitality put half the garden into wilt, and wilt means *in trouble*, not
@@ -129,23 +144,7 @@ plausible numbers is indistinguishable from data.
 
 ## Open work, in the order I would take it
 
-### 1. A look control that does not orbit
-
-The sun is the time scrub, and on desktop most of the day it cannot be pointed
-at, because an orbit control aims at its target and the upper sky is out of
-frame. Standing inside the greenhouse did not cause this — the outdoor camera
-had the same limit — but it removed the workaround of backing away until the sky
-came into view.
-
-Wanted: drag to look around from a fixed standing position, pitch included, so
-you can look up through the roof and take hold of the sun the way you would in a
-headset. Two constraints. `SunScrub` finds the camera controls via
-`useThree(state => state.controls)` and toggles `.enabled`, so a replacement
-must register itself the same way (`makeDefault`) or the shift-drag will fight
-it. And the existing orbit clamps in `viewpointFor` — walls, nearest plant,
-eaves — are what keep the viewer indoors; a new control needs its own equivalent.
-
-### 2. A collector
+### 1. A collector
 
 The archive tier can hold months and nothing is recording them. History is
 backfilled at module load and then lives only as long as the tab. A collector is
@@ -159,7 +158,7 @@ holds the schedule, the pollability flag, and the "is anything owed" scan, so a
 collector is that loop moved somewhere it can outlive a page — and `LiveSource`
 is the shape it would want anyway.
 
-### 3. Bound the geometry cache
+### 2. Bound the geometry cache
 
 51MB is affordable, unbounded growth is not. Wants an LRU keyed on node id and
 vitality bucket. Recorded as a risk since before the scrub shipped.

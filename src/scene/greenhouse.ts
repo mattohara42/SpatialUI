@@ -176,26 +176,23 @@ export function roofHeightAt(shell: Shell, fromWall: number): number {
 export const EYE = 1.62;
 
 /**
- * Clear metres kept between the viewer and the glass, and the closest the orbit
- * may pull in to a plant.
+ * Clear metres kept between the viewer and the glass, and the closest they may
+ * come to a plant.
  *
- * The far clamp is what actually keeps you indoors. Standing inside once is a
- * starting position and nothing more: the first scroll of a wheel would put the
- * camera through the wall and back out in the field, and a room you can leave by
- * accident is not a room. The near clamp stops the same wheel burying the lens
- * in a trunk.
+ * Together these two are the path, and the far one is what actually keeps you
+ * indoors. Standing inside once is a starting position and nothing more: a
+ * single hard walk would put you through the wall and out in the field, and a
+ * room you can leave by accident is not a room. The near one stops the same walk
+ * ending up inside a trunk.
  */
 const WALL_CLEARANCE = 0.6;
 const NEAREST = 1.2;
 
-/** Headroom left under the eaves, so rising never clips through the roof. */
-const ROOF_CLEARANCE = 0.3;
-
 /**
- * What the viewer looks at: the middle of the planting, a plant's own height up.
- * Aiming at the floor would tip the whole house downward and fill the view with
- * soil; aiming at the ridge would make a building the subject, and the building
- * is not the thing being read.
+ * What the viewer faces on arrival: the middle of the planting, a plant's own
+ * height up. Aiming at the floor would tip the whole house downward and fill the
+ * view with soil; aiming at the ridge would make a building the subject, and the
+ * building is not the thing being read.
  */
 const TARGET_Y = 1.0;
 
@@ -203,14 +200,21 @@ const TARGET_Y = 1.0;
 export interface Viewpoint {
   /** Camera position, world space — soil surface is y = 0, floor is below it. */
   position: [number, number, number];
-  /** Orbit target: the middle of the planting. */
+  /** What they are facing on arrival: the middle of the planting. */
   target: [number, number, number];
-  /** Orbit radius limits. The far one is the wall. */
+  /**
+   * The ring of floor they may walk on. The far one is the glass, the near one
+   * is the planting.
+   *
+   * There were two more limits here, on how far an orbit could swing up and
+   * down, and they are gone with the orbit: a viewer who stands cannot rise into
+   * the roof, because walking never changes eye height (`look.walk`). What
+   * replaced them is a limit on where the *view* may point, which is a different
+   * thing in a different place — `look.LOOK_LIMITS` — and it deliberately
+   * reaches the zenith, where the polar clamp existed to stop exactly that.
+   */
   minRadius: number;
   maxRadius: number;
-  /** Polar limits: `min` is stopped by the roof, `max` by standing height. */
-  minPolar: number;
-  maxPolar: number;
 }
 
 /**
@@ -246,26 +250,15 @@ export function viewpointFor(shell: Shell): Viewpoint {
 
   // Standing at the back of the near path, which is the far clamp itself: it is
   // the same wall in both cases, and starting anywhere short of it would mean
-  // the first scroll outward moved the viewer for no reason.
+  // the first step backwards moved the viewer for no reason.
   const rise = eyeY - TARGET_Y;
   const ground = Math.sqrt(Math.max(0, maxRadius * maxRadius - rise * rise));
-
-  // How far up the orbit may swing before the camera meets the glass. Measured
-  // against the eaves rather than the ridge, because the eaves are the low edge
-  // and a viewer who cleared the ridge would still be through the roof at the
-  // side where it comes down.
-  const headroom = FLOOR_Y + shell.eaves - ROOF_CLEARANCE - TARGET_Y;
-  const minPolar = Math.acos(clamp(headroom / maxRadius, 0, 1));
 
   return {
     position: [0, eyeY, ground],
     target: [0, TARGET_Y, 0],
     minRadius: NEAREST,
     maxRadius,
-    minPolar,
-    // Just short of level, so the orbit never drops under the target and looks
-    // up at the garden through the floor.
-    maxPolar: Math.PI / 2.05,
   };
 }
 

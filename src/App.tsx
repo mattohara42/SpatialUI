@@ -140,6 +140,9 @@ export default function App() {
         <Timeline />
 
         <div style={{ opacity: 0.4, marginTop: 8, fontSize: 11 }}>
+          drag to look · scroll to walk · look up for the sun
+        </div>
+        <div style={{ opacity: 0.4, marginTop: 2, fontSize: 11 }}>
           drag the sun along its arc for hours, across it for seasons
         </div>
         <div style={{ opacity: 0.4, marginTop: 2, fontSize: 11 }}>

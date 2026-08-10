@@ -216,16 +216,17 @@ describe('standing inside the house', () => {
     }
   });
 
-  it('cannot be orbited up through the roof', () => {
+  it('keeps the viewer under the eaves by standing rather than by a clamp', () => {
+    // This used to be a polar limit on how far the orbit could swing up before
+    // the camera met the glass. A viewer who stands does not rise at all —
+    // walking never changes eye height — so the guarantee is now structural, and
+    // the assertion is that eye height really does clear the roof everywhere.
     for (const size of FOOTPRINTS) {
       const shell = shellFor(size);
-      const { minPolar, maxPolar, maxRadius, target } = viewpointFor(shell);
-      // Highest the camera can get: fully raised, at the far clamp.
-      const highest = target[1] + maxRadius * Math.cos(minPolar);
-      expect(highest).toBeLessThanOrEqual(FLOOR_Y + shell.eaves);
-      // And it never drops below the target, which would look up through soil.
-      expect(maxPolar).toBeLessThanOrEqual(Math.PI / 2);
-      expect(minPolar).toBeLessThan(maxPolar);
+      const { position } = viewpointFor(shell);
+      expect(position[1]).toBeLessThan(FLOOR_Y + shell.eaves);
+      // And above the soil, or you would be looking at the beds from underneath.
+      expect(position[1]).toBeGreaterThan(0);
     }
   });
 

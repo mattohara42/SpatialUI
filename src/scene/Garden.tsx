@@ -1,7 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { OrbitControls } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
-import type * as THREE from 'three';
+import { StandControl } from './StandControl';
 import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
@@ -16,7 +14,7 @@ import { Greenhouse } from './Greenhouse';
 import { Props } from './Props';
 import { Tags } from './Tags';
 import { Detail } from './Detail';
-import { FLOOR_Y, shellFor, viewpointFor, type Viewpoint } from './greenhouse';
+import { FLOOR_Y, shellFor, viewpointFor } from './greenhouse';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
 import type { PlacedPlant, Tint } from './types';
@@ -144,42 +142,6 @@ function hashString(id: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-/**
- * Where you stand when you walk into a garden.
- *
- * You stand *in* it. The camera used to solve for a distance that fit the whole
- * width in frame, which necessarily put it outside the house — for the league,
- * some sixteen metres past the back wall, looking at a building with a garden
- * inside it. The house is not the subject and never was; being under the glass
- * with the plants is the entire reason for having built it.
- *
- * The position comes from `viewpointFor`, so the arithmetic that decides where a
- * body can stand lives with the rest of the proportions and is tested there.
- * This component only applies it.
- *
- * It fires on the house's dimensions and on nothing else. Those change when you
- * enter a garden and never on a telemetry tick, which is the difference between
- * a camera that frames what you walked into and one that snatches itself back
- * every two seconds while you are trying to look at something.
- */
-function Framing({ view }: { view: Viewpoint }) {
-  const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
-  const controls = useThree((state) => state.controls) as {
-    target: THREE.Vector3;
-    update: () => void;
-  } | null;
-
-  useEffect(() => {
-    camera.position.set(...view.position);
-    if (controls) {
-      controls.target.set(...view.target);
-      controls.update();
-    }
-  }, [view, controls, camera]);
-
-  return null;
 }
 
 export function Garden() {
@@ -386,22 +348,16 @@ export function Garden() {
       <group position={[0, FLOOR_Y, 0]}>
         <Horizon />
       </group>
-      {/* makeDefault so the sun drag can find these and suspend them; without
-          it, grabbing the sun would orbit the camera at the same time.
+      {/* Standing, turning and walking, rather than orbiting a point. It
+          registers itself as the default controls so the sun drag can still
+          find it and suspend it; without that, grabbing the sun would swing the
+          camera at the same time.
 
           The limits are what keep you indoors. Starting inside is only a
-          position, and a wheel that carries the camera out through the wall
-          would undo it in one gesture — so the far clamp is the glass, the near
-          one is the nearest plant, and the upward one is the eaves. */}
-      <OrbitControls
-        makeDefault
-        target={view.target}
-        minDistance={view.minRadius}
-        maxDistance={view.maxRadius}
-        minPolarAngle={view.minPolar}
-        maxPolarAngle={view.maxPolar}
-      />
-      <Framing view={view} />
+          position, and a walk that carried you out through the wall would undo
+          it in one gesture — so the outer clamp is the glass and the inner one
+          is the planting, which together are the path. */}
+      <StandControl view={view} />
     </>
   );
 }
