@@ -238,6 +238,85 @@ of its lots as of a moment, so the derivation absorbs it and the node never
 learns. Both are the same lesson: **the pressure to widen the node type is
 usually a derivation that has not been written yet.**
 
+## The world: what a *third* source asks, that neither of the others did
+
+The league proved the pipeline and the book tested it. Both are thirty-two
+things in eight even beds taking numbers off a feed that publishes on a clock,
+and between them they had stopped disagreeing. The world was chosen for the
+things it breaks.
+
+**A number can be wrong later.** This is the first source where a figure about a
+period that has already ended can *change*. Growth is published about
+seventy-five days after its quarter and revised a month after that, so the same
+quarter carries two values and there is no such thing as "the" figure for it.
+
+The resolution is the sharpest thing this source contributed: a plant reads what
+was **known** at the cursor, never what is now thought to be true. Scrub back
+past a release and the country steps to its previous vintage. The alternative —
+showing today's opinion of April when the cursor is on April — would mean the
+garden silently rewrote its own past whenever a statistical office changed its
+mind, which is the same failure as drawing a flat line through a stretch nobody
+recorded, reached by a different route. It also gives the scrub something to do
+in a garden whose underlying quantities move once a quarter: what moves is not
+the world, it is what was known about it.
+
+**A headline is not a record.** Both other adapters are handed structure by
+their feeds — a box score has a home team, a bar has a symbol. This one is
+handed sentences, and turning one into `{iso3, kind, at, severity}` is the first
+place in the project where the app forms a **judgment** about its input rather
+than a calculation.
+
+Two rules follow, and they are the price of being allowed to do it at all.
+*Extraction refuses to guess*: a headline naming two countries, or none, or
+carrying sporting vocabulary, yields nothing. A miss costs a plant that is
+quieter than the world was; a wrong attribution asserts that something happened
+in a real country, in a panel that looks exactly like the ones showing measured
+numbers. Those are not comparable. And *every derived event keeps its source
+sentence*, so a blight can answer "why?" with the dispatch rather than with a
+severity level. A judgment presented without its evidence is a judgment wearing
+the costume of a reading.
+
+**Conflict is a blight, not a health score.** The obvious design was to fold war
+into vitality: a country at war visibly wilting reads powerfully across a room,
+which is exactly the reading this project is built around. It is the one thing
+this source must not do. Vitality is a comparison — 0.6 against 0.55 invites
+"doing better than" — and a garden that ranked countries by war would be making
+a claim it cannot support with a scalar. So conflict is named, dated, sourced,
+and attached to a plant that goes on reporting whatever it reports. The garden
+says something is wrong there without claiming to know how wrong.
+
+**Size is maturity, and maturity is still not health.** A country is a thing
+with a size, and the eye expects a big country to be a big plant. That instinct
+is right and it does not need a new channel: maturity already owns structural
+size in the budget above, so a country's maturity is its UN age, its population
+weight, and how young its population is. India is a big old tree and Estonia a
+small young one.
+
+The load-bearing consequence is the same clause the league wrote and the book
+restated, in its third costume. An old company is a big tree, not a healthy one;
+a position deep underwater is a wilting tree, not a small one; **a small country
+must be able to be the healthiest plant in its bed.** Nothing in the vitality
+function can see a population, and nothing in the maturity function can see a
+growth rate.
+
+**A container property can acquire a meaning nobody intended.** A planting is
+signal-free everywhere else because a sector or a division has no character for
+it to comment on. A world region does. Handing one of them the invasive thicket
+because a bed looked bare would read as an opinion about the place, and nobody
+could point at the line where the opinion was formed. Grounding the assignment
+in what actually grows there — date palms in Northern Africa, vines in the
+south, conifers in the north, savanna where there is savanna — removes the
+judgment rather than hiding it: it describes the ground instead of evaluating
+the country. `thicket` appears nowhere in that table.
+
+**Calibration is measured, not argued — again.** The trend axis was first scaled
+to two and a half points of growth, reasoned from how far growth can swing.
+Against the actual distribution that put nine tenths of the world within a tenth
+of zero and left the fresh-growth channel unspent. Successive figures move by
+about four tenths of a point, so a point is where the axis has to end. Same
+fault and same fix as the market's drawdown deadband: **a scale argued from the
+domain rather than read off the data is usually too wide.**
+
 ## What is decoration, and why decoration is allowed
 
 Three recent additions carry no signal at all, and that is the point of them.
@@ -554,11 +633,14 @@ records `lastViewedAt` per garden and `changedSince` reports what moved, so
 entering a garden can draw attention to change rather than to whatever happens to
 be worst at that instant.
 
-**Traversal is undesigned.** Fifteen plants you walk around. Five hundred you
-cannot, and there is currently no aggregation at distance and no way to stand at
-bed level even though the rollups already exist in the data. The first scene
-dodges this deliberately. Layout decisions made now should leave room for it
-rather than quietly foreclose it.
+**Traversal is undesigned, and the world garden has stopped letting that be
+theoretical.** Fifteen plants you walk around. Five hundred you cannot, and
+there is still no aggregation at distance and no way to stand at bed level even
+though the rollups exist in the data. At thirty-two plants this could be
+deferred; at a hundred and ninety-three, across thirty-five by forty-six metres
+of glasshouse, it is the first thing anybody notices. The layout change that
+made that garden walkable at all — squaring off past a dozen beds instead of
+wrapping into two rows — buys room and answers nothing.
 
 **Normalization creates false comparability.** Vitality 0.6 in one garden and 0.6
 in another were computed by different translators against different scales, and
@@ -578,6 +660,17 @@ them. The clause still missing is the hardest: what evidence justifies a
 weighting. The league's — 0.45 record, 0.30 differential, 0.25 availability — is
 argued rather than measured, and it will stay that way until somebody watches a
 garden and disagrees with it out loud.
+
+The world garden adds a fourth clause, and it is about the axes a source must
+*decline* to use. Vitality there is growth and life expectancy and nothing else,
+though conflict, unrest, and population were all available and all would have
+moved it. The test each failed is the same: **would including this make the
+number a claim the data cannot support?** Population would have made big
+countries healthy. Conflict would have made the axis a ranking of wars. Birth
+rate would have called a young country a sick one. What is left is two
+quantities that are unambiguously better when they go up, which is a much
+smaller thing than "how is this country doing" and is the only thing a single
+scalar can honestly be.
 
 **Completion has no vocabulary.** Tasks and goals end, plants do not. Fruit and
 deadwood are the obvious answer. Deferred until the scene exists.

@@ -178,6 +178,38 @@ describe('the generated tape', () => {
     }
   });
 
+  it('never prints two bars for one symbol at one instant', () => {
+    // The tape used to emit a session's hourly bars *and* its daily bar, which
+    // close at the same moment, so the recent stretch carried a duplicate
+    // `closeAt` with the whole day's volume on it. No real feed does that,
+    // which is why nothing downstream defended against it.
+    for (const [symbol, own] of Object.entries(barsBySymbol(snapshot))) {
+      const seen = new Set<number>();
+      for (const bar of own) {
+        expect(seen.has(bar.closeAt), `${symbol} printed twice at ${bar.closeAt}`).toBe(false);
+        seen.add(bar.closeAt);
+      }
+    }
+  });
+
+  it('keeps volume against its own average near one, so activity can read', () => {
+    // The damage the duplicate did, asserted where it showed: `volumeRatioAt`
+    // compares the latest bar against the mean of the previous twenty, so a day
+    // measured against a window of hours read about 5.7. `activityOf` saturates
+    // at 3, which pinned thirty-one of thirty-two holdings to exactly 1.00 and
+    // left the axis driving every plant's animation rate with no information in
+    // it. An ordinary bar should sit near its own recent normal.
+    const bars = barsBySymbol(snapshot);
+    const ratios = Object.values(bars)
+      .filter((own) => own.length > 25)
+      .map((own) => volumeRatioAt(own, snapshot.fetchedAt))
+      .sort((a, b) => a - b);
+
+    const median = ratios[Math.floor(ratios.length / 2)];
+    expect(median).toBeGreaterThan(0.6);
+    expect(median).toBeLessThan(1.8);
+  });
+
   it('says in its provenance that it is not live', () => {
     expect(snapshot.provenance.live).toBe(false);
     expect(snapshot.provenance.note).toMatch(/fiction/i);

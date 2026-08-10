@@ -12,26 +12,75 @@ are still open.
 
 ## State
 
-Green. 578 tests across 29 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 652 tests across 32 files, `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
-Six gardens. Two are real, in the sense that they come through the
+Seven gardens. Three are real, in the sense that they come through the
 adapter → translation pipeline from feed-shaped records:
 
 | garden | beds | plants | source |
 | --- | --- | --- | --- |
 | **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season |
 | **Markets** | 8 sectors | 32 holdings | `adapters/market` — seeded tape |
+| **World** | 22 UN subregions | 193 states | `adapters/world` + `adapters/news` |
 | Infrastructure, Vault, Threats, Portfolio | 4 mock gardens | | `mock/` — drift tick |
 
-Both real sources are generated rather than fetched. This container has no
-outbound network access to a sports API or a market data vendor — verified, and
-the agent proxy itself is healthy, so it is policy and not a broken setup. Each
-implements a one-method interface (`NflSource`, `MarketSource`) that a live
-feed can be dropped into with nothing downstream changing. That swap is the
-single highest-value thing an environment with network access could do.
+All three real sources are generated rather than fetched. This container has no
+outbound access to a sports API, a market data vendor, the World Bank, or a news
+wire — verified per host (`api.worldbank.org`, `feeds.bbci.co.uk`,
+`aljazeera.com` all answer 403 at the proxy CONNECT), and the agent proxy itself
+is healthy, so it is policy and not a broken setup. Each implements a
+one-method interface (`NflSource`, `MarketSource`, `WorldSource`, `NewsSource`)
+that a live feed can be dropped into with nothing downstream changing. That swap
+is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
+
+- **The world as a third source**, which was the item at the top of this list,
+  and it was taken deliberately unlike the other two rather than as a third
+  instance of them. 193 UN members, twenty-two uneven beds (2 to 18), indicators
+  that get revised, and events derived from news rather than generated.
+
+  Four things it settled, all written up in `DESIGN.md` and `ARCHITECTURE.md`:
+  **as-of split in two** (what was published versus what it describes, so a
+  scrub shows what was *known*); **a layer under translation** (`extract.ts`,
+  the first code here that judges rather than calculates, and the first that has
+  to keep its evidence); **conflict is a blight, never a vitality term**; and
+  **size is maturity**, which is where "a big country should be a big plant"
+  belongs without spending a channel.
+
+  Two things to be careful with if you touch it. The provenance rules are
+  load-bearing rather than decorative — `UnrestEvent.article` is a required
+  field so an event cannot exist without the sentence behind it, and the
+  simulated marker on blights derives from `provenance.live` so a live adapter
+  drops it by being live. And which countries are shown in conflict is chosen by
+  a hash on purpose; hand-picking would mean this repo taking a position on
+  which real places are at war, in invented data.
+
+  **The hash is a settled decision, not a placeholder.** It was raised for
+  review and kept deliberately: a plausible-looking conflict map reads as
+  reporting, and the whole design wants the data obviously synthetic and only
+  its *shape* realistic. Do not "improve" it into something that looks real
+  without reopening that decision with the owner first.
+
+- **Tag textures build on approach, not on entry.** They were drawn for every
+  plant when a garden opened — about 95MB of texture for the world's 193, for
+  labels of which a dozen at most are ever inside the 9m fade radius. `Tags.tsx`
+  now builds a card when its plant first comes within range, metered to three a
+  frame, and the smoothstep fade covers the frame or two before a texture lands.
+  Recorded because the prediction behind it was wrong in a useful way: drawing
+  the canvases was never the cost (all 193 in 135ms), holding and uploading them
+  was — so the fix was to build fewer, not faster.
+
+- **The market's activity axis was dead, and is not mine.** Found by printing
+  all four axes for all three gardens rather than only the one under work: the
+  market's `activity` sat at exactly 1.00 for 31 of 32 holdings and had since
+  that garden existed. The tape emitted a session's hourly bars *and* its daily
+  bar at the same `closeAt`, so `volumeRatioAt` measured a day against a window
+  of hours (~5.7 where an ordinary day is 1, against a curve that saturates at
+  3). Fixed in the generator, since no real feed prints two bars for one symbol
+  at one instant. The lesson is in "How to work on this" below: a saturated axis
+  is invisible, because it looks exactly like a signal that is always on.
 
 - **The collector**, which was the item at the top of this list. History was
   backfilled at module load and thrown away on reload, so the archive tier could
@@ -218,25 +267,89 @@ addition to the current path rather than a replacement for it.
 
 Roughly in order of value for effort, with the reason rather than just the idea.
 
-**A live adapter behind either interface.** The highest-value single change, and
-the cheapest, because the seam was built for it: implement `NflSource` or
-`MarketSource` against a real feed and nothing below changes. It also converts
-every "seeded fiction" caveat in the docs into a real claim. Needs network
-access this environment does not have.
+### Start here: the bonsai table
 
-**A third source, deliberately unlike both.** The two current ones are both
-32 things in 8 groups with numeric axes, which is starting to look like a mould
-rather than a coincidence. Something with a genuinely different shape would test
-the model harder than a third instance of the same one:
+**This is the chosen next piece of work, decided with the owner.** It is the
+answer to traversal — the largest open question in the project — rather than a
+parallel nicety, so the two are now one item.
 
-- *Personal knowledge / notes* — a graph with real link topology rather than
-  synthetic grafts, and where "maturity" means something entirely different.
-  Tests whether the model survives a domain with no numbers in it.
+The problem it solves is concrete. The world garden is 193 plants across roughly
+35 × 46 metres, and the only way to see them is to walk, a scroll along a path.
+Standing inside works beautifully for a bed you are among and not at all for a
+garden you want to take in at once. History already has two grains of *time*
+(hourly, daily); the garden has one grain of *space*, and this is the second:
+a **tabletop view of a whole garden at bonsai scale**, seen from above and
+outside, as an alternative to standing on the path.
+
+The seam is already there. `layout.ts` produces a `size` for every garden and
+its own comment says that field is "for Bonsai mode scaling" — the layout was
+built to be shrunk to a table, and nothing has ever shrunk it. So this is a new
+camera and a new frame, not a new layout.
+
+Constraints, because this bumps into three decisions that are deliberate and
+must survive it:
+
+- **It is a change of *distance*, not of reading.** The tabletop plant is the
+  same plant, smaller. Health still reads through droop, colour, and density —
+  the tabletop must not earn a second visual language (a pin, a heat tint, a
+  badge) that says the same thing the plant already says. That would spend the
+  channel budget twice.
+- **Tags stay gone, and for free.** At tabletop distance you are far from every
+  plant, so the fade radius (`labels.ts`) keeps every label absent — which is
+  correct: a whole-world overview has no text in it, exactly as the room view
+  does not. Do not special-case labels back in; the existing rule already does
+  the right thing.
+- **One garden at a time, still.** Showing several gardens on one table is the
+  obvious next thought and it is the *cross-garden comparison* constraint below
+  in disguise — green means two different things across two gardens, which is the
+  one rule the whole environment model exists to hold. v1 is one garden on the
+  table. Several is a separate design with a real problem to solve first.
+
+The genuinely new design question, and the thing to settle before code: **the
+transition.** How you go from standing on the path to looking down at the table
+and back — whether it is a mode toggle, a pull-back-and-up of the same camera, or
+a gesture — is the whole of the UX here, and it is the part `layout.ts` cannot
+hand you. Everything else is plumbing the seam that already exists.
+
+### The rest, roughly by value for effort
+
+**A live adapter behind any of the four interfaces.** The highest-value single
+change, and the cheapest, because every seam was built for it: implement
+`NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
+and nothing below changes. It also converts every "seeded fiction" caveat in the
+docs into a real claim. Needs network access this environment does not have.
+
+`NewsSource` is the one to do first if you get network, and not because it is
+the easiest. It is the only source whose generated half is *text about real
+places*, so it carries caveats the other two do not need, and it is the only one
+where going live improves the honesty of the app rather than only its accuracy.
+Two things to settle before it ships: the outlets' terms on storing their text,
+and whether the keyword classifier is good enough on real copy — it was tuned
+against generated headlines, which is a much easier problem than a real wire.
+
+**Traversal** is folded into "the bonsai table" above — the tabletop view is the
+answer to it, so they are one piece of work rather than two.
+
+Note what is *not* on this list any more: tag textures. They were built for
+every plant on entering a garden — about 95MB for 193 — and are now built when a
+plant first comes within the fade radius, a few per frame. If you are hunting
+for the next cheap win, do not re-find that one; and be careful about assuming
+its neighbours are CPU-bound, because that one was not (all 193 canvases draw in
+135ms). Measure before believing a stall is where it looks.
+
+**A fourth source, for the shapes still untested.** The three present ones are
+all numeric and all publisher-fed. What is still unexercised:
+
+- *Personal knowledge / notes* — a graph with real link topology and where
+  "maturity" means something entirely different. Tests whether the model
+  survives a domain with no numbers in it. The world garden's land borders are
+  the closest thing to real topology so far, but they are static.
 - *CI pipelines* — where things genuinely complete, which the vocabulary has no
   word for. Recorded as an open risk: tasks end, plants do not.
 - *Prometheus* — the archetype the whole idea was built for. Deliberately not
-  chosen twice now, because the mock gardens already cover infrastructure and it
-  needs a live server to be interesting. Worth doing the moment there is one.
+  chosen three times now, because the mock gardens already cover infrastructure
+  and it needs a live server to be interesting. Worth doing the moment there is
+  one.
 
 **Completion vocabulary.** Plants do not finish; tasks, goals, builds, and
 harvests do. Fruit and deadwood are the obvious candidates and `Produce.tsx`
@@ -249,10 +362,8 @@ doing against the NFC North" and "how are my energy holdings against my tech"
 are the questions people actually ask, and neither is currently answerable. This
 needs design before code — the constraint it bumps into is deliberate.
 
-**A second grain of *space*, not just time.** History has hourly and daily. The
-garden has one scale: you walk in and see everything. A bonsai or tabletop view
-of a whole garden, or of several, is hinted at in `layout.ts` (`size` is
-described as being for "Bonsai mode scaling") and does not exist.
+**A second grain of *space*** is "the bonsai table" above — promoted out of this
+list to the chosen next piece of work.
 
 **Sound.** `Blight` and `Vitals` both carry fields whose comments mention
 spatial audio, and there is none. Peripheral awareness is exactly the case where
@@ -273,10 +384,22 @@ signal, which is what makes it affordable. See "what is decoration" in
   stale code; hard-reload, and if that fails `rm -rf node_modules/.vite`.
 - `npm test`, `npm run typecheck`, `npm run build` — all three run in CI, so
   there is no value in guessing whether they pass.
-- **Measure before judging a source.** Both calibration faults in the market
-  adapter were invisible in a screenshot and obvious in a distribution. Compare
-  a new source's vitality spread against an existing garden's before deciding it
-  looks wrong.
+- **Measure before judging a source.** Every calibration fault found so far was
+  invisible in a screenshot and obvious in a distribution — the market's two, the
+  world's trend axis, and the one below. Compare a new source's spread against an
+  existing garden's before deciding it looks wrong, and print the distribution of
+  *every* axis rather than the one you are working on: the market's dead activity
+  channel was found by measuring the world's, three columns over.
+
+- **Print all four axes, not the one you changed.** The market's `activity` sat
+  at exactly 1.00 for thirty-one of thirty-two holdings for as long as that
+  garden has existed, meaning the animation-rate channel carried no information
+  at all. Nothing looked wrong: every plant simply moved, and a plant that moves
+  looks healthy. The cause was upstream of the axis — the tape emitted a
+  session's hourly bars *and* its daily bar at the same `closeAt`, so
+  `volumeRatioAt` compared a day against a window of hours and read 5.7 where an
+  ordinary day reads 1. A saturated axis is the hardest failure to see, because
+  it looks exactly like a signal that is always on.
 - **Look at the actual app.** Chromium and Playwright are available
   (`executablePath: '/opt/pw-browsers/chromium'`, do not run `playwright
   install`). A screenshot caught the camera being outside the greenhouse; no

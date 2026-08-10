@@ -3,6 +3,7 @@ import type { VitalsHistory } from '../ecosystem/history';
 import { scheduleFor, type StalePolicy } from '../ecosystem/staleness';
 import { syntheticNflSource } from '../adapters/nfl';
 import { syntheticMarketSource } from '../adapters/market';
+import { syntheticWorldSource } from '../adapters/world';
 import {
   MARKET_GARDEN_ID,
   MARKET_STALE_SCHEDULE,
@@ -13,6 +14,11 @@ import {
   NFL_STALE_AFTER_MS,
   translateNflSnapshot,
 } from '../translation/nfl';
+import {
+  WORLD_GARDEN_ID,
+  WORLD_STALE_SCHEDULE,
+  translateWorldSnapshot,
+} from '../translation/world';
 
 /**
  * The real sources, and the one question that turned out to have two uses.
@@ -63,6 +69,7 @@ export interface LiveSource {
 
 const nfl = syntheticNflSource();
 const market = syntheticMarketSource();
+const world = syntheticWorldSource();
 
 export const SOURCES: readonly LiveSource[] = [
   {
@@ -75,6 +82,17 @@ export const SOURCES: readonly LiveSource[] = [
     gardenId: MARKET_GARDEN_ID,
     policy: MARKET_STALE_SCHEDULE,
     read: (now) => translateMarketSnapshot(market.snapshot(now), { asOf: now }),
+    pollable: true,
+  },
+  {
+    gardenId: WORLD_GARDEN_ID,
+    policy: WORLD_STALE_SCHEDULE,
+    read: (now) => translateWorldSnapshot(world.snapshot(now), { asOf: now }),
+    // Re-askable, and by construction rather than by an anchor bolted on. Both
+    // halves of this source depend only on the window asked about: releases are
+    // walked from a fixed year, and the feed is seeded per country-day. So a
+    // later reading is a superset of an earlier one and the recorded past does
+    // not move under it — the property `pollable` is really asserting.
     pollable: true,
   },
 ];

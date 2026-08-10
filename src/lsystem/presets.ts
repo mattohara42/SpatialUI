@@ -12,9 +12,11 @@ export type PresetName =
   | 'spire'
   | 'flower'
   | 'wildflower'
+  | 'acacia'
   // Bespoke forms — built by hand in lsystem/bespoke.ts, not by a grammar.
   | 'vine'
-  | 'topiary';
+  | 'topiary'
+  | 'palm';
 
 /**
  * The tree-like archetypes, in the order the scene rotates through them to give
@@ -29,7 +31,7 @@ export const TREE_PRESETS: PresetName[] = ['broadleaf', 'bushy', 'willow'];
  * render choice keyed off the archetype, so it lives here as data the scene
  * reads rather than as a field on every leaf.
  */
-export type LeafKind = 'broad' | 'blade' | 'needle' | 'round' | 'bloom';
+export type LeafKind = 'broad' | 'blade' | 'needle' | 'round' | 'bloom' | 'frond';
 
 export interface FoliageStyle {
   kind: LeafKind;
@@ -59,10 +61,23 @@ export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   // Blooms are big relative to the short stem and pack tightly into a head.
   flower: { kind: 'bloom', cluster: 6, scale: 2.6, spread: 0.28 },
   wildflower: { kind: 'bloom', cluster: 4, scale: 2.3, spread: 0.34 },
+  // Fine pinnate leaflets in a wide flat canopy: many small blades rather than
+  // a few broad ones, which is what makes an acacia read as feathery from
+  // across the room instead of as a small broadleaf.
+  //
+  // The cluster is the highest in the table and that is the whole trick. Small
+  // leaves need to be numerous or the canopy reads as bare twigs — the first
+  // cut had a third of a broadleaf's foliage at the same vitality, which put a
+  // healthy country in the savanna beds at the bleakest sick-state the language
+  // has. Density comes from the cluster rather than from more branch symbols
+  // because leaves are instanced and cheap while symbols grow the grammar
+  // exponentially.
+  acacia: { kind: 'blade', cluster: 8, scale: 0.7, spread: 0.85 },
   // Bespoke forms place their own leaves, so cluster and spread go unused; only
   // kind and scale reach them.
   vine: { kind: 'broad', cluster: 1, scale: 1.1, spread: 0 },
   topiary: { kind: 'round', cluster: 1, scale: 0.7, spread: 0 },
+  palm: { kind: 'frond', cluster: 1, scale: 1.15, spread: 0 },
 };
 
 /** Foliage for a plant with no preset (a raw hand-written grammar). */
@@ -177,9 +192,32 @@ export const PRESETS: Record<PresetName, Grammar> = {
     iterations: 1,
   },
 
+  /**
+   * A flat-crowned savanna tree: a long bare trunk, then a whorl of limbs that
+   * pitch over hard and spread almost horizontally into feathery sprays.
+   *
+   * The crown is deliberately not recursive. An acacia's silhouette is a plate
+   * balanced on a stem, and self-similar branching produces a dome however it is
+   * tuned — so `A` fires once into four limbs and `C` clothes each of them, and
+   * the whole thing settles after two rewrites. Cheap for the same reason: a
+   * couple of hundred symbols against the broadleaf's few thousand.
+   */
+  acacia: {
+    axiom: 'FFFFFA',
+    rules: {
+      A: 'F[&&&C]////[&&&C]////[&&&C]////[&&&C]////[&&&C]////[&&&C]',
+      C: [
+        { successor: 'FF[+FJ][-FJ][^FJ]FJ', weight: 2 },
+        { successor: 'F[+FJ][-FFJ][&FJ]FJ', weight: 3 },
+      ],
+    },
+    iterations: 4,
+  },
+
   // The bespoke forms are generated in lsystem/bespoke.ts, not from a grammar.
   // These placeholders keep the preset table total; the generator supersedes
   // them before expansion is ever reached.
   vine: { axiom: 'F', rules: {}, iterations: 1 },
   topiary: { axiom: 'F', rules: {}, iterations: 1 },
+  palm: { axiom: 'F', rules: {}, iterations: 1 },
 };

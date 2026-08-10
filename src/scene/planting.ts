@@ -29,6 +29,11 @@ export const PLANTING_FORMS: Record<PlantingType, PresetName[]> = {
   'vegetable-rows': ['bushy'],
   vineyard: ['vine'],
   topiary: ['topiary'],
+  'palm-grove': ['palm'],
+  // Acacia carries the savanna, with the odd broadleaf among them. A single
+  // form would read as a plantation, and scattered trees of two kinds is what
+  // makes it look unplanted rather than merely spaced out.
+  savanna: ['acacia', 'acacia', 'broadleaf'],
 };
 
 /** The archetype for one plant in a planting, chosen deterministically by id. */
