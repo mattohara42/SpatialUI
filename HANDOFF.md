@@ -260,14 +260,15 @@ against generated headlines, which is a much easier problem than a real wire.
 across roughly 35 × 46 metres, and walking is a scroll along a path. There is no
 aggregation at distance and no way to stand at bed level, though the rollups
 exist in the data. This was a deferred question when the biggest garden held
-thirty-two plants; it is now the first thing you notice.
+thirty-two plants; it is now the first thing you notice, and it is the largest
+open question in the project.
 
-The cheapest real win alongside it: **tag textures built lazily**. All 193 are
-built on entering the garden, at 588 × 210 each — about 95MB before mipmaps —
-and only a handful are ever inside the ~9m fade radius. Building on approach and
-caching would cut that to a few megabytes. Note this was *not* the CPU
-bottleneck it was predicted to be: building all 193 canvases measures 135ms.
-It is a memory and upload cost, not a stall.
+Note what is *not* on this list any more: tag textures. They were built for
+every plant on entering a garden — about 95MB for 193 — and are now built when a
+plant first comes within the fade radius, a few per frame. If you are hunting
+for the next cheap win, do not re-find that one; and be careful about assuming
+its neighbours are CPU-bound, because that one was not (all 193 canvases draw in
+135ms). Measure before believing a stall is where it looks.
 
 **A fourth source, for the shapes still untested.** The three present ones are
 all numeric and all publisher-fed. What is still unexercised:

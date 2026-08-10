@@ -421,9 +421,22 @@ building all 193 measures 135ms, so it is not a bottleneck. Nor is geometry, at
 Entering it in this environment takes far longer than that, but so does entering
 the NFL garden — there is no GPU here and the software rasteriser runs the
 thirty-two-plant garden at 1.3 fps — so the remaining cost is fill rate and
-texture upload, and **it cannot be judged from here**. The one number that is
-GPU-independent and does scale: 193 tag textures at 588×210 is about 95MB before
-mipmaps, which is the argument for building them lazily inside the fade radius.
+texture upload, and **it cannot be judged from here**.
+
+The one number that is GPU-independent and does scale is memory: 193 tag
+textures at 588 × 210 is about 95MB before mipmaps, for a set of labels of which
+a dozen at most are ever inside the nine-metre fade radius. `Tags.tsx` therefore
+builds a card when its plant first comes within range rather than when the
+garden opens, metered to a few per frame so that walking into a bed does not
+draw a dozen canvases in one. The fade pays for the meter: `legibility` is a
+smoothstep that reaches the one-percent cutoff exactly where a tag becomes
+visible, so a card waiting its turn is drawn blank at an opacity nobody can see.
+
+The distinction is worth keeping straight, because the first guess was wrong in
+an instructive way. Drawing the canvases was never expensive. What was expensive
+was holding and uploading them, so the fix is to build fewer rather than to
+build faster — and the worst case is unchanged: walk up to all 193 and you have
+paid for all 193, a card at a time instead of all at once.
 
 ### The layout could not stay as it was
 
