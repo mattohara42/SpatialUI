@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 650 tests across 32 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 652 tests across 32 files, `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
 Seven gardens. Three are real, in the sense that they come through the
@@ -56,6 +56,31 @@ is the single highest-value thing an environment with network access could do.
   drops it by being live. And which countries are shown in conflict is chosen by
   a hash on purpose; hand-picking would mean this repo taking a position on
   which real places are at war, in invented data.
+
+  **The hash is a settled decision, not a placeholder.** It was raised for
+  review and kept deliberately: a plausible-looking conflict map reads as
+  reporting, and the whole design wants the data obviously synthetic and only
+  its *shape* realistic. Do not "improve" it into something that looks real
+  without reopening that decision with the owner first.
+
+- **Tag textures build on approach, not on entry.** They were drawn for every
+  plant when a garden opened — about 95MB of texture for the world's 193, for
+  labels of which a dozen at most are ever inside the 9m fade radius. `Tags.tsx`
+  now builds a card when its plant first comes within range, metered to three a
+  frame, and the smoothstep fade covers the frame or two before a texture lands.
+  Recorded because the prediction behind it was wrong in a useful way: drawing
+  the canvases was never the cost (all 193 in 135ms), holding and uploading them
+  was — so the fix was to build fewer, not faster.
+
+- **The market's activity axis was dead, and is not mine.** Found by printing
+  all four axes for all three gardens rather than only the one under work: the
+  market's `activity` sat at exactly 1.00 for 31 of 32 holdings and had since
+  that garden existed. The tape emitted a session's hourly bars *and* its daily
+  bar at the same `closeAt`, so `volumeRatioAt` measured a day against a window
+  of hours (~5.7 where an ordinary day is 1, against a curve that saturates at
+  3). Fixed in the generator, since no real feed prints two bars for one symbol
+  at one instant. The lesson is in "How to work on this" below: a saturated axis
+  is invisible, because it looks exactly like a signal that is always on.
 
 - **The collector**, which was the item at the top of this list. History was
   backfilled at module load and thrown away on reload, so the archive tier could
@@ -242,6 +267,52 @@ addition to the current path rather than a replacement for it.
 
 Roughly in order of value for effort, with the reason rather than just the idea.
 
+### Start here: the bonsai table
+
+**This is the chosen next piece of work, decided with the owner.** It is the
+answer to traversal — the largest open question in the project — rather than a
+parallel nicety, so the two are now one item.
+
+The problem it solves is concrete. The world garden is 193 plants across roughly
+35 × 46 metres, and the only way to see them is to walk, a scroll along a path.
+Standing inside works beautifully for a bed you are among and not at all for a
+garden you want to take in at once. History already has two grains of *time*
+(hourly, daily); the garden has one grain of *space*, and this is the second:
+a **tabletop view of a whole garden at bonsai scale**, seen from above and
+outside, as an alternative to standing on the path.
+
+The seam is already there. `layout.ts` produces a `size` for every garden and
+its own comment says that field is "for Bonsai mode scaling" — the layout was
+built to be shrunk to a table, and nothing has ever shrunk it. So this is a new
+camera and a new frame, not a new layout.
+
+Constraints, because this bumps into three decisions that are deliberate and
+must survive it:
+
+- **It is a change of *distance*, not of reading.** The tabletop plant is the
+  same plant, smaller. Health still reads through droop, colour, and density —
+  the tabletop must not earn a second visual language (a pin, a heat tint, a
+  badge) that says the same thing the plant already says. That would spend the
+  channel budget twice.
+- **Tags stay gone, and for free.** At tabletop distance you are far from every
+  plant, so the fade radius (`labels.ts`) keeps every label absent — which is
+  correct: a whole-world overview has no text in it, exactly as the room view
+  does not. Do not special-case labels back in; the existing rule already does
+  the right thing.
+- **One garden at a time, still.** Showing several gardens on one table is the
+  obvious next thought and it is the *cross-garden comparison* constraint below
+  in disguise — green means two different things across two gardens, which is the
+  one rule the whole environment model exists to hold. v1 is one garden on the
+  table. Several is a separate design with a real problem to solve first.
+
+The genuinely new design question, and the thing to settle before code: **the
+transition.** How you go from standing on the path to looking down at the table
+and back — whether it is a mode toggle, a pull-back-and-up of the same camera, or
+a gesture — is the whole of the UX here, and it is the part `layout.ts` cannot
+hand you. Everything else is plumbing the seam that already exists.
+
+### The rest, roughly by value for effort
+
 **A live adapter behind any of the four interfaces.** The highest-value single
 change, and the cheapest, because every seam was built for it: implement
 `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
@@ -256,12 +327,8 @@ Two things to settle before it ships: the outlets' terms on storing their text,
 and whether the keyword classifier is good enough on real copy — it was tuned
 against generated headlines, which is a much easier problem than a real wire.
 
-**Traversal, which is no longer theoretical.** The world garden is 193 plants
-across roughly 35 × 46 metres, and walking is a scroll along a path. There is no
-aggregation at distance and no way to stand at bed level, though the rollups
-exist in the data. This was a deferred question when the biggest garden held
-thirty-two plants; it is now the first thing you notice, and it is the largest
-open question in the project.
+**Traversal** is folded into "the bonsai table" above — the tabletop view is the
+answer to it, so they are one piece of work rather than two.
 
 Note what is *not* on this list any more: tag textures. They were built for
 every plant on entering a garden — about 95MB for 193 — and are now built when a
@@ -295,10 +362,8 @@ doing against the NFC North" and "how are my energy holdings against my tech"
 are the questions people actually ask, and neither is currently answerable. This
 needs design before code — the constraint it bumps into is deliberate.
 
-**A second grain of *space*, not just time.** History has hourly and daily. The
-garden has one scale: you walk in and see everything. A bonsai or tabletop view
-of a whole garden, or of several, is hinted at in `layout.ts` (`size` is
-described as being for "Bonsai mode scaling") and does not exist.
+**A second grain of *space*** is "the bonsai table" above — promoted out of this
+list to the chosen next piece of work.
 
 **Sound.** `Blight` and `Vitals` both carry fields whose comments mention
 spatial audio, and there is none. Peripheral awareness is exactly the case where
