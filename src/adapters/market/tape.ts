@@ -208,8 +208,24 @@ function seriesFor(
       stepOpen = price;
     }
 
+    // The daily bar, for sessions the fine grain does not cover.
+    //
+    // `!fine` is load-bearing and was missing. A session inside the intraday
+    // window already emitted its hours above, and the last of those closes at
+    // the same instant the day does — so emitting both put two bars for one
+    // symbol at one `closeAt`, one of them carrying the whole day's volume and
+    // the other an hour of it.
+    //
+    // No real feed does that, which is why nothing downstream defends against
+    // it, and the damage landed where a duplicate timestamp is invisible:
+    // `volumeRatioAt` compares the latest bar against the mean of the previous
+    // twenty, so it was measuring a day against a window of hours. It read
+    // about 5.7 where an ordinary day should read 1, `activityOf` saturates at
+    // 3, and thirty-one of thirty-two holdings pinned to an activity of exactly
+    // 1.00 — an axis with no information left in it, driving the animation rate
+    // of every plant in the garden.
     const dailyClose = closes[closes.length - 1];
-    if (dailyClose <= now && dailyClose < haltAt) {
+    if (!fine && dailyClose <= now && dailyClose < haltAt) {
       const move = Math.abs(price / sessionOpen - 1);
       out.push({
         symbol: instrument.symbol,

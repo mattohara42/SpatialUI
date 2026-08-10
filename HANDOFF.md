@@ -319,10 +319,22 @@ signal, which is what makes it affordable. See "what is decoration" in
   stale code; hard-reload, and if that fails `rm -rf node_modules/.vite`.
 - `npm test`, `npm run typecheck`, `npm run build` — all three run in CI, so
   there is no value in guessing whether they pass.
-- **Measure before judging a source.** Both calibration faults in the market
-  adapter were invisible in a screenshot and obvious in a distribution. Compare
-  a new source's vitality spread against an existing garden's before deciding it
-  looks wrong.
+- **Measure before judging a source.** Every calibration fault found so far was
+  invisible in a screenshot and obvious in a distribution — the market's two, the
+  world's trend axis, and the one below. Compare a new source's spread against an
+  existing garden's before deciding it looks wrong, and print the distribution of
+  *every* axis rather than the one you are working on: the market's dead activity
+  channel was found by measuring the world's, three columns over.
+
+- **Print all four axes, not the one you changed.** The market's `activity` sat
+  at exactly 1.00 for thirty-one of thirty-two holdings for as long as that
+  garden has existed, meaning the animation-rate channel carried no information
+  at all. Nothing looked wrong: every plant simply moved, and a plant that moves
+  looks healthy. The cause was upstream of the axis — the tape emitted a
+  session's hourly bars *and* its daily bar at the same `closeAt`, so
+  `volumeRatioAt` compared a day against a window of hours and read 5.7 where an
+  ordinary day reads 1. A saturated axis is the hardest failure to see, because
+  it looks exactly like a signal that is always on.
 - **Look at the actual app.** Chromium and Playwright are available
   (`executablePath: '/opt/pw-browsers/chromium'`, do not run `playwright
   install`). A screenshot caught the camera being outside the greenhouse; no
