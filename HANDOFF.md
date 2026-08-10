@@ -12,8 +12,8 @@ are still open.
 
 ## State
 
-`main` is green. 498 tests across 25 files, `tsc --noEmit` clean, `vite build`
-clean, and CI runs all three on every push and every pull request. 87 tracked
+`main` is green. 510 tests across 26 files, `tsc --noEmit` clean, `vite build`
+clean, and CI runs all three on every push and every pull request. 90 tracked
 source files.
 
 Six gardens. Two are real, in the sense that they come through the
@@ -48,6 +48,20 @@ single highest-value thing an environment with network access could do.
   question, used twice. Making the tape safe to ask twice was most of the work,
   and found a latent determinism bug: the price walk's rng was consumed inside the
   bar-emission branch, so what got printed changed the prices.
+- **The timeline strip**, which is the one thing the sun cannot say. Dragging the
+  sun back, there was no way to know whether the record ran out in an hour or in
+  four months, and at the edge the cursor simply stopped with no explanation.
+  `ecosystem/timeline.ts` plus `Timeline.tsx` draw the extent, the point where
+  hours become days, and where you are standing in it. Deliberately a provenance
+  display and not the scrub bar `SunScrub` argues against: the sun keeps the
+  gesture.
+- **Two false claims corrected**, both found by checking the code rather than by
+  a test. Open work item 2 said the inspection panel did not exist; `Detail.tsx`
+  has been doing the whole job — vitals, both sparklines, blights, the flattened
+  `raw` payload — for some time. And three sites still justified the panel being
+  world-anchored "because `src/xr/` exists", which is the very claim the #9 audit
+  found false and removed from one place but not the rest. The reasoning was
+  sound and the premise invented; the reasoning now stands on assumption 6.
 - **#9** — an audit of the docs against the code. Five claims were false,
   including a `src/xr/` that never existed and a sample count that was out by
   4,000. Then the CI that would have caught them, because the repository had
@@ -131,15 +145,7 @@ must register itself the same way (`makeDefault`) or the shift-drag will fight
 it. And the existing orbit clamps in `viewpointFor` — walls, nearest plant,
 eaves — are what keep the viewer indoors; a new control needs its own equivalent.
 
-### 2. An inspection HUD that uses what is already there
-
-Both real sources fill `raw` with a full payload nothing renders — a club's stat
-sheet, an instrument's cost basis, market value, drawdown, volatility, and bar
-count. `ecosystem/inspect.ts` already flattens an opaque payload into rows, and
-`ecosystem/series.ts` already turns history into a line with the gaps preserved.
-The pieces exist; the panel that shows them on selection does not.
-
-### 3. A collector
+### 2. A collector
 
 The archive tier can hold months and nothing is recording them. History is
 backfilled at module load and then lives only as long as the tab. A collector is
@@ -153,7 +159,7 @@ holds the schedule, the pollability flag, and the "is anything owed" scan, so a
 collector is that loop moved somewhere it can outlive a page — and `LiveSource`
 is the shape it would want anyway.
 
-### 4. Bound the geometry cache
+### 3. Bound the geometry cache
 
 51MB is affordable, unbounded growth is not. Wants an LRU keyed on node id and
 vitality bucket. Recorded as a risk since before the scrub shipped.

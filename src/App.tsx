@@ -4,16 +4,19 @@ import { Garden } from './scene/Garden';
 import { useEcosystem, markVisited } from './state/ecosystemStore';
 import { DAY_MS, HOUR_MS } from './ecosystem/history';
 import { scrubBy } from './ecosystem/scrub';
+import { Timeline } from './Timeline';
 
 /**
  * Deliberately plain chrome. This exists to look at the garden, not to be the
  * interface, and the garden buttons are a placeholder for walking somewhere
  * else.
  *
- * Time is no longer among them. Scrubbing is dragging the sun across the sky
- * (see scene/SunScrub.tsx), so what is left here is a readout of where the
- * cursor stands and a keyboard path to the same thing, because a gesture that
- * needs a pointing device is not a control everyone has.
+ * Scrubbing is still dragging the sun across the sky (see scene/SunScrub.tsx).
+ * What is here is a readout of where the cursor stands, a keyboard path to the
+ * same thing — a gesture that needs a pointing device is not a control everyone
+ * has — and the one thing the sun cannot say, which is how much past there is.
+ * `Timeline.tsx` is that, and it is a provenance display rather than the scrub
+ * bar the sun was chosen over.
  */
 export default function App() {
   const nodes = useEcosystem((s) => s.nodes);
@@ -134,7 +137,9 @@ export default function App() {
           {changes.length > 0 && ` · ${changes.length} changed since last visit`}
         </div>
 
-        <div style={{ opacity: 0.4, marginTop: 4, fontSize: 11 }}>
+        <Timeline />
+
+        <div style={{ opacity: 0.4, marginTop: 8, fontSize: 11 }}>
           drag the sun along its arc for hours, across it for seasons
         </div>
         <div style={{ opacity: 0.4, marginTop: 2, fontSize: 11 }}>

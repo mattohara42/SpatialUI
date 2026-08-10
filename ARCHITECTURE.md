@@ -69,6 +69,10 @@ src/
                      when a scrub lands back on live. Knows nothing about the
                      sky, so the store can use it without importing a renderer.
     scrub.test.ts
+    timeline.ts      What that legal range looks like: how far the record goes,
+                     where hours become days, and where the cursor stands in it.
+                     The extent a sun cannot express.
+    timeline.test.ts
     planting.ts      What a bed is planted as: the PlantingType vocabulary and
                      each type's spatial arrangement. Self-contained, imports
                      nothing, so layout and the renderer share it cycle-free.
@@ -106,10 +110,11 @@ src/
                      generation path.
   state/             Zustand store, and where the gardens are composed. Holds
                      EcosystemState and nothing derived from it, with one
-                     deliberate exception: `scrubWindowMs`, which the scrub
-                     gesture asks for on every pointer move and which only
-                     changes when the garden does. Recomputing it per move
-                     would walk every node's archive at pointer rate.
+                     deliberate exception: the two window figures
+                     (`scrubWindowMs`, `fineWindowMs`), which the scrub gesture
+                     and the timeline ask for constantly and which only change
+                     when the garden does. Recomputing them per move would walk
+                     every node's buffers at pointer rate.
     ecosystemStore.ts  The store, `composeEcosystem`, and the poll that asks a
                      source for a reading when its own schedule says one is due.
     sources.ts       The real sources: what each garden is read from, when it is
@@ -184,11 +189,13 @@ src/
                      a translated one.
   App.tsx            Deliberately plain chrome: garden buttons and a readout of
                      where the cursor is. The garden is the interface.
+  Timeline.tsx       The recorded past drawn as an extent: how much there is,
+                     how finely it was kept, and where you stand in it.
   main.tsx           Vite entry.
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-498 tests across twenty-five files, `tsc --noEmit` clean, `vite build` succeeds.
+510 tests across twenty-six files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -721,7 +728,7 @@ hit rate and scrubbing costs less than a frame.
     direction.
 
 24. The detail panel is world-anchored, not head-locked, and reads through the
-    cursor. Anchored because `src/xr/` exists to keep the project honest and a
+    cursor. Anchored because a headset is a stated target (assumption 6) and a
     card welded to the corner of the screen is the one interface a headset
     cannot have; through the cursor because a panel that showed live numbers
     while the sky showed Tuesday would be two clocks in one frame. Selection

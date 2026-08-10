@@ -30,11 +30,11 @@ import type { PlacedPlant } from './types';
  * that and both are rules rather than preferences.
  *
  * **It is world-anchored, not head-locked.** The panel hangs in the air beside
- * the plant it is about and stays there while you orbit, because `src/xr/`
- * exists to keep this project honest about a headset and a card welded to your
- * face is the one interface a headset cannot have. On a desktop it looks like a
- * tooltip; in a headset it is a thing floating next to the plant, which is the
- * same object either way.
+ * the plant it is about and stays there while you orbit, because a headset is a
+ * stated target (assumption 6) and a card welded to your face is the one
+ * interface a headset cannot have. On a desktop it looks like a tooltip; in a
+ * headset it is a thing floating next to the plant, which is the same object
+ * either way.
  *
  * **It carries no colour and no opinion.** Bars are one neutral tone whatever
  * the reading, because colour is the health channel and a panel that turned red
