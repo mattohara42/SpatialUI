@@ -78,8 +78,10 @@ src/
                emblems, history-as-a-series, and the raw-payload flattener
   lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
   hooks/       useLSystem — memoized geometry generation
-  state/       Zustand store (holds state, near enough nothing derived) and the
-               composition point where the gardens are assembled
+  state/       Zustand store (holds state, near enough nothing derived), the
+               composition point where the gardens are assembled, and the
+               collector that writes down what was observed so a reload does not
+               throw the past away
   scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
                Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, plus
                the pure sway, daylight, dust, greenhouse, and label modules
@@ -93,6 +95,28 @@ so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
 not a rebuild.
 
 ## What's built
+
+- **The past stops being thrown away.** History used to be backfilled when the
+  page loaded and discarded when it closed, so scrubbing back four months was a
+  scrub over four months of fiction regenerated on the spot. A collector now
+  writes down what was actually observed, and lays it back into the buffers on
+  the next visit. Of the archive's 140 daily slots the league can backfill 85
+  and the tape 60 — weekends, byes, and the days before each record begins are
+  simply gaps — and those gaps are what the collector fills, a sitting at a
+  time.
+
+  The rule it turns on is which account wins. A restored observation goes only
+  into a slot the source left empty: a backfill is the source's *current* story
+  about its own past and may carry corrections, while the record we kept is
+  worth something exactly where the source has gone quiet. And what gets written
+  down is what reported — the mock garden's dead plant is never recorded as
+  saying the same number every hour, which would be the app inventing the one
+  thing the whole design is built to avoid.
+
+  It collects while a tab is open and not while one is not, which is as far as a
+  browser with no server behind it honestly goes. The stored shape is the one a
+  server-side collector would want, so moving the loop somewhere it can run
+  unattended is a change of backend rather than of format.
 
 - **A book of positions, as the second real source — and the one that argues
   back.** Eight sectors are the beds, thirty-two holdings are the plants, and
@@ -288,9 +312,11 @@ than the one shift-drag was standing in for.
 
 ## What's next
 
-The design docs track the open work. Near-term candidates: an inspection HUD,
-since the league's `raw` payload already carries a full stat sheet nothing yet
-renders; a live NFL adapter behind the same `NflSource` interface (this
-environment has no outbound network access to a sports API, which is why the
-season is generated); and a collector, since the archive tier can now hold months
-that nobody is yet recording.
+The design docs track the open work. Near-term candidates: a live adapter behind
+either the `NflSource` or `MarketSource` interface, which is the cheapest change
+with the largest payoff because the seam was built for it (this environment has
+no outbound network access to a sports API or a market data vendor, which is why
+both are generated); a third source deliberately unlike the two present ones,
+which are both thirty-two things in eight groups and starting to look like a
+mould; and a vocabulary for completion, since tasks and builds finish and plants
+do not.

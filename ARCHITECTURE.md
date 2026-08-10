@@ -121,6 +121,15 @@ src/
                      next owed a reading, and whether asking again is meaningful.
                      The one place that knows more than one source exists.
     sources.test.ts
+    persist.ts       The record: what was observed, sparse, in a form that
+                     survives a reload — and the rule that a restored
+                     observation fills silence rather than overwriting a source.
+                     Pure; knows nothing about a browser.
+    persist.test.ts
+    collector.ts     The loop that keeps the record. Schedules the writes, holds
+                     it inside a byte budget, and is the only file that touches
+                     `localStorage`.
+    collector.test.ts
   scene/             R3F components. Owns InstancedMesh and the merged graft
                      geometry.
     types.ts         What the scene is handed per plant: geometry, place, tint.
@@ -793,13 +802,57 @@ produces a history full of holes exactly across the gaps you most want to
 inspect. Recording therefore implies a collector that runs continuously and a
 viewer that reads from it, rather than one application that does both.
 
-Half of this now exists. The poll in `state/sources.ts` keeps the live reading
-true — a source is re-read when its own calendar says a reading is due — and it
-took the same `dueAfter` staleness uses, which is the collector's schedule handed
-over for free. What the poll does not do is outlive the tab: it refreshes what is
-on screen, while history is still backfilled at load and lost on reload. The
-collector is the part that runs whether or not anyone is looking, and it is still
-missing.
+Both halves now exist, and the honest limit is the one stated above rather than
+one that has been engineered away. The poll in `state/sources.ts` keeps the live
+reading true — a source is re-read when its own calendar says a reading is due —
+and it took the same `dueAfter` staleness uses, which is the collector's schedule
+handed over for free. What the poll could not do is outlive the tab. The
+collector does, and no further: it records while a tab is open, and a browser
+with no server behind it has nowhere to put a process that runs while one is
+not.
+
+What that buys is not nothing. Before it, history was backfilled at module load
+and discarded on reload, so a scrub over four months was a scrub over four
+months of fiction regenerated on the spot. Now a season is assembled from
+sittings. Measured on the seeded gardens, the two real sources leave real gaps
+for it to fill: of the archive's 140 daily slots, the league backfills 85 and
+the tape 60, the rest being weekends, byes, and days before the record starts.
+
+### What is stored, and what wins
+
+`state/persist.ts` is the format and the rules; `state/collector.ts` is the only
+file that knows `localStorage` exists. Two decisions carry the design.
+
+**Observations, not buffers.** What is written down is one sample per plant per
+slot at the moment it reported — not a copy of `state.history`. A backfill fills
+every slot it covers, so persisting the buffers would be storing each source's
+own account back to itself, at roughly a megabyte, for nothing. Observations are
+the part no source can re-tell. Which nodes count as having reported is decided
+by the caller, because the caller is the layer that knows: `commit` receives
+exactly the nodes a source spoke about, and the mock tick reports exactly the
+plants it drifted. The silent plant is in neither, and a collector that wrote it
+down hourly as reporting the same number would be inventing precisely the thing
+the rest of the design refuses to invent.
+
+**On restore, the source wins.** `recordIfAbsent` writes only into slots the
+freshly built buffers left empty. A backfill is the source's current account of
+its own past and may carry corrections; the record we kept is only worth
+something where the source has gone quiet. Verified both directions in the
+browser: a day 85 back that the league cannot reach comes from the record, and a
+day it does cover is untouched by a record claiming otherwise.
+
+The two tiers are not treated alike. When the record exceeds its budget the
+hourly tier is shed first and entirely before a single daily slot goes, because
+a live feed can usually still be asked about last week, and past its window
+those days exist nowhere else. Two megabytes holds a full season of every plant
+in every garden, measured rather than guessed — `recordBytes` estimates the
+encoded size analytically so a budget check does not serialize a megabyte to
+find out how big it is, and a test holds the estimate to within 5% of the real
+output.
+
+`ObservedRecord` is also the shape a server-side collector would want, which is
+the point of the seam: moving the loop somewhere it can run unattended is a
+change of storage backend, not of format.
 
 Adapters that can backfill should, so a new garden has history on day one
 instead of after a week of collection. Prometheus, market data, and sports
@@ -836,12 +889,20 @@ change to the node type.
 Completion has no vocabulary yet. Tasks and goals end, plants do not. Fruit and
 deadwood are the obvious answer, worth deciding once the scene exists.
 
-The geometry cache still needs an explicit bound. 51MB is affordable and
-unbounded growth is not, so it wants an LRU keyed by node id and vitality bucket
-before the scrub control ships.
+The geometry cache is bounded and this said for a long time that it was not.
+`useLSystem.ts` has held 600 entries with FIFO eviction since before the scrub
+shipped, so the risk as written — unbounded growth toward 51MB — has not been
+real for some time. What is still true is the smaller half of it: FIFO evicts by
+insertion order, not by use, so a plant you are standing in front of can be
+thrown out to make room for one you scrubbed past, and the next frame rebuilds
+it. Keyed on last use instead, the same 600 entries would not do that. The
+measured 94% hit rate is against present behaviour, so the cost of the current
+policy is a fraction of the remaining 6% rather than anything visible.
 
-Recording history means a collector that runs whether or not anyone is wearing
-the headset, which is a layer the original diagram does not have. See below.
+Collection is no longer missing, but the limit it was named for is: a tab that
+is closed still records nothing, and a browser has nowhere to put a process that
+runs while one is not. See "Collection" above for what the client-side collector
+does and does not buy.
 
 `TRUNK_RATIO` in `generate.ts` is 0.035 of height, which reads stout next to a
 real tree. It is a stylistic knob, better tuned in the headset than on paper.

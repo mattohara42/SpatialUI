@@ -12,9 +12,8 @@ are still open.
 
 ## State
 
-`main` is green. 527 tests across 27 files, `tsc --noEmit` clean, `vite build`
-clean, and CI runs all three on every push and every pull request. 92 tracked
-source files.
+Green. 578 tests across 29 files, `tsc --noEmit` clean, `vite build` clean, and
+CI runs all three on every push and every pull request.
 
 Six gardens. Two are real, in the sense that they come through the
 adapter → translation pipeline from feed-shaped records:
@@ -34,7 +33,26 @@ single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
 
-- **Session-aware staleness**, which was the item at the top of this list and the
+- **The collector**, which was the item at the top of this list. History was
+  backfilled at module load and thrown away on reload, so the archive tier could
+  hold twenty weeks and held twenty weeks of fiction regenerated on the spot.
+  `state/persist.ts` is the record and the rules, `state/collector.ts` is the
+  loop, and the store restores at compose and notes at commit and tick. Verified
+  in the browser both ways: a day 85 back that the league cannot reach came from
+  the record; a day it does cover was untouched by a record claiming otherwise.
+  The limit is stated rather than engineered away — it collects while a tab is
+  open and not while one is not — and the format is the one a server-side
+  collector would want. See ARCHITECTURE.md, "Collection".
+- **A false risk retired and a true one sharpened.** "The geometry cache still
+  needs an explicit bound" had been in the risk list a long time and was not
+  true: `useLSystem.ts` has capped it at 600 entries with FIFO eviction since
+  before the scrub shipped. What is left is smaller and real — FIFO evicts by
+  insertion order, so a plant you are standing in front of can be thrown out for
+  one you scrubbed past. Item 2 below is now that, and only that.
+
+### What shipped in the session before
+
+- **Session-aware staleness**, which was the item at the top of that list and the
   largest open piece of design. `staleness` now takes a `StaleSchedule` — a
   source-supplied due time plus a grace that only runs once something is owed —
   instead of a flat duration. Measured on the same tape, a vendor dying inside a
@@ -114,6 +132,32 @@ close time rather than drawn from the walk's rng, because drawing it inside the
 emission branch made the price path depend on which bars happened to be printed.
 There are tests for both.
 
+**The restore fills silence and never overwrites a source.** `recordIfAbsent`
+writes only into slots a freshly built buffer left empty. Swap it for `record`
+"so the newest reading wins" and the app starts preferring its own old
+observation over the source's current account of the same day, which is the one
+thing a source is authoritative about. The test is named for it, and it was
+checked in a real browser both ways round.
+
+**What counts as having reported is the caller's call, not the collector's.**
+`observe` writes everything it is handed, and the store hands it exactly what
+`commit` committed and exactly what the mock tick drifted. Move that decision
+down into the collector as a freshness heuristic and the silent plant starts
+being recorded hourly as reporting the same number — the app inventing a feed
+that has died, which is the failure the staleness work exists to prevent. Note
+that the market gets this for free from the schedule: `poll` only commits when a
+bar is genuinely due, so a weekend leaves no trace rather than a flat line.
+
+**The record stores observations, not the buffers.** Persisting
+`state.history` would be storing each source's own account back to itself, at
+about a megabyte, and buy nothing — a backfill fills every slot it covers. The
+value is only in the slots it does not.
+
+**Shedding spends the hourly tier before the daily one, entirely.** A live feed
+can usually still be asked about last week; past its window, the daily tier is
+the only place those days exist. Even out the eviction "for fairness" and the
+budget starts eating the irreplaceable half first.
+
 **Beds are raised by lowering the floor.** Plants sit at `y = 0` and grafts,
 dust, and sway all measure from there. Raising the soil would force every one of
 those to learn a bed height. `FLOOR_Y` is negative for this reason.
@@ -144,24 +188,29 @@ plausible numbers is indistinguishable from data.
 
 ## Open work, in the order I would take it
 
-### 1. A collector
+### 1. Make the geometry cache LRU rather than FIFO
 
-The archive tier can hold months and nothing is recording them. History is
-backfilled at module load and then lives only as long as the tab. A collector is
-a layer the original architecture diagram does not have — something that runs
-whether or not anyone is looking — and it is the difference between a scrub over
-generated history and a scrub over the real past.
+Small, and the last thing left on the original list. `useLSystem.ts` caps the
+cache at 600 entries and evicts the oldest *inserted*, so a plant you are
+standing in front of can be thrown out to make room for one you scrubbed past,
+and the next frame rebuilds it. Touching an entry on read and evicting by last
+use fixes it inside the same 600. The measured 94% hit rate is against present
+behaviour, so what this buys is a slice of the remaining 6% — worth doing
+because it is ten lines, not because anything is visibly wrong.
 
-The poll is the half of this that now exists, and it is worth reading first: it
-keeps the *live* reading true but dies with the tab. `state/sources.ts` already
-holds the schedule, the pollability flag, and the "is anything owed" scan, so a
-collector is that loop moved somewhere it can outlive a page — and `LiveSource`
-is the shape it would want anyway.
+### 2. Move the collector somewhere a tab is not required
 
-### 2. Bound the geometry cache
+What exists collects while a tab is open, which is the honest limit of a browser
+with no server behind it, and it is stated as such in three places rather than
+glossed. The next real step is a process: the same loop, the same
+`ObservedRecord` on the wire, reading through `LiveSource` and writing somewhere
+that is not `localStorage`. That is a deployment question more than a code one,
+and it is the point at which "the archive holds a season" stops depending on
+somebody leaving a tab open.
 
-51MB is affordable, unbounded growth is not. Wants an LRU keyed on node id and
-vitality bucket. Recorded as a risk since before the scrub shipped.
+A smaller intermediate step, if a server is not on the table: a service worker
+with periodic background sync. Availability is patchy enough that it would be an
+addition to the current path rather than a replacement for it.
 
 ---
 

@@ -8,6 +8,8 @@ import type { VitalsHistory } from '../ecosystem/history';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
 import { NFL_GARDEN_ID } from '../translation/nfl';
 import { SOURCES, dueSources } from './sources';
+import { browserStorage, createCollector } from './collector';
+import type { ObservedRecord } from './persist';
 
 /**
  * The store holds state and nothing derived. Geometry, layout, adjacency, and
@@ -93,6 +95,11 @@ function composeEcosystem(now = Date.now()): EcosystemState {
     setStaleSchedule(source.gardenId, source.policy);
   }
 
+  // Last, and the order is load-bearing: what previous sittings watched happen
+  // goes into the gaps the sources left, never over what they have just said.
+  // See `recordIfAbsent`.
+  collector.restore(state.history, state.archive);
+
   return state;
 }
 
@@ -126,6 +133,14 @@ function windowsFor(
     fineWindowMs: fine.length ? reachOf(fine, now) : 0,
   };
 }
+
+/**
+ * The record of what previous sittings saw, and the thing that keeps adding to
+ * it. Built before `composeEcosystem` because compose is where it gets laid
+ * into the buffers, and a module-level singleton for the same reason the store
+ * is one: there is one garden and one browser tab.
+ */
+const collector = createCollector({ storage: browserStorage() });
 
 const initial = composeEcosystem();
 
@@ -162,10 +177,23 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
       const coarse = archive[node.id];
       if (coarse) record(coarse, at, node);
     }
+    // The same set the buffers got, written somewhere it survives the tab. The
+    // collector is told what reported rather than working it out, because this
+    // is the call that knows: `nodes` is exactly what a source spoke about.
+    collector.note(Object.values(nodes), at);
     set((state) => ({ nodes: { ...state.nodes, ...nodes }, revision: at }));
   },
 
-  tick: () => set((state) => tickMockEcosystem(state)),
+  tick: () => {
+    const next = tickMockEcosystem(get());
+    // The mock tick writes its own buffers, so the collector has to be told
+    // separately, and told the same thing: the plants it drifted, which are the
+    // ones stamped with this revision. The silent plant is not among them, and
+    // must not be — recording it as reporting the same number every hour is
+    // exactly the fiction the whole design keeps refusing to write down.
+    collector.note(reportedAt(next, next.revision), next.revision);
+    set(next);
+  },
 
   /**
    * The poll.
@@ -200,6 +228,37 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
     return changedSince(state, state.activeGardenId, since);
   },
 }));
+
+/** The plants stamped with this revision, meaning the ones that just reported. */
+function reportedAt(state: EcosystemState, revision: number): EcosystemNode[] {
+  return Object.values(state.nodes).filter(
+    (node) => node.kind === 'plant' && node.updatedAt === revision,
+  );
+}
+
+/**
+ * Write the record out now.
+ *
+ * Wired to the page going away, which is the one moment the thirty-second
+ * schedule cannot cover and the one where the loss is guaranteed rather than
+ * merely possible. Exported rather than registered here because a module that
+ * builds state should not be attaching window listeners; `App.tsx` owns that.
+ */
+export function flushObservations(at = Date.now()): boolean {
+  return collector.flush(at);
+}
+
+/**
+ * The record as it currently stands.
+ *
+ * Exported because the rule that matters most about it is only enforced here —
+ * that a silent plant is never written down as having reported — and a rule
+ * with no way to look at it from outside is a rule nothing can hold this file
+ * to. See `collector.test.ts`.
+ */
+export function observations(): ObservedRecord {
+  return collector.record;
+}
 
 /**
  * Call when leaving a garden. Separate from `enterGarden` because the timestamp

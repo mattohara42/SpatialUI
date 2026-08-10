@@ -6,6 +6,7 @@ import {
   historyBytes,
   historyExtent,
   record,
+  recordIfAbsent,
   sampleAt,
   vitalsAt,
 } from './history';
@@ -89,6 +90,49 @@ describe('VitalsHistory', () => {
 
   it('stays inside the stated memory budget', () => {
     expect(historyBytes(createHistory(HOUR_MS, 168))).toBe(3360);
+  });
+});
+
+/**
+ * The collector's rule. See the comment on the function for why the source's
+ * account of its own past outranks the one we kept.
+ */
+describe('recordIfAbsent', () => {
+  it('writes into an empty slot and says so', () => {
+    const h = createHistory(HOUR_MS, 24);
+    expect(recordIfAbsent(h, 3 * HOUR_MS, vitals(0.4))).toBe(true);
+    expect(sampleAt(h, 3 * HOUR_MS)!.vitality).toBeCloseTo(0.4);
+  });
+
+  it('leaves a written slot alone', () => {
+    const h = createHistory(HOUR_MS, 24);
+    record(h, 3 * HOUR_MS, vitals(0.9));
+    expect(recordIfAbsent(h, 3 * HOUR_MS, vitals(0.1))).toBe(false);
+    expect(sampleAt(h, 3 * HOUR_MS)!.vitality).toBeCloseTo(0.9);
+  });
+
+  it('refuses a slot older than the ring keeps, as `record` does', () => {
+    const h = createHistory(HOUR_MS, 4);
+    record(h, 10 * HOUR_MS, vitals(0.5));
+    expect(recordIfAbsent(h, 2 * HOUR_MS, vitals(0.1))).toBe(false);
+  });
+
+  /**
+   * A ring index that already holds a different absolute slot holds one from
+   * inside the window. Overwriting it would drop a sample to add an older one.
+   */
+  it('refuses an index that belongs to another slot in the window', () => {
+    const h = createHistory(HOUR_MS, 4);
+    record(h, 6 * HOUR_MS, vitals(0.5)); // slot 6, index 2
+    expect(recordIfAbsent(h, 2 * HOUR_MS, vitals(0.1))).toBe(false); // slot 2, index 2
+    expect(sampleAt(h, 6 * HOUR_MS)!.vitality).toBeCloseTo(0.5);
+  });
+
+  it('carries the latest slot forward when it fills past the end', () => {
+    const h = createHistory(HOUR_MS, 24);
+    record(h, 3 * HOUR_MS, vitals(0.5));
+    recordIfAbsent(h, 5 * HOUR_MS, vitals(0.2));
+    expect(h.latestSlot).toBe(5);
   });
 });
 
