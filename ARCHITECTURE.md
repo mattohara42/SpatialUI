@@ -217,7 +217,7 @@ src/
 ```
 
 Everything listed above without a "planned" note exists and is under test:
-527 tests across twenty-seven files, `tsc --noEmit` clean, `vite build` succeeds.
+694 tests across thirty-eight files, `tsc --noEmit` clean, `vite build` succeeds.
 `npm install && npm run dev` runs the desktop scene.
 
 ## Layer contracts
@@ -347,6 +347,114 @@ computations, because each one is far cheaper: a club's reading walks its whole
 season of games, while an instrument's is a binary search into a sorted bar list
 plus a couple of short window scans. The lesson is that the memo was never the
 load-bearing part — the derivations being O(log n) in the record is.
+
+## The third source: the world, and a layer under translation
+
+The world source exists because the first two had stopped disagreeing. Both are
+thirty-two things in eight even beds fed by a publisher on a clock, and a
+pipeline validated twice by the same shape is validated once. This one breaks
+four things, and two of them needed new structure rather than new numbers.
+
+### A number can be revised, so "as of" splits in two
+
+Every derivation in this project answers *as of a timestamp*. Until now that
+question had one meaning, because a game result and a closing price are facts
+about a moment that never change afterwards. An indicator is not: growth is
+published about seventy-five days after its quarter and revised a month later,
+so the record holds two releases with the same `period` and different values.
+
+`IndicatorRelease` therefore carries both dates, and they answer different
+questions. `period` is what the figure describes; `releasedAt` is when it became
+known. **Every derivation keys on `releasedAt`.** `latestRelease` returns the
+most recent figure published at or before `asOf` — not the most recent figure
+describing a period at or before `asOf`, which is a different query and the
+wrong one.
+
+The consequence is that scrubbing shows *what was known*, and it is the only
+honest option available. Reading the other way would mean the garden rewrote its
+own past whenever a statistical office revised something — structurally the same
+error as drawing a flat line through a stretch nobody recorded, which the history
+buffers already refuse to commit. It also gives the scrub work to do in a garden
+whose underlying quantities move quarterly: what moves under the cursor is not
+the world but the state of knowledge about it.
+
+### Extraction: a layer between adapter and translation
+
+`adapters/news/` is the first source whose records are **text**, and
+`extract.ts` is the first code in the project that forms a judgment rather than
+performing a calculation. It sits under translation, not over the gardens: a
+cross-garden news overlay would break the rule that a garden fixes what vitality
+means, which is why `domain` needs no channel at all.
+
+Two properties are enforced structurally rather than by convention:
+
+- **It refuses to guess.** Zero or several countries named, or any sporting
+  vocabulary present, yields `null`. Recall suffers and that is the trade: a
+  miss makes a plant quieter than the world was, a wrong attribution asserts
+  something about a real country in a panel that looks like measurement.
+- **Provenance cannot be dropped.** `UnrestEvent.article` and
+  `ConflictEpisode.articles` are required fields, so an event cannot exist
+  without the sentence it came from, and no amount of downstream carelessness
+  can strip it.
+
+The classifier is a keyword table because it has to be *inspectable*. A model
+would score better and nobody could read the docs and predict its output, which
+is not an acceptable property for a layer whose output is attached to the names
+of real places.
+
+### What it cost
+
+Measured on this machine, translating one snapshot with history backfilled at
+both grains:
+
+```
+                     plants   translate   geometry   segments   leaves
+NFL                      32        45ms       28ms      2,288    2,377
+Markets                  32        69ms         —           —        —
+World                   193       485ms       74ms     18,057   15,333
+```
+
+Six times the plants for ten times the translation and under three times the
+geometry. The backfill memo — keyed on releases published and events reported —
+earns more here than in either other source and for the reason the vintage rule
+exists in the first place: the underlying quantities almost never move, so the
+key is unchanged across long stretches and the walk collapses.
+
+The scale finding worth recording is the one that came out **negative**. The
+predicted bottleneck was the tag textures, one canvas per plant at 1400 px/m;
+building all 193 measures 135ms, so it is not a bottleneck. Nor is geometry, at
+74ms. Total attributable CPU cost for the world garden is about 0.7 seconds.
+Entering it in this environment takes far longer than that, but so does entering
+the NFL garden — there is no GPU here and the software rasteriser runs the
+thirty-two-plant garden at 1.3 fps — so the remaining cost is fill rate and
+texture upload, and **it cannot be judged from here**.
+
+The one number that is GPU-independent and does scale is memory: 193 tag
+textures at 588 × 210 is about 95MB before mipmaps, for a set of labels of which
+a dozen at most are ever inside the nine-metre fade radius. `Tags.tsx` therefore
+builds a card when its plant first comes within range rather than when the
+garden opens, metered to a few per frame so that walking into a bed does not
+draw a dozen canvases in one. The fade pays for the meter: `legibility` is a
+smoothstep that reaches the one-percent cutoff exactly where a tag becomes
+visible, so a card waiting its turn is drawn blank at an opacity nobody can see.
+
+The distinction is worth keeping straight, because the first guess was wrong in
+an instructive way. Drawing the canvases was never expensive. What was expensive
+was holding and uploading them, so the fix is to build fewer rather than to
+build faster — and the worst case is unchanged: walk up to all 193 and you have
+paid for all 193, a card at a time instead of all at once.
+
+### The layout could not stay as it was
+
+Twenty-two beds through the old rule — four or fewer in one row, more wrapped
+into two — stand eleven to a row, a sixty-metre wall with the far end invisible
+from the near one. Past twelve beds the default now squares the garden off
+(`ceil(sqrt(n))` per row). The threshold is set where it is deliberately: every
+existing garden is unchanged, because in those the row *is* the reading (a
+conference, half the sectors), and the rule only takes over where no such
+grouping exists to preserve. The world garden lands at roughly 35 × 46 metres,
+which is walkable and still more house than anyone wants to cross — traversal is
+now an urgent open question rather than a theoretical one.
 
 ## Standing, rather than orbiting
 
@@ -950,6 +1058,17 @@ confirmation rather than added later.
 Geospatial domains, meaning disasters and geopolitics, do not fit a bed layout,
 because a garden discards the map. That wants a terrain environment mode, not a
 change to the node type.
+
+**Half of that has now been tested, and it was half right.** The world garden
+groups countries into UN subregion beds, and discarding the map costs less than
+this predicted: a region is a real grouping people already think in, bed order
+carries west-to-east so the house has a rough geography to it, and land borders
+as grafts put back the adjacency that mattered most. What the prediction got
+right is subtler than "it will not fit" — the borders that *cross* a subregion
+cannot be drawn at all, because a graft between two beds is the length of the
+greenhouse. Egypt and Israel share a border and this garden does not know it. A
+terrain mode is still the answer for a source where adjacency is the whole
+reading; a bed layout is enough for one where adjacency is context.
 
 Completion has no vocabulary yet. Tasks and goals end, plants do not. Fruit and
 deadwood are the obvious answer, worth deciding once the scene exists.

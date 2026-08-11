@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LOOK_LIMITS, lookAt, turn, walk, type Look, type Path } from './look';
+import { FLIGHT_MS, flyPose, progress, type Pose } from './fly';
 import type { Viewpoint } from './greenhouse';
 
 /**
@@ -20,8 +21,13 @@ import type { Viewpoint } from './greenhouse';
  * two gestures fight for the same pointer. `Garden`'s framing effect also
  * reaches for `.target` and `.update()`, so both are kept: the target is where
  * this stands looking, and updating writes the camera.
+ *
+ * `flyIn` is set only when arriving back from the table (see `bonsai.ts`): the
+ * camera is up and outside, and rather than cut back down to standing it eases
+ * there, the mirror of the flight out. It is off for a first load and for
+ * walking between gardens, both of which should simply *be* where they put you.
  */
-export function StandControl({ view }: { view: Viewpoint }) {
+export function StandControl({ view, flyIn = false }: { view: Viewpoint; flyIn?: boolean }) {
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
   const set = useThree((state) => state.set);
@@ -29,6 +35,29 @@ export function StandControl({ view }: { view: Viewpoint }) {
   const look = useRef<Look>({ yaw: 0, pitch: 0 });
   const stand = useRef<[number, number, number]>([...view.position]);
   const dragging = useRef<{ x: number; y: number } | null>(null);
+
+  // The flight down from the table, if this mounted from there. The start pose
+  // is captured in render, before the framing effect below snaps the camera to
+  // the standing position, so it is the table pose the flight leaves from and
+  // not the destination. While `flying`, `useFrame` owns the camera and the
+  // pointer handlers stand back.
+  const flying = useRef(false);
+  const since = useRef(0);
+  const flyFrom = useRef<Pose | null>(null);
+  if (flyIn && flyFrom.current === null) {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    flyFrom.current = {
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [
+        camera.position.x + dir.x,
+        camera.position.y + dir.y,
+        camera.position.z + dir.z,
+      ],
+    };
+    since.current = performance.now();
+    flying.current = true;
+  }
 
   const path = useMemo<Path>(
     () => ({ minRadius: view.minRadius, maxRadius: view.maxRadius }),
@@ -102,21 +131,43 @@ export function StandControl({ view }: { view: Viewpoint }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature, apply]);
 
+  // The flight down, when there is one. It leaves from the captured table pose
+  // and eases onto the standing position and heading; on arrival it hands the
+  // camera to the ordinary yaw/pitch state and the frame driver falls idle.
+  useFrame(() => {
+    if (!flying.current || !flyFrom.current) return;
+    const t = progress(performance.now() - since.current, FLIGHT_MS);
+    const pose = flyPose(flyFrom.current, { position: view.position, target: view.target }, t);
+    camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
+    camera.updateMatrixWorld();
+    if (t >= 1) {
+      flying.current = false;
+      stand.current = [...view.position];
+      look.current = lookAt(view.position, view.target, LOOK_LIMITS);
+      apply();
+    }
+  });
+
   useEffect(() => {
     const canvas = gl.domElement;
 
     const onDown = (event: PointerEvent) => {
       // Shift belongs to the sun scrub, and the left button to it as well while
       // a grab is live — `SunScrub` clears `enabled` in the capture phase, which
-      // runs before this.
-      if (!controls.current.enabled || event.button !== 0 || event.shiftKey) return;
+      // runs before this. A drag is also ignored mid-flight, so grabbing at the
+      // camera while it settles does not fight the flight for the pointer.
+      if (!controls.current.enabled || flying.current || event.button !== 0 || event.shiftKey) {
+        return;
+      }
       dragging.current = { x: event.clientX, y: event.clientY };
       canvas.setPointerCapture(event.pointerId);
     };
 
     const onMove = (event: PointerEvent) => {
       const from = dragging.current;
-      if (!from || !controls.current.enabled) return;
+      if (!from || !controls.current.enabled || flying.current) return;
       look.current = turn(
         look.current,
         event.clientX - from.x,
@@ -135,7 +186,7 @@ export function StandControl({ view }: { view: Viewpoint }) {
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (!controls.current.enabled) return;
+      if (!controls.current.enabled || flying.current) return;
       event.preventDefault();
       // A step per notch, and forward is where you are looking rather than
       // where you are pointing: a scroll while looking at the roof should not

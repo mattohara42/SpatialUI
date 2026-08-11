@@ -13,6 +13,14 @@ import type { Vec3 } from '../lsystem/types';
  * deciding it.
  */
 
+/**
+ * The most beds that still wrap into two rows. Above this the garden squares
+ * off — see `bedsPerRow`. Twelve keeps every garden built so far on the old
+ * rule with room to spare, and the smallest garden it changes is nearly twice
+ * that.
+ */
+const TWO_ROW_LIMIT = 12;
+
 export interface PlantPlacement {
   nodeId: string;
   position: Vec3;
@@ -50,6 +58,14 @@ export interface LayoutOptions {
    * the wrap is also what lets a grouping above the bed — an NFL conference, a
    * cluster of clusters — read as *which row you are looking at* without adding
    * a container level the model does not have.
+   *
+   * Past a dozen beds the two-row rule stops helping and starts hurting: the
+   * world garden's twenty-two subregions would stand eleven to a row, which is
+   * a sixty-metre wall of planting with the far end invisible from the near one.
+   * So beyond that the default squares the garden off instead. The threshold is
+   * set where it is deliberately — it leaves every existing garden's layout
+   * exactly as it was, because the row *is* the reading in those, and only
+   * takes over where no such grouping exists to preserve.
    */
   bedsPerRow?: number;
 }
@@ -74,7 +90,9 @@ export function layoutGarden(
       ? bedsPerRow
       : beds.length <= 4
         ? Math.max(1, beds.length)
-        : Math.ceil(beds.length / 2);
+        : beds.length <= TWO_ROW_LIMIT
+          ? Math.ceil(beds.length / 2)
+          : Math.ceil(Math.sqrt(beds.length));
 
   const bedPlacements: BedPlacement[] = [];
   const plants: PlantPlacement[] = [];

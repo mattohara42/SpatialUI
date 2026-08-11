@@ -3,7 +3,13 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
-import { barkPixels, liftForTexture, surfaceTexture } from './textures';
+import {
+  barkPixels,
+  liftForTexture,
+  normalTexture,
+  roughnessTexture,
+  surfaceTexture,
+} from './textures';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -57,8 +63,17 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
 
   // Bark grain, generated once. Streaks run along v, which cylinder UVs map to
   // the limb's own axis, so the grain runs up the trunk rather than around it.
-  const bark = useMemo(() => surfaceTexture(barkPixels(), [1, 2]), []);
-  useLayoutEffect(() => () => bark.dispose(), [bark]);
+  // The relief map is built from the same pixels, so the ridges the albedo
+  // darkens are the ones the light now catches (see textures.ts).
+  const barkPx = useMemo(() => barkPixels(), []);
+  const bark = useMemo(() => surfaceTexture(barkPx, [1, 2]), [barkPx]);
+  const barkRelief = useMemo(() => normalTexture(barkPx, [1, 2], 7), [barkPx]);
+  const barkRough = useMemo(() => roughnessTexture(barkPx, [1, 2], 0.9, 1.1), [barkPx]);
+  useLayoutEffect(() => () => {
+    bark.dispose();
+    barkRelief.dispose();
+    barkRough.dispose();
+  }, [bark, barkRelief, barkRough]);
 
   const scratch = useMemo(
     () => ({
@@ -146,8 +161,10 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
           top of it. See textures.ts. */}
       <meshStandardMaterial
         map={bark}
+        normalMap={barkRelief}
+        roughnessMap={barkRough}
         color={liftForTexture('#ffffff')}
-        roughness={0.9}
+        roughness={1}
         metalness={0}
       />
     </instancedMesh>

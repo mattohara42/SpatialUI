@@ -2,17 +2,19 @@ import { expand } from './grammar';
 import { PRESETS, foliageFor, type PresetName } from './presets';
 import { rngFromSeed, type Rng } from './random';
 import { interpret, type RawGeometry } from './turtle';
-import { generateTopiary, generateVine } from './bespoke';
+import { generatePalm, generateTopiary, generateVine } from './bespoke';
 import type { Bounds, Grammar, PlantGeometry, TurtleParams, Vec3 } from './types';
 
 /**
  * Forms built by hand rather than by rewriting a grammar. A vine trained on a
- * wire and a topiary clipped to a solid are not self-similar, so they get a
- * bespoke generator that still emits the standard geometry (see lsystem/bespoke).
+ * wire, a topiary clipped to a solid, and a palm — one unbranched stem under a
+ * rosette of fronds — are none of them self-similar, so each gets a bespoke
+ * generator that still emits the standard geometry (see lsystem/bespoke).
  */
 const BESPOKE: Partial<Record<PresetName, (rng: Rng, params: TurtleParams) => RawGeometry>> = {
   vine: generateVine,
   topiary: generateTopiary,
+  palm: generatePalm,
 };
 
 export interface GeneratePlantInput {

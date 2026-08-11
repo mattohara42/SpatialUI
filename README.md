@@ -31,10 +31,10 @@ a claim in a commit message.
 
 The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
 built through the real adapter → translation pipeline — alongside **Markets**,
-thirty-two holdings in eight sector beds through the same pipeline, and four
-mock gardens (Infrastructure, Vault, Threats, Portfolio) with a live drift tick.
-It runs with no backend: both real sources are generated (see below), not
-fetched.
+thirty-two holdings in eight sector beds through the same pipeline, **World**,
+193 UN member states across twenty-two subregion beds, and four mock gardens
+(Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It runs with
+no backend: all three real sources are generated (see below), not fetched.
 
 > **Dev note:** Vite HMR on this project often serves stale code (component
 > state, memoized shader uniforms). If an edit doesn't show, hard-reload the
@@ -67,12 +67,14 @@ unfinished, and what is worth building next.
 src/
   adapters/    Input sources. `nfl/` is feed-shaped records (games with box
                scores, depth charts, injury reports); `market/` is closed bars,
-               fills as lots, halts, and a trading calendar. Both come with the
-               derivations that answer as of any moment. Neither knows what a
-               plant is.
+               fills as lots, halts, and a trading calendar; `world/` is dated
+               indicator releases, the country table, and land borders; `news/`
+               is articles, plus the extractor that turns a headline into a
+               record. All come with the derivations that answer as of any
+               moment. None knows what a plant is.
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
-               the garden and `market.ts` where a portfolio does — the only
-               places the mappings are decided.
+               the garden, `market.ts` where a portfolio does, and `world.ts`
+               where countries do — the only places the mappings are decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types, labels and
                emblems, history-as-a-series, and the raw-payload flattener
@@ -83,8 +85,10 @@ src/
                collector that writes down what was observed so a reload does not
                throw the past away
   scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
-               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, plus
-               the pure sway, daylight, dust, greenhouse, and label modules
+               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, and the
+               two cameras — StandControl on the path, TableControl above the
+               bonsai table — plus the pure sway, daylight, dust, greenhouse,
+               label, bonsai (table framing), and fly (transition) modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -97,6 +101,96 @@ keeps a plant you are looking at from being thrown out by a season scrub walking
 every other plant through buckets nobody will ask for again.
 
 ## What's built
+
+- **The first graphics pass: light through leaves, a model on the table, relief
+  underfoot.** Leaves now transmit light — a backlit canopy glows toward the sun
+  and fades at dusk (`scene/translucency.ts`), a lighting response tinted by the
+  sun rather than a hue the plant carries, so it stays clear of the channel
+  budget. The bonsai table wears a **tilt-shift depth of field**
+  (`scene/TiltShift.tsx`), the shallow-focus band that makes a shrunk garden read
+  as a physical model — mounted only in table mode, on three's own compositor with
+  no new dependency. And bark, turf, soil and all timber carry **normal and
+  roughness maps** derived from the same achromatic height field as their albedo,
+  so the sun catches their relief and highlights break up instead of sliding over
+  a painted plane. That completes the material pass — the first rungs of the
+  fidelity ladder in [docs/graphics.md](docs/graphics.md), which also records the
+  settled decision that XR stays a target.
+
+- **The garden on a table — a second grain of space.** History has two grains of
+  *time* (hourly for a week, daily for twenty); the garden had one grain of
+  *space*, standing on the path, and this is the second. Press `t` (or the
+  **overview** button) and the whole garden shrinks to a miniature on the grass,
+  seen from above and outside, as an alternative to walking a scroll along the
+  aisle. It answers the world garden, which is 193 plants across some 35 × 46
+  metres — a strip whose far end you could never see from its near one — by
+  making the whole of it takeable at a glance.
+
+  It is a change of *distance*, not of reading: the tabletop plant is the same
+  plant, smaller, and health still reads through droop, colour and density with
+  no second visual language added. **It shrinks rather than flying the camera
+  back** because the scene is lit through exponential fog — framing a thirty-metre
+  garden would mean standing eighty metres off, where the fog has swallowed it —
+  so bonsai scale keeps the model an arm's length away in clear air, the way you
+  build a model instead of photographing the building from orbit. The seam was
+  already there: `layout.ts` has always returned a `size` "for Bonsai mode
+  scaling", and nothing had ever shrunk it, so this is a new camera and a new
+  frame, not a new layout (`scene/bonsai.ts`).
+
+  The overview has **no text in it**, and for free: at table distance every plant
+  is beyond the label fade radius, so the existing rule draws no tags without a
+  line of special-casing — the same silence the room's far view keeps. The switch
+  is a **flight, not a cut** (`scene/fly.ts`): the camera eases out to the table
+  and back down to the path, so a second view of the same garden reads as the
+  same garden because you watched the eye travel there. On the table the camera
+  *orbits* — the gesture `look.ts` argued against for the room, and which is right
+  here, where the whole garden has become the one object you are examining. One
+  garden at a time, still: several on a table is cross-garden comparison in
+  disguise, where green would mean two things at once, and that is a separate
+  design.
+
+- **The world, as the third source — and the first one where a number can be
+  revised.** 193 UN member states, twenty-two UN subregions as beds, and the
+  first garden built on figures that are *published* rather than measured. It
+  was chosen because it breaks three things the first two sources had quietly
+  agreed on.
+
+  **Beds are no longer all the same size.** Both existing gardens are eight even
+  beds of four; the subregions hold between two countries and eighteen. The
+  two-row wrap that serves eight beds turns twenty-two into a sixty-metre strip
+  with the far end invisible from the near one, so past a dozen beds the layout
+  squares the garden off instead. Every existing garden's layout is untouched,
+  because in those the row *is* the reading.
+
+  **Scrubbing shows what was known, not what was true.** Growth is published
+  about seventy-five days after the quarter it describes and revised a month
+  later, so the same quarter carries two different values and which one you see
+  depends on where the cursor is. A plant therefore reads the figure that had
+  been published at the cursor, and steps on release dates rather than drifting.
+  Doing it the other way would mean the garden rewrote its own past every time a
+  statistical office changed its mind — the flat-line failure the history
+  buffers already refuse to commit, arriving by a different route.
+
+  **A headline is not a record.** Unrest and conflict do not come from the
+  generator; they come from a news feed through a new extraction layer
+  (`adapters/news/`), which is the first place in the project where the app
+  forms a *judgment* about its input rather than a calculation. It refuses to
+  guess: a headline naming two countries, or none, or reading like sport,
+  produces nothing at all. Precision over recall, because a miss costs a quiet
+  plant and a wrong attribution asserts something about a real country in a
+  panel that looks exactly like the ones showing measured numbers.
+
+  Conflict is a **blight**, never a vitality term. A country at war visibly
+  wilting reads powerfully and is the one thing this source must not do, because
+  vitality is a comparison and the app would then be ranking countries by war.
+  Every derived blight carries the dispatch it came from — headline, outlet,
+  date — and says out loud that it was simulated.
+
+  Countries, ISO codes, subregions, UN accession years, land borders and
+  approximate populations are real. Every indicator value and every event is
+  generated, the outlets are named "Simulated Wire" rather than borrowing a real
+  masthead, the links are on `.invalid`, and **which countries are shown in
+  conflict is decided by a hash** — hand-picking would mean taking a position on
+  which real places are at war, in invented data, in a public repository.
 
 - **The past stops being thrown away.** History used to be backfilled when the
   page loaded and discarded when it closed, so scrubbing back four months was a
@@ -318,10 +412,11 @@ than the one shift-drag was standing in for.
 ## What's next
 
 The design docs track the open work. Near-term candidates: a live adapter behind
-either the `NflSource` or `MarketSource` interface, which is the cheapest change
-with the largest payoff because the seam was built for it (this environment has
-no outbound network access to a sports API or a market data vendor, which is why
-both are generated); a third source deliberately unlike the two present ones,
-which are both thirty-two things in eight groups and starting to look like a
-mould; and a vocabulary for completion, since tasks and builds finish and plants
-do not.
+any of the `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource`
+interfaces, which is the cheapest change with the largest payoff because every
+one of those seams was built for it — this environment's proxy denies
+`api.worldbank.org`, `feeds.bbci.co.uk`, and `aljazeera.com` alike, which is why
+all of them are generated; **traversal**, which the world garden has now made
+urgent rather than theoretical, since 193 plants across thirty-five by forty-six
+metres is more house than anyone wants to walk; and a vocabulary for completion,
+since tasks and builds finish and plants do not.

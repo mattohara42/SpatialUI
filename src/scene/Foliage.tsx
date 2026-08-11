@@ -5,6 +5,8 @@ import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
 import type { LeafKind } from '../lsystem/presets';
 import { grain } from './textures';
+import { makeLeafMaterial } from './translucency';
+import type { Daylight } from './daylight';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -42,6 +44,10 @@ const SHAPES: Record<LeafKind, LeafShape> = {
   // A petal: rounded and slightly cupped, brighter than a leaf. A cluster of
   // these fanned around a stem tip reads as a flower head.
   bloom: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [1.0, 0.55, 1.0], roughness: 0.45 },
+  // A palm leaflet: much longer than it is wide and nearly flat. Strung in pairs
+  // down an arcing rachis (see `generatePalm`), a run of these reads as one
+  // frond rather than as a line of separate leaves.
+  frond: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.28, 2.3, 0.1], roughness: 0.6 },
 };
 
 /**
@@ -63,7 +69,7 @@ const SHAPES: Record<LeafKind, LeafShape> = {
  * single geometry, so distinct shapes have to be distinct meshes. A garden uses
  * at most four, so this is four draw calls, not one per plant.
  */
-export function Foliage({ plants }: { plants: PlacedPlant[] }) {
+export function Foliage({ plants, daylight }: { plants: PlacedPlant[]; daylight: Daylight }) {
   const groups = useMemo(() => {
     const byKind = new Map<LeafKind, PlacedPlant[]>();
     for (const plant of plants) {
@@ -77,13 +83,21 @@ export function Foliage({ plants }: { plants: PlacedPlant[] }) {
   return (
     <>
       {[...groups].map(([kind, kindPlants]) => (
-        <LeafLayer key={kind} kind={kind} plants={kindPlants} />
+        <LeafLayer key={kind} kind={kind} plants={kindPlants} daylight={daylight} />
       ))}
     </>
   );
 }
 
-function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) {
+function LeafLayer({
+  kind,
+  plants,
+  daylight,
+}: {
+  kind: LeafKind;
+  plants: PlacedPlant[];
+  daylight: Daylight;
+}) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const shape = SHAPES[kind];
 
@@ -94,6 +108,11 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
 
   const geometry = useMemo(() => shape.geometry(), [shape]);
   useLayoutEffect(() => () => geometry.dispose(), [geometry]);
+
+  // A leaf material that lets the sun through when the canopy is backlit. Built
+  // once per leaf shape and aimed at the sun each frame; see `translucency.ts`.
+  const leaf = useMemo(() => makeLeafMaterial(shape.roughness), [shape]);
+  useLayoutEffect(() => () => leaf.dispose(), [leaf]);
 
   useLayoutEffect(() => {
     const instanced = mesh.current;
@@ -123,9 +142,12 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
     [],
   );
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const instanced = mesh.current;
     if (!instanced || count === 0) return;
+    // Aim the transmission at the sun for this frame, in the camera's space, and
+    // let its strength ride the sun's own intensity so the glow fades at dusk.
+    leaf.update(camera, daylight.sunDirection, daylight.sunColor, daylight.sunIntensity);
     const { dummy, sway, direction } = scratch;
     const t = clock.elapsedTime;
     const [ax, ay, az] = shape.aspect;
@@ -178,11 +200,9 @@ function LeafLayer({ kind, plants }: { kind: LeafKind; plants: PlacedPlant[] }) 
   return (
     <instancedMesh
       ref={mesh}
-      args={[geometry, undefined, count]}
+      args={[geometry, leaf.material, count]}
       frustumCulled={false}
       castShadow
-    >
-      <meshStandardMaterial roughness={shape.roughness} flatShading />
-    </instancedMesh>
+    />
   );
 }

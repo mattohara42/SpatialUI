@@ -17,7 +17,8 @@ export type Domain =
   | 'security'
   | 'markets'
   | 'sports'
-  | 'learning';
+  | 'learning'
+  | 'geopolitics';
 
 /**
  * Where the node sits in the hierarchy.
@@ -63,6 +64,40 @@ export interface Blight {
   since: number;
   /** Set by an adapter when this blight is safely actionable. */
   remediable?: boolean;
+}
+
+/** Whether a completed unit of work finished well. See `Completion`. */
+export type CompletionOutcome = 'done' | 'failed';
+
+/**
+ * A unit of work that finished, attached to the node that produced it.
+ *
+ * The sibling of `Blight`, with the opposite sign and a crucial difference in
+ * tense: a blight is an *ongoing* condition that persists until it heals, while a
+ * completion is a *terminal event* — it happened, at an instant, and is now
+ * history. A red build is a completion; a pipeline that is currently broken is a
+ * blight, and the two can sit on the same node meaning different things.
+ *
+ * It is deliberately not a fifth vital. The four axes are levels — where a thing
+ * stands now — and completion is a discrete outcome you *count*, not a height. It
+ * drives its own reading (fruit for `done`, deadwood for `failed`), which is a
+ * new channel the reading budget has not spent: *output*, independent of health.
+ * See `docs/completion.md`.
+ */
+export interface Completion {
+  id: string;
+  /** Epoch ms the thing finished. Read against the cursor, so completion scrubs
+   *  with everything else and needs no history tier of its own. */
+  at: number;
+  outcome: CompletionOutcome;
+  /** Short human line: "build #4821", "Q3 goal", "deploy v2.1". */
+  label: string;
+  /**
+   * Where this came from, so a fruit never asserts a completion it cannot show.
+   * Required on the type for the reason `UnrestEvent.article` is (see the world
+   * garden): a mark claiming a real outcome must carry what it was.
+   */
+  evidence: string;
 }
 
 /**
@@ -138,6 +173,14 @@ export interface EcosystemNode extends Vitals {
   plantingType?: PlantingType;
   /** Empty array means healthy. */
   blights: Blight[];
+  /**
+   * Units of work that finished, most-recent-carrying. Optional, and undefined
+   * reads as none — unlike `blights`, which every source computes, most sources
+   * have no notion of completion at all, and only a source shaped like *work that
+   * ends* (a pipeline, a task board) ever sets this. See `Completion` and
+   * `ecosystem/completion.ts`.
+   */
+  completions?: Completion[];
   /** Epoch ms of the last telemetry update. Drives staleness fading. */
   updatedAt: number;
   /**
