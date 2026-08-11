@@ -12,11 +12,11 @@ are still open.
 
 ## State
 
-Green. 772 tests across 44 files (plus one live Prometheus test that skips
+Green. 814 tests across 46 files (plus one live Prometheus test that skips
 unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
-Seven gardens. Three are real, in the sense that they come through the
+Eight gardens. Four are real, in the sense that they come through the
 adapter → translation pipeline from feed-shaped records:
 
 | garden | beds | plants | source |
@@ -24,19 +24,77 @@ adapter → translation pipeline from feed-shaped records:
 | **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season |
 | **Markets** | 8 sectors | 32 holdings | `adapters/market` — seeded tape |
 | **World** | 22 UN subregions | 193 states | `adapters/world` + `adapters/news` |
+| **Prometheus** | 3 jobs | 7 targets | `adapters/prometheus` — **mock fetch** |
 | Infrastructure, Vault, Threats, Portfolio | 4 mock gardens | | `mock/` — drift tick |
 
-All three real sources are generated rather than fetched. This container has no
-outbound access to a sports API, a market data vendor, the World Bank, or a news
-wire — verified per host (`api.worldbank.org`, `feeds.bbci.co.uk`,
-`aljazeera.com` all answer 403 at the proxy CONNECT), and the agent proxy itself
-is healthy, so it is policy and not a broken setup. Each implements a
-one-method interface (`NflSource`, `MarketSource`, `WorldSource`, `NewsSource`)
-that a live feed can be dropped into with nothing downstream changing. That swap
-is the single highest-value thing an environment with network access could do.
+All four real sources run without outbound network. Three are generated; the
+fourth, Prometheus, *fetches* — through a mock (`adapters/prometheus/mock.ts`)
+that answers `/api/v1/query` in the exact wire shape a server returns, because
+this container has no egress. The block is verified per host (`api.worldbank.org`,
+`feeds.bbci.co.uk`, `aljazeera.com`, and Prometheus's own demo all answer 403 at
+the proxy CONNECT), and the agent proxy itself is healthy, so it is policy and not
+a broken setup. Each source implements a one-method interface (`NflSource`,
+`MarketSource`, `WorldSource`, `NewsSource`) or the `LiveSource.read`/`refresh`
+fetch seam (Prometheus), so a live feed drops in with nothing downstream changing
+— for Prometheus, by swapping the mock `fetchImpl` for the platform `fetch` and a
+real endpoint. That swap is the single highest-value thing an environment with
+network access could do.
 
 ### What shipped in the most recent session
 
+- **Prometheus is wired into `SOURCES`, behind a mock fetch.** The archetype the
+  whole idea was built for is now a live garden in the app — eight gardens, not
+  seven — without an inch of network. `promSource` goes into `SOURCES` with its
+  `fetchImpl` pointed at `mockPromFetch` (`adapters/prometheus/mock.ts`), a
+  `FetchLike` that answers `/api/v1/query` with a synthetic seven-target fleet in
+  the exact wire shape a real server returns: value as a string, timestamp in
+  seconds, labels under `metric`. So `fetchPromSnapshot` parses it,
+  `translatePromSnapshot` maps it, and nothing in the path can tell it did not
+  come off a socket — going live is a swap of that one `fetchImpl` argument. Three
+  seams made it fit the synchronous app: the source is **primed synchronously**
+  (`adopt(syntheticPromSnapshot())`) so the garden is populated on the first
+  `read`, no empty-then-fill flicker; `LiveSource` gained an optional **`refresh`**
+  that the beat kicks fire-and-forget (the mock stand-in for the backend collector
+  loop — a fetch that fails just doesn't advance, and staleness greys the garden);
+  and `promStaleSchedule` now makes a target **due one scrape interval after its
+  last sample** rather than on every beat, which is both realistic and what keeps
+  the common poll cheap. The fleet moves (latencies walk, so trend is real) and one
+  replica is held **down** — `up{} == 0`, last sample frozen in the past — so the
+  garden shows the thing only Prometheus states about itself: a target greying into
+  staleness with a critical blight while its neighbours stay fresh. Not verified in
+  a real browser: Playwright is not a dependency here and adding it for one
+  screenshot was not worth it, so the proof is the suite (compose lands the garden
+  with history and a schedule; the fleet translates well-formed; the down replica
+  greys; a refresh advances what `read` returns).
+- **The garden builder's offline groundwork — the half that does not need a
+  network.** Two of the three things `docs/sources.md` named as blocking a
+  general user-defined source are cleared. **`Domain` is open**: it was a closed
+  enum of seven, and the recorded fear was that it "feeds materials" so a new
+  domain would have no look — but the code disagreed, nothing keys materials off
+  `domain` (a plant's look is `plantingType` + archetype, chosen in translation),
+  and the only reader is the HUD, which renders it as text. So it is now
+  `KnownDomain | (string & {})` with `'general'` as the named fallback, and a user
+  source names its own with nothing downstream to teach (`ecosystem/types.ts`,
+  `isKnownDomain`). **The declarative interpreter is built**: `translation/
+  declarative.ts` turns a mapping over plain fetched JSON — records path, dotted
+  field paths, the axis scale, mandatory polarity, optional activity field,
+  group-by for beds, provenance — into the same flat nodes the hand-written
+  translators produce. It is the general case of what `prometheus.ts` proved for
+  one wire shape; the three hand-written translators are its spec, and what it
+  does not yet express (edges, the world's as-of split) is named in the file. It
+  *does* now speak **completion**: an optional `completions` block maps a record's
+  finished work (an array path plus `atPath`/`outcomePath`/`labelPath` and a
+  `doneWhen` set) onto the node's `completions`, so a config-driven CI feed or
+  to-do list hangs fruit and deadwood without a developer — safe as config because
+  a completion is an event the source *states*, not a comparison to invent. The
+  two shared primitives it needed — `scale`/`AxisScale` and the container roll-up —
+  were lifted out of `prometheus.ts` into `ecosystem/scale.ts` and
+  `ecosystem/rollup.ts`, since they were never Prometheus-specific; Prometheus
+  re-exports `scale`/`AxisScale` so nothing downstream moved. What is still missing
+  is the half a browser cannot do: the fetch (arbitrary third-party hosts need a
+  backend proxy) and a config UI. 30 tests, including a league-shaped and a
+  market-shaped mapping as reference cases and a pipelines-shaped one for
+  completion.
 - **The geometry cache evicts by last use.** It held 600 entries and threw out
   the oldest *inserted*, which is the same thing until something churns: a season
   scrub walks every plant through maturity buckets nobody wants again, and each
@@ -393,8 +451,12 @@ a scrub that works from the table view is worth a thought.
 **A live adapter behind any of the four interfaces.** The highest-value single
 change, and the cheapest, because every seam was built for it: implement
 `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
-and nothing below changes. It also converts every "seeded fiction" caveat in the
-docs into a real claim. Needs network access this environment does not have.
+and nothing below changes. Prometheus has now walked this the whole way short of
+the socket — it fetches through `promSource`'s `fetchImpl` seam, with a mock in
+that slot (`adapters/prometheus/mock.ts`), so going live is swapping the mock for
+the platform `fetch` and a real endpoint. It also converts every "seeded fiction"
+caveat in the docs into a real claim. Needs network access this environment does
+not have.
 
 **User-defined data sources** — letting an end user point the garden at their own
 feed (FIFA, Prometheus, political fundraising) rather than a developer writing a
@@ -405,10 +467,13 @@ is nearly there, and non-developer runtime configuration, which is the real work
 The crux is turning the translator from *code* into a *declarative mapping*,
 because it decides things the raw data does not carry: the four axes as
 comparisons in [0, 1], and above all polarity, the one rule the whole
-environment model exists to hold. Prometheus is the archetype and the right first
-source; `Domain` being a closed enum and the completion-vocabulary gap are the
-two things to fix before the general case. Needs the same network — and, for a
-real connection past the browser's CORS wall, a backend.
+environment model exists to hold. **That mapping now exists in first-cut form**
+(`translation/declarative.ts`), and the two blockers this bullet used to name —
+`Domain` being a closed enum, and the completion-vocabulary gap — are both
+cleared (opened, and fruit/deadwood shipped). What is left is above and below the
+interpreter, not in it: a real fetch past the browser's CORS wall needs a backend
+proxy, and a non-developer needs a config UI over the `DeclarativeMapping` shape.
+Both wait on the same network and the same backend the collector move waits on.
 
 `NewsSource` is the one to do first if you get network, and not because it is
 the easiest. It is the only source whose generated half is *text about real
@@ -437,20 +502,23 @@ all numeric and all publisher-fed. What is still unexercised:
   the closest thing to real topology so far, but they are static.
 - *CI pipelines* — where things genuinely complete, which the vocabulary has no
   word for. Recorded as an open risk: tasks end, plants do not.
-- *Prometheus* — the archetype the whole idea was built for. Deliberately not
-  chosen three times now, because the mock gardens already cover infrastructure
-  and it needs a live server to be interesting. Worth doing the moment there is
-  one.
+- *Prometheus* — the archetype the whole idea was built for, and **now built and
+  wired in behind a mock fetch** (see the most-recent-session note and
+  `docs/prometheus.md`). What remains is only the socket: a live server, and the
+  unattended refresh loop a shut tab cannot be. Worth doing the moment there is
+  network.
 
-**Completion vocabulary.** Plants do not finish; tasks, goals, builds, and
-harvests do. Fruit and deadwood are the obvious candidates and `Produce.tsx`
-already draws fruit for other reasons. This is the gap that blocks a whole
-class of sources — and it is now **planned in detail in `docs/completion.md`**:
-completion modelled as an *event* on the Blight pattern (a discrete terminal
-outcome carried as-of a timestamp, not a fifth health level), read as fruit for
-success and deadwood for failure, exercised first by a self-contained mock
-pipelines garden. The open decisions the owner should settle before code are
-listed there.
+**Completion vocabulary — built, config verb included.** Plants do not finish;
+tasks, goals, builds, and harvests do, and the vocabulary now has a word for it.
+`Completion` sits on the node beside `Blight` with the opposite sign — a discrete
+terminal outcome carried as-of a timestamp, not a fifth health level — read as
+fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
+`scene/Completions.tsx`, designed in `docs/completion.md`). And the declarative
+source now declares it: a `completions` block maps a record's finished work onto
+the node, so a user pointing the garden at a CI feed or a to-do list gets fruit
+without a developer writing a translator. What is left is only a source shaped
+*entirely* around finishing — a dedicated pipelines garden — for which the
+mock/live plumbing, not the vocabulary, is the remaining work.
 
 **Cross-garden comparison.** One garden is live at a time, which is what stops
 green meaning two things at once, and that is right. But "how is the AFC West

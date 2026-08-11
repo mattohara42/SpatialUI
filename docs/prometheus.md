@@ -76,7 +76,35 @@ What that leaves open is deliberate and is *not* a translator problem: something
 has to *call* `refresh` on the scrape interval, and a shut browser tab cannot.
 That caller is the unattended collector loop `docs/sources.md` describes — a
 backend — and the observation record already stores in the shape it wants. So a
-live Prometheus garden is `promSource` plus that loop, and `promSource` is the
-whole of the part that lives in the client. It is intentionally not added to
-`state/sources.ts` yet, because wiring it live is that backend's job, not this
-source's.
+*live* Prometheus garden is `promSource` plus that loop, and `promSource` is the
+whole of the part that lives in the client.
+
+## Wired in behind a mock fetch
+
+`promSource` is now in `state/sources.ts` — the eighth garden — pointed at a mock
+instead of a server. `adapters/prometheus/mock.ts` is a `FetchLike` that answers
+`/api/v1/query` from a synthetic seven-target fleet in the exact wire shape above,
+so the whole path runs in the app with the socket the only thing missing. Three
+things make an async fetch source fit the synchronous composition the other
+sources assume:
+
+- **Primed synchronously.** `syntheticPromSnapshot()` builds a parsed snapshot
+  without the promise, and `adopt` hands it to the source before compose reads it,
+  so the garden is populated on the first `read` rather than empty until a fetch
+  lands.
+- **`refresh` on the beat.** `LiveSource` gained an optional `refresh(now)`; the
+  store's `poll` kicks it fire-and-forget for any source that has one, so the next
+  beat's `read` sees the fetched snapshot. This is the mock standing in for the
+  backend loop — the caller the section above says a shut tab cannot be. A fetch
+  that rejects simply does not advance, and staleness greys the garden, which is
+  the honest reading of a feed that went quiet.
+- **Due on the scrape interval, not every beat.** `promStaleSchedule` now marks a
+  target owed one interval after its last sample (and stale one interval beyond
+  that), so the poll re-reads on the scrape cadence rather than continuously.
+
+The mock fleet moves — latencies walk on a slow per-target curve, so trend is a
+real delta across refreshes — and one replica is held down (`up{} == 0`, last
+sample frozen in the past) so the garden exercises the staleness-and-blight read,
+not just the healthy one. Swapping `mockPromFetch` for the platform `fetch` and a
+real `PromQuery` endpoint is the whole of what "go live" means; the unattended
+refresh loop for a shut tab remains the backend's job.

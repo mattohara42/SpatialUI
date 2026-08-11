@@ -215,7 +215,16 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
     if (due.length === 0) return [];
 
     const nodes: Record<string, EcosystemNode> = {};
-    for (const source of due) Object.assign(nodes, source.read(at).nodes);
+    for (const source of due) {
+      // An async source (a real or mock fetch) advances by refreshing: kick the
+      // next fetch fire-and-forget so the following beat's `read` sees it, and
+      // read the snapshot it currently holds now. This is the mock stand-in for
+      // the unattended collector loop a backend would run on the scrape interval;
+      // a fetch that fails simply does not advance, and staleness greys the
+      // garden, which is the honest reading of a feed that stopped answering.
+      if (source.refresh) void Promise.resolve(source.refresh(at)).catch(() => {});
+      Object.assign(nodes, source.read(at).nodes);
+    }
     get().commit(nodes, at);
     return due.map((source) => source.gardenId);
   },

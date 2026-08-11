@@ -32,9 +32,11 @@ a claim in a commit message.
 The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
 built through the real adapter → translation pipeline — alongside **Markets**,
 thirty-two holdings in eight sector beds through the same pipeline, **World**,
-193 UN member states across twenty-two subregion beds, and four mock gardens
+193 UN member states across twenty-two subregion beds, **Prometheus**, seven
+targets across three job beds fetched through a mock server, and four mock gardens
 (Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It runs with
-no backend: all three real sources are generated (see below), not fetched.
+no backend: the generated sources are seeded and Prometheus fetches from a mock
+(see below), so nothing leaves the page.
 
 > **Dev note:** Vite HMR on this project often serves stale code (component
 > state, memoized shader uniforms). If an edit doesn't show, hard-reload the
@@ -70,11 +72,15 @@ src/
                fills as lots, halts, and a trading calendar; `world/` is dated
                indicator releases, the country table, and land borders; `news/`
                is articles, plus the extractor that turns a headline into a
-               record. All come with the derivations that answer as of any
-               moment. None knows what a plant is.
+               record; `prometheus/` is the query-API wire and a `fetch` seam,
+               with `mock.ts` a stand-in server so it runs offline. All come with
+               the derivations that answer as of any moment. None knows what a
+               plant is.
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
-               the garden, `market.ts` where a portfolio does, and `world.ts`
-               where countries do — the only places the mappings are decided.
+               the garden, `market.ts` where a portfolio does, `world.ts` where
+               countries do, and `prometheus.ts` / `declarative.ts` where a
+               metric feed and a config-driven JSON source do — the only places
+               the mappings are decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types, labels and
                emblems, history-as-a-series, and the raw-payload flattener

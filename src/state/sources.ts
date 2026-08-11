@@ -19,6 +19,13 @@ import {
   WORLD_STALE_SCHEDULE,
   translateWorldSnapshot,
 } from '../translation/world';
+import { promSource } from '../adapters/prometheus';
+import {
+  PROM_MOCK_MAPPING,
+  PROM_MOCK_QUERY,
+  mockPromFetch,
+  syntheticPromSnapshot,
+} from '../adapters/prometheus/mock';
 
 /**
  * The real sources, and the one question that turned out to have two uses.
@@ -50,6 +57,18 @@ export interface LiveSource {
   /** Ask the source, and translate what it says, as of `now`. */
   read(now: number): TranslatedGarden;
   /**
+   * Advance an async source: fetch the next reading and adopt it, so the *next*
+   * `read` reflects it. Present only on sources whose feed is a network fetch
+   * rather than a generator — Prometheus is the first — because `read` is
+   * synchronous by contract and a fetch is not. The beat kicks this
+   * fire-and-forget (see `ecosystemStore.poll`); a fetch that fails simply does
+   * not advance, and staleness greys the garden, which is the honest reading of a
+   * feed that stopped answering. It is the seam a backend's collector loop would
+   * drive on the scrape interval; in the app today a mock fetch stands in for the
+   * server. Absent on generator sources, whose `read` already answers as-of now.
+   */
+  refresh?(now?: number): void | Promise<void>;
+  /**
    * Whether asking again is meaningful.
    *
    * Not every generated source can be re-asked. The league's season is anchored
@@ -70,6 +89,31 @@ export interface LiveSource {
 const nfl = syntheticNflSource();
 const market = syntheticMarketSource();
 const world = syntheticWorldSource();
+
+/**
+ * Prometheus, wired in behind a mock fetch.
+ *
+ * The first source in `SOURCES` whose feed is a real HTTP fetch rather than a
+ * generator — the archetype `docs/sources.md` was written for. Its `read`
+ * translates the snapshot it holds; `refresh` fetches the next one, and the beat
+ * kicks that fire-and-forget so the fleet stays live. What it fetches from is a
+ * mock (`mockPromFetch`), because a browser cannot reach an arbitrary server and
+ * this environment has no egress — but it fetches through the exact `fetchImpl`
+ * seam a real server drops into, so going live is a change of that one argument
+ * and nothing else. The source is primed synchronously here so the garden is
+ * populated on the first `read`, before any refresh can land; `adopt` is the same
+ * seam a backend that already fetched would hand results back through.
+ */
+const prometheus = promSource({
+  query: PROM_MOCK_QUERY,
+  mapping: PROM_MOCK_MAPPING,
+  fetchImpl: mockPromFetch(),
+  // A brisk scrape so the fleet visibly moves; due one interval after the last
+  // sample (see `promStaleSchedule`), so it re-reads on that cadence rather than
+  // on every beat, and greys only after two intervals of silence.
+  scrapeIntervalMs: 15_000,
+});
+prometheus.adopt(syntheticPromSnapshot());
 
 export const SOURCES: readonly LiveSource[] = [
   {
@@ -95,6 +139,7 @@ export const SOURCES: readonly LiveSource[] = [
     // not move under it — the property `pollable` is really asserting.
     pollable: true,
   },
+  prometheus,
 ];
 
 /**

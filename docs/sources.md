@@ -73,6 +73,19 @@ So the developer path is: write a `read(now)` that fetches and translates, give
 it a policy, add it to `SOURCES`. Done. The user path has to turn each of those
 steps into data.
 
+**And the first turn of that crank now exists.** `translation/declarative.ts`
+interprets a mapping over plain fetched JSON — an array of records and dotted
+paths for id, label, level, and bed — into the same flat nodes the hand-written
+translators produce. It is the general case of what `translation/prometheus.ts`
+proved for one wire shape: the axis scale, mandatory polarity, derived trend, and
+group-by-for-beds are all *config*, so a second garden of that shape is a
+`DeclarativeMapping` object rather than a copy of a translator. It also maps
+declared **completions** — fruit and deadwood for finished work, the verb a CI
+feed or a to-do list needs. It does not yet cover edges or the
+published-vs-described split the world garden needs — each named in the file
+against the translator that is its spec. What is still missing above it is a
+fetch/backend and a UI, below.
+
 ---
 
 ## What does not exist — configuration, mapping, and a place to run
@@ -154,16 +167,22 @@ Two constraints the honesty of the app imposes on any user source:
 
 Small, concrete, and they block the general case:
 
-- **`Domain` is a closed enum** (`devops | pkm | markets | sports | …`) used "for
-  grouping and materials". An arbitrary user domain — political fundraising —
-  does not fit it, and because it feeds *materials*, a new domain has no look.
-  Either open it to a string with a generic fallback material, or map every user
-  source onto a small set of provided domains. This is a real edit, not a
-  formality.
+- **`Domain` — opened.** It was a closed enum of seven, and the worry recorded
+  here was that it "feeds materials", so a new domain would have no look.
+  Checking the code retired half that worry: nothing in the renderer keys
+  materials off `domain` at all — a plant's look comes from `plantingType` and
+  the L-system archetype, both chosen in translation, and the only thing that
+  reads `domain` is the inspection HUD, which renders it as text. So `Domain` is
+  now `KnownDomain | (string & {})`: the seven ship as autocompleted literals with
+  `'general'` added as the named fallback bucket, and a user source names its own
+  (`fundraising`, `fifa`) with nothing downstream to teach. `isKnownDomain` is for
+  code that wants to branch on the built-in set — never as a gate that rejects an
+  unfamiliar string, which would be the closed enum back again.
 - **The node type must stay narrow.** Its own rule: *never a field only one domain
-  uses* — those live in `raw`. A declarative source must respect that. The
-  temptation to add per-source fields to the node is the thing the flat contract
-  exists to refuse.
+  uses* — those live in `raw`. A declarative source must respect that, and
+  `translation/declarative.ts` does: everything source-specific goes into
+  `raw.record`, never onto the node. The temptation to add per-source fields to
+  the node is the thing the flat contract exists to refuse.
 
 ---
 
@@ -195,37 +214,59 @@ Small, concrete, and they block the general case:
 
 ---
 
-## The gap that blocks a whole class of sources: completion
+## The gap that blocked a whole class of sources: completion — now closed
 
 Plants grow; they do not *finish*. Tasks, builds, goals, and harvests do.
-Prometheus gauges are safe, but "CI pipelines", "a sprint", "a fundraising
-target" all genuinely complete, and the health vocabulary has no term for it —
-recorded as an open risk elsewhere: *tasks end, plants do not*. Fruit and
-deadwood are the obvious candidates, and `Produce.tsx` already draws fruit for
-other reasons. This is worth settling before shipping a user-source feature that
-invites completion-shaped data, because a user *will* point it at a to-do list.
+Prometheus gauges were safe, but "CI pipelines", "a sprint", "a fundraising
+target" all genuinely complete, and the health vocabulary had no term for it.
+That gap is now filled: `Completion` sits on the node beside `Blight` with the
+opposite sign — a discrete terminal event carried as-of a timestamp, read as
+fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
+`scene/Completions.tsx`, `docs/completion.md`). So a user *can* point the garden
+at a to-do list — and the declarative interpreter now speaks the verb: a
+`DeclarativeMapping` takes an optional `completions` block (an array path, plus
+`atPath`/`outcomePath`/`labelPath` and a `doneWhen` set) that maps a record's
+finished work onto the node's `completions`. It is safe as config where the level
+is not, because a completion is a discrete event the source *states* — it
+happened, at a time, with an outcome — rather than a comparison the config has to
+invent; the only judgement is which outcome values count as success.
 
 ---
 
 ## Recommended sequence
 
-1. **Prometheus as a hand-written `LiveSource`**, the moment there is network. It
-   is the archetype, and it builds the fetch/poll/backend plumbing every later
-   step reuses. No new UI, no declarative layer yet — just prove the live pull
-   behind the existing interface.
-2. **Open `Domain`** and add a generic fallback material, so a source that is not
-   one of the seven built-in domains has somewhere to live.
+1. ~~**Prometheus as a hand-written `LiveSource`**~~ — **done, and wired into
+   `SOURCES` behind a mock fetch.** `translation/prometheus.ts` +
+   `adapters/prometheus/` translate the wire, `prometheus.live.test.ts` proves the
+   live pull the moment a server is reachable (it 403s here by egress policy, not
+   by any gap in the code), and `promSource` is now the eighth garden — pointed at
+   `mockPromFetch` (`adapters/prometheus/mock.ts`) instead of a socket. It fetches
+   through the exact `fetchImpl` seam a real server drops into, primed
+   synchronously and refreshed on the beat (see `docs/prometheus.md`). Going live
+   is a swap of that one argument plus the unattended refresh loop of step 6.
+2. ~~**Open `Domain`**~~ — **done.** Now `KnownDomain | (string & {})` with
+   `'general'` as the named fallback; no material map was needed, because nothing
+   keyed materials off `domain` in the first place (see above).
 3. **Generalize `read(now)` into a declarative HTTP/JSON source + mapping
-   config**: fetch spec, cadence, field paths, the axis-scaling rule, mandatory
-   polarity, group-by for beds, provenance. The three hand-written translators
-   are the spec for what it must be able to express.
-4. **Settle the completion vocabulary** (fruit/deadwood) before inviting
-   completion-shaped data.
+   config** — **first cut done, offline half.** `translation/declarative.ts`
+   interprets a mapping over fetched JSON: records path, field paths, the
+   axis-scaling rule, mandatory polarity, optional activity field, group-by for
+   beds, provenance. The three hand-written translators are its spec; what it does
+   not yet express (edges, the world's as-of split, a completion verb) is named in
+   the file. What remains is the *fetch* half — a real HTTP call needs the backend
+   proxy of step 6, because a browser cannot fetch arbitrary third-party hosts.
+4. ~~**Settle the completion vocabulary**~~ — **done, including the config verb.**
+   Fruit and deadwood ship (`ecosystem/completion.ts`, `docs/completion.md`), and
+   `translation/declarative.ts` now maps a record's finished work onto the node's
+   `completions` via an optional `completions` block — so a config-driven CI feed
+   or to-do list hangs fruit without a developer writing a translator.
 5. **A configuration UI** over the mapping — at which point FIFA and fundraising
-   are things a user sets up, not things a developer writes.
-6. **A backend** for the fetch proxy and the unattended collector loop. The
-   observation record already stores in the shape this wants, so it is a change
-   of backend, not of format.
+   are things a user sets up, not things a developer writes. The `DeclarativeMapping`
+   interface is the shape a form would produce.
+6. **A backend** for the fetch proxy and the unattended collector loop — now the
+   critical-path blocker for everything with "needs network" on it. The observation
+   record already stores in the shape this wants, so it is a change of backend, not
+   of format.
 
 The test the whole feature has to pass is the one every source so far has passed:
 a stranger glancing at the garden reads health correctly without being told the
