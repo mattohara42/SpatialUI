@@ -7,6 +7,7 @@ import { Beds } from './Beds';
 import { Branches } from './Branches';
 import { Foliage } from './Foliage';
 import { Produce } from './Produce';
+import { Completions } from './Completions';
 import { Trellis } from './Trellis';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
@@ -28,6 +29,7 @@ import { useEcosystem } from '../state/ecosystemStore';
 import { edgesInGarden, nodesInGarden } from '../ecosystem/graph';
 import { layoutGarden } from '../ecosystem/layout';
 import { vitalsAt } from '../ecosystem/history';
+import { shownCompletions } from '../ecosystem/completion';
 import { scheduleFor, staleness } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
@@ -289,6 +291,11 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
               : undefined,
           grape: planting === 'vineyard',
           stale,
+          // What this plant has finished lately, filtered to the cursor. Undefined
+          // for every garden that does not complete work — almost all of them.
+          completions: node.completions
+            ? shownCompletions(node.completions, now)
+            : undefined,
         },
       ];
     });
@@ -394,6 +401,11 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           <Branches plants={plants} />
           <Foliage plants={plants} daylight={daylight} />
           <Produce plants={plants} />
+          {/* Fruit for finished builds, deadwood for failed ones. Only the
+              pipelines garden's plants carry completions, so this draws nothing
+              elsewhere; `now` rides the cursor so fruit ripens and drops in
+              scrubbed time too. */}
+          <Completions plants={plants} now={cursor ?? revision} />
           <Grafts edges={gardenEdges} positionOf={layout.positionOf} />
           {/* Names, and the panel behind them. Only in the room: at table
               distance you are far from every plant, so the fade radius keeps
