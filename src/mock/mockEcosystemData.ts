@@ -1,5 +1,6 @@
 import type {
   Blight,
+  Completion,
   Domain,
   EcosystemEdge,
   EcosystemNode,
@@ -15,6 +16,7 @@ import {
   record,
   type VitalsHistory,
 } from '../ecosystem/history';
+import { COMPLETION_WINDOW_MS } from '../ecosystem/completion';
 import { emblemFrom } from '../ecosystem/labels';
 import type { PlantingType } from '../ecosystem/planting';
 import { mulberry32, type Rng } from '../lsystem/random';
@@ -53,6 +55,13 @@ interface GardenSpec {
   beds: BedSpec[];
   plants: string[];
   blights: string[];
+  /**
+   * Whether this garden's plants finish units of work — builds, in the pipelines
+   * garden — and so bear completions. Its beds use plantings that carry no
+   * decorative produce, so fruit here means one thing only: a completion. See
+   * `docs/completion.md`, the "separate by garden" rule.
+   */
+  completions?: boolean;
 }
 
 /**
@@ -117,6 +126,29 @@ const GARDENS: GardenSpec[] = [
       'egress to an address seen for the first time',
       'privilege grant outside change window',
     ],
+  },
+  {
+    id: 'pipelines',
+    label: 'Pipelines',
+    domain: 'devops',
+    polarity: 'nurture',
+    edgeKind: 'depends',
+    directed: true,
+    // Plantings that bear no decorative produce, so the only fruit here is a
+    // completion — the "separate by garden" rule from docs/completion.md, kept by
+    // construction rather than by a runtime check.
+    beds: [
+      { label: 'web', planting: 'orchard' },
+      { label: 'api', planting: 'conifer-stand' },
+      { label: 'infra', planting: 'hedge' },
+    ],
+    plants: ['build', 'test', 'deploy', 'lint', 'e2e', 'release'],
+    blights: [
+      'main red for the last 3 builds',
+      'flaky: 40% failure over 20 runs',
+      'queue backed up, 12 builds waiting',
+    ],
+    completions: true,
   },
   {
     id: 'portfolio',
@@ -276,6 +308,10 @@ export function generateMockEcosystem(options: MockOptions = {}): EcosystemState
           maturity: 0.2 + rng() * 0.8,
           trend: (rng() * 2 - 1) * 0.4,
           blights: sick ? [makeBlight(garden, vitality, rng, now)] : [],
+          // A pipeline bears the builds it has finished lately. A silent one has
+          // a dead adapter, so it finished nothing and bears nothing.
+          completions:
+            garden.completions && !silent ? makeCompletions(id, rng, now) : undefined,
           updatedAt: reportedAt,
           raw: { note: 'mock node, no upstream source', mock: true, silent },
         };
@@ -361,11 +397,19 @@ export function tickMockEcosystem(
       continue;
     }
     const delta = (rng() * 2 - 1) * drift;
+    // A pipeline finishes a build now and then, so fruit and deadwood accrue
+    // live; the list is trimmed to the visible window so it cannot grow without
+    // bound across a long sitting.
+    let completions = node.completions;
+    if (completions && rng() < 0.14) {
+      completions = trimCompletions([...completions, makeBuild(id, rng, now)], now);
+    }
     nodes[id] = {
       ...node,
       vitality: clamp01(node.vitality + delta),
       activity: clamp01(node.activity + (rng() * 2 - 1) * drift * 3),
       trend: clamp(delta / drift, -1, 1),
+      completions,
       updatedAt: now,
     };
   }
@@ -435,6 +479,43 @@ function rollUp(nodes: Record<string, EcosystemNode>, parentId: string): void {
     trend: mean(children.map((c) => c.trend)),
     updatedAt: Date.now(),
   };
+}
+
+/** How often a mock build goes red. Low, so a pipeline reads as mostly fruit
+ *  with the occasional length of deadwood — a bad build among good ones. */
+const BUILD_FAIL_RATE = 0.22;
+
+/** One finished build, at a given time. */
+function makeBuild(plantId: string, rng: Rng, at: number): Completion {
+  const failed = rng() < BUILD_FAIL_RATE;
+  return {
+    id: `${plantId}#${at}-${Math.floor(rng() * 1e6).toString(36)}`,
+    at,
+    outcome: failed ? 'failed' : 'done',
+    label: `build ${1000 + Math.floor(rng() * 9000)}`,
+    evidence: 'mock pipeline, no upstream CI',
+  };
+}
+
+/**
+ * A recent run of builds for a pipeline, spread across the visible window so a
+ * plant opens with fruit already on it rather than waiting for the drift tick.
+ */
+function makeCompletions(plantId: string, rng: Rng, now: number): Completion[] {
+  const count = 3 + Math.floor(rng() * 8); // 3..10
+  const out: Completion[] = [];
+  for (let i = 0; i < count; i++) {
+    const at = now - Math.floor(rng() * (COMPLETION_WINDOW_MS - HOUR_MS));
+    out.push(makeBuild(plantId, rng, at));
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+/** Drop builds that have aged out of the window, and cap the list so a busy
+ *  pipeline's array cannot grow without bound over a long sitting. */
+function trimCompletions(completions: Completion[], now: number): Completion[] {
+  const live = completions.filter((c) => now - c.at <= COMPLETION_WINDOW_MS);
+  return live.length > 40 ? live.slice(live.length - 40) : live;
 }
 
 function makeBlight(

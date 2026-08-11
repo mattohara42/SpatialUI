@@ -1,4 +1,4 @@
-import type { EcosystemNode } from '../ecosystem/types';
+import type { Completion, EcosystemNode } from '../ecosystem/types';
 import type { PlantGeometry, Vec3 } from '../lsystem/types';
 import type { LeafKind } from '../lsystem/presets';
 
@@ -42,4 +42,12 @@ export interface PlacedPlant {
    * separate from node.vitality so wilt scrubs with time like the geometry does.
    */
   vitality: number;
+  /**
+   * The completions this plant should show at the cursor — already filtered to
+   * what is young enough to hang, newest-first and capped (see
+   * `ecosystem/completion.ts`). Undefined for the plants of every garden that
+   * does not finish work, which is almost all of them. Drawn as fruit (`done`)
+   * and deadwood (`failed`) by `Completions.tsx`.
+   */
+  completions?: Completion[];
 }
