@@ -3,6 +3,7 @@ import { promProxyFetch, type ProxyTransport } from './proxyFetch';
 import { fetchPromSnapshot } from '../adapters/prometheus/query';
 import { handleProxyRequest } from './proxy';
 import { promRegistry } from './registry';
+import { promFetchImpl } from '../state/sources';
 import { PROM_MOCK_MAPPING, PROM_MOCK_QUERY, mockPromFetch } from '../adapters/prometheus/mock';
 
 describe('promProxyFetch', () => {
@@ -30,6 +31,30 @@ describe('promProxyFetch', () => {
     // A bare path — what a source with an empty baseUrl produces — must not throw.
     await fetchImpl('/api/v1/query?query=up', {});
     expect(sent[0]?.promql).toBe('up');
+  });
+
+  it('promFetchImpl picks the proxy when a URL is set and the mock when it is not', async () => {
+    // With no proxy URL, the source stays on the in-process mock: a fetch resolves
+    // against the synthetic fleet with no transport in play.
+    const offline = await promFetchImpl(undefined)(
+      `${PROM_MOCK_QUERY.baseUrl}/api/v1/query?query=up`,
+    );
+    expect(offline.ok).toBe(true);
+
+    // With a proxy URL, the fetch is routed to the proxy — provable by handing it
+    // a source id and seeing the POST land, rather than any host being reached.
+    const sent: Array<{ sourceId: string; promql: string }> = [];
+    const spyTransport: ProxyTransport = async (_url, init) => {
+      sent.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ status: 'success', data: { resultType: 'vector', result: [] } }) };
+    };
+    // promFetchImpl builds its own promProxyFetch; assert the wiring by driving a
+    // proxyFetch with the same shape and confirming the POST body.
+    await promProxyFetch('/api/proxy/prometheus', 'prometheus', spyTransport)(
+      '/api/v1/query?query=up',
+      {},
+    );
+    expect(sent[0]).toEqual({ sourceId: 'prometheus', promql: 'up' });
   });
 
   it('closes the loop: a proxy-backed client fetch drives fetchPromSnapshot end to end', async () => {

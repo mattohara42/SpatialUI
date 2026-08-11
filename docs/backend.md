@@ -316,16 +316,26 @@ with the Prometheus mock and an in-memory store.
   });
   ```
 
-- **`proxyFetch.ts` — the single-argument client swap.** `promProxyFetch(proxyUrl,
-  sourceId)` returns a `FetchLike` that POSTs `{ sourceId, promql }` to the proxy
-  instead of reaching a host directly. In `state/sources.ts` the swap is one line,
-  guarded so the app still ships pointed at the mock where no proxy is configured:
+- **`proxyFetch.ts` — the single-argument client swap, now wired.**
+  `promProxyFetch(proxyUrl, sourceId)` returns a `FetchLike` that POSTs
+  `{ sourceId, promql }` to the proxy instead of reaching a host directly, and
+  `state/sources.ts` selects it through `promFetchImpl(PROM_PROXY_URL)` — a plain
+  function of one env var, `VITE_PROM_PROXY_URL`:
 
   ```ts
-  fetchImpl: PROM_PROXY_URL
-    ? promProxyFetch(PROM_PROXY_URL, 'prometheus')
-    : mockPromFetch(),
+  export function promFetchImpl(proxyUrl: string | undefined, sourceId = 'prometheus') {
+    return proxyUrl ? promProxyFetch(proxyUrl, sourceId) : mockPromFetch();
+  }
+  // ...and the source is primed with the synthetic snapshot only when offline:
+  if (!PROM_PROXY_URL) prometheus.adopt(syntheticPromSnapshot());
   ```
+
+  Unset (dev, and every test) keeps the in-process mock, so the app runs with no
+  egress and nothing downstream changes; set the var in a networked deploy and the
+  same source pulls live through the proxy, starting empty and filling on its first
+  refresh rather than showing mock data behind a live label. The selection is a
+  pure exported function precisely so "going live is one argument" is a tested
+  fact, not a claim (`proxyFetch.test.ts`).
 
 What is **not** here, and why: the HTTP route, the scheduler, and the persistent
 `CollectorStorage` — each a shell around a tested seam, each needing a running

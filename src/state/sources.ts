@@ -20,12 +20,14 @@ import {
   translateWorldSnapshot,
 } from '../translation/world';
 import { promSource } from '../adapters/prometheus';
+import type { FetchLike } from '../adapters/prometheus/query';
 import {
   PROM_MOCK_MAPPING,
   PROM_MOCK_QUERY,
   mockPromFetch,
   syntheticPromSnapshot,
 } from '../adapters/prometheus/mock';
+import { promProxyFetch } from '../backend/proxyFetch';
 
 /**
  * The real sources, and the one question that turned out to have two uses.
@@ -90,30 +92,60 @@ const nfl = syntheticNflSource();
 const market = syntheticMarketSource();
 const world = syntheticWorldSource();
 
+/** The id an operator registers this source under, server-side (see
+ *  `backend/registry.ts`). The client names it; the host and token live there. */
+export const PROM_SOURCE_ID = 'prometheus';
+
 /**
- * Prometheus, wired in behind a mock fetch.
+ * A configured proxy URL, or nothing. `VITE_PROM_PROXY_URL` is the one switch
+ * that takes Prometheus live: set it, and the source fetches through the backend
+ * proxy against a real server; leave it unset — the default, and every test — and
+ * it stays on the mock so the app runs with no egress.
+ */
+const PROM_PROXY_URL = import.meta.env.VITE_PROM_PROXY_URL as string | undefined;
+
+/**
+ * Prometheus's fetch: the backend proxy when a URL is configured, else the mock.
  *
- * The first source in `SOURCES` whose feed is a real HTTP fetch rather than a
- * generator — the archetype `docs/sources.md` was written for. Its `read`
- * translates the snapshot it holds; `refresh` fetches the next one, and the beat
- * kicks that fire-and-forget so the fleet stays live. What it fetches from is a
- * mock (`mockPromFetch`), because a browser cannot reach an arbitrary server and
- * this environment has no egress — but it fetches through the exact `fetchImpl`
- * seam a real server drops into, so going live is a change of that one argument
- * and nothing else. The source is primed synchronously here so the garden is
- * populated on the first `read`, before any refresh can land; `adopt` is the same
- * seam a backend that already fetched would hand results back through.
+ * Exported as a plain function of the URL so the choice is testable without
+ * booting Vite's `import.meta.env` — the whole "going live is one argument"
+ * claim, made assertable. `promProxyFetch` POSTs `{ sourceId, promql }` to the
+ * proxy, naming neither a host nor a token; `mockPromFetch` answers from the
+ * synthetic fleet in-process.
+ */
+export function promFetchImpl(
+  proxyUrl: string | undefined,
+  sourceId: string = PROM_SOURCE_ID,
+): FetchLike {
+  return proxyUrl ? promProxyFetch(proxyUrl, sourceId) : mockPromFetch();
+}
+
+/**
+ * Prometheus — the first source in `SOURCES` whose feed is a real HTTP fetch
+ * rather than a generator, the archetype `docs/sources.md` was written for.
+ *
+ * `read` translates the snapshot it holds; `refresh` fetches the next one, and
+ * the beat kicks that fire-and-forget so the fleet stays live. Where it fetches
+ * from is now a matter of configuration: unset `VITE_PROM_PROXY_URL` and it reads
+ * the mock (`mockPromFetch`) in-process, because a browser cannot reach an
+ * arbitrary server and this environment has no egress; set it and the same source
+ * pulls live through the backend proxy — one switch, nothing else changed, which
+ * was the whole point of the `fetchImpl` seam.
  */
 const prometheus = promSource({
   query: PROM_MOCK_QUERY,
   mapping: PROM_MOCK_MAPPING,
-  fetchImpl: mockPromFetch(),
+  fetchImpl: promFetchImpl(PROM_PROXY_URL),
   // A brisk scrape so the fleet visibly moves; due one interval after the last
   // sample (see `promStaleSchedule`), so it re-reads on that cadence rather than
   // on every beat, and greys only after two intervals of silence.
   scrapeIntervalMs: 15_000,
 });
-prometheus.adopt(syntheticPromSnapshot());
+// Prime with the synthetic snapshot only when running offline, so the garden is
+// populated on the first `read` before any refresh lands. A proxied source starts
+// empty and fills on its first live refresh instead — showing mock data behind a
+// live label would be exactly the dishonesty the provenance marker exists to stop.
+if (!PROM_PROXY_URL) prometheus.adopt(syntheticPromSnapshot());
 
 export const SOURCES: readonly LiveSource[] = [
   {
