@@ -97,6 +97,21 @@ describe('handleProxyRequest', () => {
     expect(result).toMatchObject({ ok: false, status: 403 });
   });
 
+  it('keeps the upstream status when the body is not JSON, rather than flattening to 502', async () => {
+    const htmlGateway: FetchLike = async () => ({
+      ok: false,
+      status: 504,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    });
+    const result = await handleProxyRequest(registry, htmlGateway, {
+      sourceId: 'prometheus',
+      promql: 'up',
+    });
+    expect(result).toMatchObject({ ok: false, status: 504 });
+  });
+
   it('builds the query URL against the registered host, not anything the client sent', async () => {
     const capture = vi.fn<FetchLike>(async () => ({
       ok: true,

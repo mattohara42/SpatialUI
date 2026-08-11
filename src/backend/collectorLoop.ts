@@ -4,7 +4,7 @@ import {
   type Collector,
   type CollectorStorage,
 } from '../state/collector';
-import { dueSources, type LiveSource } from '../state/sources';
+import type { LiveSource } from '../state/sources';
 import { promSource } from '../adapters/prometheus';
 import type { FetchLike } from '../adapters/prometheus/query';
 import type { PromRegistry } from './registry';
@@ -77,42 +77,73 @@ export function createCollectorLoop(options: CollectorLoopOptions): CollectorLoo
   const { registry, fetchImpl, storage = null, now = Date.now() } = options;
   const sources = sourcesFromRegistry(registry, fetchImpl);
   const collector = createCollector({ storage, now });
-  const nodes: Record<string, EcosystemNode> = {};
 
-  const hasSpoken = (gardenId: string): boolean =>
-    Object.values(nodes).some((n) => n.gardenId === gardenId);
+  // The loop's own poll clock, not the garden's node state. Deciding "due" off
+  // plant nodes (the way the client's `dueSources` does) is wrong for an
+  // unattended loop: a source that primes empty has no plants to measure, so it
+  // would never be re-asked and its garden would wedge dead forever. A per-source
+  // last-fetch time makes the poll a property of the source, so an empty source
+  // is re-asked on its own cadence and recovers the moment it has something.
+  const lastFetchAt = new Map<LiveSource, number>();
+  // Each source's latest translated nodes, replaced whole on every read rather
+  // than merged into one accumulator — so a target that disappears from a source
+  // (a decommissioned instance) leaves with it, instead of ghosting on as a
+  // permanently-stale plant that keeps getting re-recorded.
+  const slices = new Map<LiveSource, Record<string, EcosystemNode>>();
+
+  const nodes: Record<string, EcosystemNode> = {};
+  const rebuildNodes = (): void => {
+    for (const key of Object.keys(nodes)) delete nodes[key];
+    for (const slice of slices.values()) Object.assign(nodes, slice);
+  };
+
+  const dueAt = (source: LiveSource, last: number): number =>
+    typeof source.policy === 'number'
+      ? last + source.policy
+      : source.policy.dueAfter(last);
 
   return {
     nodes,
     collector,
 
     async tick(at = Date.now()) {
-      // A source that has never spoken cannot be "due" — `dueAt` returns null
-      // with no plants to measure — so prime it once, then honor the schedule
-      // for the rest. This is what the client does by adopting a synthetic
-      // snapshot at construction; the loop does it by fetching once.
-      const due: LiveSource[] = sources.filter((s) => !hasSpoken(s.gardenId));
-      for (const s of dueSources(nodes, at, sources)) {
-        if (!due.includes(s)) due.push(s);
-      }
-
       const advanced: string[] = [];
-      for (const source of due) {
-        try {
-          if (source.refresh) await source.refresh(at);
-        } catch {
-          // A failed fetch simply does not advance; staleness greys the garden,
-          // which is the honest reading of a feed that stopped answering.
+      for (const source of sources) {
+        const last = lastFetchAt.get(source);
+        // Never fetched → prime it. Fetched but not pollable → leave it as it is.
+        // Otherwise ask again once the source's own schedule says a reading is owed.
+        if (last !== undefined && (!source.pollable || at < dueAt(source, last))) {
           continue;
         }
-        Object.assign(nodes, source.read(at).nodes);
+        try {
+          if (source.refresh) await source.refresh(at);
+          // `read` sits inside the try alongside `refresh`: a translation error is
+          // as much "this source did not advance" as a fetch failure, and must not
+          // abort the tick and discard every other source that already advanced.
+          slices.set(source, source.read(at).nodes);
+        } catch {
+          // A failed fetch or translation simply does not advance; staleness greys
+          // the garden, the honest reading of a feed that stopped answering.
+          continue;
+        }
+        lastFetchAt.set(source, at);
         advanced.push(source.gardenId);
       }
 
-      // Record only what advanced, mirroring the client's commit-only-when-due:
-      // re-noting unchanged nodes would be busywork, and `observe` keeps plants
-      // only, so beds and gardens in `nodes` are ignored either way.
-      if (advanced.length > 0) collector.note(Object.values(nodes), at);
+      rebuildNodes();
+
+      // Record only the sources that advanced. Noting the whole node view would
+      // write a fresh sample at `at` for silent sources' plants too, inventing
+      // continuity for a feed that never spoke this tick.
+      if (advanced.length > 0) {
+        const fresh: EcosystemNode[] = [];
+        for (const source of sources) {
+          if (!advanced.includes(source.gardenId)) continue;
+          const slice = slices.get(source);
+          if (slice) fresh.push(...Object.values(slice));
+        }
+        collector.note(fresh, at);
+      }
       return advanced;
     },
 

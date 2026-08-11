@@ -92,6 +92,59 @@ describe('createCollectorLoop', () => {
     expect(Object.keys(second.collector.record.fine).length).toBeGreaterThan(0);
   });
 
+  it('recovers a source that primes empty instead of wedging its garden forever', async () => {
+    // A fetch that answers empty until t >= 1_010_000, then reports the fleet.
+    let now = 1_000_000;
+    const base = mockPromFetch(() => now);
+    const emptyThenFull: FetchLike = async (url) => {
+      if (now < 1_010_000) {
+        return { ok: true, status: 200, json: async () => ({ status: 'success', data: { resultType: 'vector', result: [] } }) };
+      }
+      return base(url);
+    };
+    const registry = promRegistry([
+      { id: 'prometheus', query: PROM_MOCK_QUERY, mapping: PROM_MOCK_MAPPING, scrapeIntervalMs: SCRAPE },
+    ]);
+    const loop = createCollectorLoop({ registry, fetchImpl: emptyThenFull, storage: memoryStorage(), now });
+
+    await loop.tick(now); // primes empty
+    expect(Object.values(loop.nodes).filter((n) => n.kind === 'plant')).toHaveLength(0);
+
+    now += SCRAPE + 1; // schedule says a reading is owed again
+    await loop.tick(now);
+    // The garden did not wedge: once the source had plants, the loop picked them up.
+    expect(Object.values(loop.nodes).filter((n) => n.kind === 'plant').length).toBeGreaterThan(0);
+  });
+
+  it('drops a plant that disappears from a source rather than ghosting it', async () => {
+    let now = 1_000_000;
+    let dropOne = false;
+    const base = mockPromFetch(() => now);
+    const droppable: FetchLike = async (url) => {
+      const res = await base(url);
+      if (!dropOne) return res;
+      const body = (await res.json()) as unknown as {
+        data: { result: Array<{ metric: Record<string, string> }> };
+      };
+      // Remove one instance from the result set, as a decommissioned target would.
+      body.data.result = body.data.result.filter((e) => e.metric.instance !== 'api-1:8080');
+      return { ok: true, status: 200, json: async () => body };
+    };
+    const registry = promRegistry([
+      { id: 'prometheus', query: PROM_MOCK_QUERY, mapping: PROM_MOCK_MAPPING, scrapeIntervalMs: SCRAPE },
+    ]);
+    const loop = createCollectorLoop({ registry, fetchImpl: droppable, storage: memoryStorage(), now });
+
+    await loop.tick(now);
+    const before = Object.values(loop.nodes).filter((n) => n.kind === 'plant').length;
+
+    dropOne = true;
+    now += SCRAPE + 1;
+    await loop.tick(now);
+    const after = Object.values(loop.nodes).filter((n) => n.kind === 'plant').length;
+    expect(after).toBe(before - 1);
+  });
+
   it('does not advance when the upstream fetch fails, leaving staleness to grey the garden', async () => {
     const registry = promRegistry([
       { id: 'prometheus', query: PROM_MOCK_QUERY, mapping: PROM_MOCK_MAPPING, scrapeIntervalMs: SCRAPE },

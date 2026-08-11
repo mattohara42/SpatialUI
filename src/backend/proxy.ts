@@ -69,7 +69,20 @@ export async function handleProxyRequest(
 
   try {
     const res = await fetchImpl(url, { headers });
-    const body = await res.json();
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      // A non-JSON body (an HTML gateway page from a load balancer, say) is not
+      // a network failure — keep the upstream's real status rather than flattening
+      // it to a generic 502, so the client can tell a 504 from a dead socket. A
+      // 2xx with an unreadable body has nothing usable, so it becomes a 502.
+      return {
+        ok: false,
+        status: res.ok ? 502 : res.status,
+        error: `upstream returned a non-JSON body (status ${res.status})`,
+      };
+    }
     // The upstream status and envelope pass through untouched, so a client's
     // `fetchPromSnapshot` sees exactly what a direct fetch would — including a
     // `status: "error"` envelope, which it deliberately throws on rather than

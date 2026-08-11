@@ -42,8 +42,10 @@ export function promProxyFetch(
   return async (url, init) => {
     // `fetchPromSnapshot` builds a `/api/v1/query?query=<promql>` URL; the proxy
     // wants the PromQL as data, so lift it back out and post it. The proxy
-    // resolves `sourceId` to the real host — the client names neither.
-    const promql = new URL(url).searchParams.get('query') ?? '';
+    // resolves `sourceId` to the real host — the client names neither, so its
+    // `baseUrl` may well be empty or a bare path; parse against a base so a
+    // relative URL is still valid rather than throwing `Invalid URL`.
+    const promql = new URL(url, 'http://proxy.invalid').searchParams.get('query') ?? '';
     return send(proxyUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

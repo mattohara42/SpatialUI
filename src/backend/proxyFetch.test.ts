@@ -20,6 +20,18 @@ describe('promProxyFetch', () => {
     expect(sent[0]?.body).toEqual({ sourceId: 'prometheus', promql: 'up' });
   });
 
+  it('lifts the PromQL from a relative URL, since the client names no host', async () => {
+    const sent: Array<{ promql: string }> = [];
+    const transport: ProxyTransport = async (_url, init) => {
+      sent.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ status: 'success', data: { resultType: 'vector', result: [] } }) };
+    };
+    const fetchImpl = promProxyFetch('/api/proxy/prometheus', 'prometheus', transport);
+    // A bare path — what a source with an empty baseUrl produces — must not throw.
+    await fetchImpl('/api/v1/query?query=up', {});
+    expect(sent[0]?.promql).toBe('up');
+  });
+
   it('closes the loop: a proxy-backed client fetch drives fetchPromSnapshot end to end', async () => {
     // The transport routes the client POST straight into the server handler,
     // which fetches upstream through the mock — the whole hop, in one process.
