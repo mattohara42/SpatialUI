@@ -12,7 +12,8 @@ are still open.
 
 ## State
 
-Green. 754 tests across 42 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 772 tests across 44 files (plus one live Prometheus test that skips
+unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
 Seven gardens. Three are real, in the sense that they come through the
