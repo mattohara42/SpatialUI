@@ -1,10 +1,13 @@
 # The backend — the fetch proxy and the unattended collector loop
 
-A proposal, not a description of built state. It settles the shape of the one
-piece the whole source pipeline was built around and does not yet have: a place
-for a real fetch to happen and a place for the poll to run when no tab is open.
-Written so that when a networked environment exists, the work is a matter of
-standing up a known interface rather than deciding what it should be.
+Was a proposal; now the runtime-agnostic core is built and tested, and only two
+thin shells are left to a deploy target. This settles the shape of the one piece
+the whole source pipeline was built around and did not have: a place for a real
+fetch to happen, and a place for the poll to run when no tab is open. Written so
+that when a networked environment exists, the work is standing up a known
+interface — most of which now exists in `src/backend/` — rather than deciding
+what it should be. The **Reference implementation** section below maps the design
+onto the code; the sections before it are the reasoning that shaped it.
 
 Read `docs/sources.md` for why a real source is two problems wearing one
 sentence and why this is the second's critical-path blocker; `docs/prometheus.md`
@@ -267,6 +270,68 @@ and testing* it. Every piece but the socket is green offline, which is the state
 the rest of the pipeline is already in.
 
 ---
+
+## Reference implementation — the shipped core
+
+`src/backend/` is the runtime-agnostic half, pure and green offline (19 tests).
+Every piece takes its network and its storage as injected arguments, so the same
+code runs under any HTTP framework and any persistence, and the tests drive it
+with the Prometheus mock and an in-memory store.
+
+- **`registry.ts` — the allowlist.** `promRegistry([{ id, query, mapping,
+  scrapeIntervalMs }])`. `query` carries the base URL and bearer token,
+  server-side; `resolve(id)` is how the proxy turns a client-named id into a host
+  it was allowed to reach, and `all()` is what the loop walks.
+
+- **`proxy.ts` — the pipe with an allowlist.** `handleProxyRequest(registry,
+  fetchImpl, { sourceId, promql })` resolves the source, **404s an unknown id**
+  and **403s any PromQL that is neither the source's registered query nor `up`**
+  (no query injection past the boundary), attaches the token, forwards, and
+  returns the wire envelope untouched. An HTTP route is a thin shell over this —
+  read the body, call it, write `status`/`body` back.
+
+- **`collectorLoop.ts` — the poll, moved off the tab.** `createCollectorLoop({
+  registry, fetchImpl, storage })` builds a `promSource` per registered source and
+  a `createCollector`, and `tick(now)` refreshes whatever `dueSources` says is
+  owed (awaited, not fire-and-forget), reads it, and notes it into the record. A
+  failed fetch does not advance — staleness greys the garden, the honest reading.
+  The scheduler that calls `tick` on a clock is the other thin shell (a
+  `setInterval`, a cron, a scheduled function — the deploy target's choice).
+
+- **`storage.ts` — the reference store.** `memoryStorage()` implements the same
+  three-method `CollectorStorage` the browser's `localStorage` does. The
+  persistent adapter is the same three methods over a file or a KV row — the one
+  place a runtime leaks in, left out of the typed core because a file read is
+  `fs`, which this repo does not type, and because the record format is fixed
+  wherever the bytes land:
+
+  ```ts
+  // file-storage.ts — the ~6-line shell, on a runtime with fs
+  import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+  import type { CollectorStorage } from '../state/collector';
+  export const fileStorage = (path: string): CollectorStorage => ({
+    getItem: () => { try { return readFileSync(path, 'utf8'); } catch { return null; } },
+    setItem: (_k, v) => writeFileSync(path, v),
+    removeItem: () => { try { rmSync(path); } catch {} },
+  });
+  ```
+
+- **`proxyFetch.ts` — the single-argument client swap.** `promProxyFetch(proxyUrl,
+  sourceId)` returns a `FetchLike` that POSTs `{ sourceId, promql }` to the proxy
+  instead of reaching a host directly. In `state/sources.ts` the swap is one line,
+  guarded so the app still ships pointed at the mock where no proxy is configured:
+
+  ```ts
+  fetchImpl: PROM_PROXY_URL
+    ? promProxyFetch(PROM_PROXY_URL, 'prometheus')
+    : mockPromFetch(),
+  ```
+
+What is **not** here, and why: the HTTP route, the scheduler, and the persistent
+`CollectorStorage` — each a shell around a tested seam, each needing a running
+process this environment does not have. The `prometheus.live.test.ts` tripwire
+(`provenance.kind === 'live'`) is preserved across the proxy hop and checked in
+`proxyFetch.test.ts`.
 
 ## The minimal viable backend
 
