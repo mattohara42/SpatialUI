@@ -79,10 +79,12 @@ paths for id, label, level, and bed — into the same flat nodes the hand-writte
 translators produce. It is the general case of what `translation/prometheus.ts`
 proved for one wire shape: the axis scale, mandatory polarity, derived trend, and
 group-by-for-beds are all *config*, so a second garden of that shape is a
-`DeclarativeMapping` object rather than a copy of a translator. It does not yet
-cover edges, the published-vs-described split the world garden needs, or
-completion — each named in the file against the translator that is its spec. What
-is still missing above it is a fetch/backend and a UI, below.
+`DeclarativeMapping` object rather than a copy of a translator. It also maps
+declared **completions** — fruit and deadwood for finished work, the verb a CI
+feed or a to-do list needs. It does not yet cover edges or the
+published-vs-described split the world garden needs — each named in the file
+against the translator that is its spec. What is still missing above it is a
+fetch/backend and a UI, below.
 
 ---
 
@@ -221,9 +223,13 @@ That gap is now filled: `Completion` sits on the node beside `Blight` with the
 opposite sign — a discrete terminal event carried as-of a timestamp, read as
 fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
 `scene/Completions.tsx`, `docs/completion.md`). So a user *can* point the garden
-at a to-do list. What the declarative interpreter does not yet do is let a config
-*declare* completion — that verb is the next increment, and the contract it
-targets already exists.
+at a to-do list — and the declarative interpreter now speaks the verb: a
+`DeclarativeMapping` takes an optional `completions` block (an array path, plus
+`atPath`/`outcomePath`/`labelPath` and a `doneWhen` set) that maps a record's
+finished work onto the node's `completions`. It is safe as config where the level
+is not, because a completion is a discrete event the source *states* — it
+happened, at a time, with an outcome — rather than a comparison the config has to
+invent; the only judgement is which outcome values count as success.
 
 ---
 
@@ -249,9 +255,11 @@ targets already exists.
    not yet express (edges, the world's as-of split, a completion verb) is named in
    the file. What remains is the *fetch* half — a real HTTP call needs the backend
    proxy of step 6, because a browser cannot fetch arbitrary third-party hosts.
-4. ~~**Settle the completion vocabulary**~~ — **done.** Fruit and deadwood ship
-   (`ecosystem/completion.ts`, `docs/completion.md`); what is left is a config verb
-   to *declare* completion, folded into step 3's next increment.
+4. ~~**Settle the completion vocabulary**~~ — **done, including the config verb.**
+   Fruit and deadwood ship (`ecosystem/completion.ts`, `docs/completion.md`), and
+   `translation/declarative.ts` now maps a record's finished work onto the node's
+   `completions` via an optional `completions` block — so a config-driven CI feed
+   or to-do list hangs fruit without a developer writing a translator.
 5. **A configuration UI** over the mapping — at which point FIFA and fundraising
    are things a user sets up, not things a developer writes. The `DeclarativeMapping`
    interface is the shape a form would produce.

@@ -9,6 +9,7 @@ import { rollUpContainers } from '../ecosystem/rollup';
 import { clamp, scale, type AxisScale } from '../ecosystem/scale';
 import type { PlantingType } from '../ecosystem/planting';
 import type {
+  Completion,
   Domain,
   EcosystemEdge,
   EcosystemNode,
@@ -59,12 +60,19 @@ import type {
  * - **The published-vs-described split** the world garden needs, where a filing
  *   is revised and a scrub must show what was *known* at a date. This interpreter
  *   translates one snapshot as-of one moment. Spec: `translation/world.ts`.
- * - **Completion** (fruit and deadwood for work that finishes). The node contract
- *   carries it (`completions`), and a config verb for it is future work. Spec:
- *   `ecosystem/completion.ts` and `docs/completion.md`.
  * - **Backfill / archive.** Like Prometheus, a live pull cannot invent months
  *   from one reading, so there is no archive and the fine buffer holds only the
  *   one observed sample. The collector fills the rest over visits.
+ *
+ * What it *does* express beyond the four axes: **completion**. A record can carry
+ * a list of finished units of work — builds, deploys, a sprint's tickets — and
+ * `completions` maps them onto the node's `completions`, read as fruit for
+ * success and deadwood for failure (`ecosystem/completion.ts`,
+ * `docs/completion.md`). This is the verb a to-do list or a CI feed needs, and
+ * the reason it is safe as config where the level is not: a completion is a
+ * discrete event the record *states* (it happened, at a time, with an outcome),
+ * not a comparison the config has to invent — the only judgement is which outcome
+ * values count as success, which `doneWhen` names.
  */
 
 /** A dotted path into a fetched record, e.g. `"team.abbr"` or `"metrics.cpu"`. */
@@ -129,12 +137,54 @@ export interface DeclarativeMapping {
    */
   trendSensitivity?: number;
   /**
+   * Optional: where each record's finished work lives, mapped onto the node's
+   * `completions` (fruit for success, deadwood for failure). Absent for the many
+   * sources that never finish anything — a gauge, a price, a country.
+   */
+  completions?: CompletionMapping;
+  /**
    * Where this data came from, copied onto every node's `raw.provenance` so the
    * inspection HUD can always answer "says who". A user source pointing at real
    * data must set it; the world garden made carrying the evidence load-bearing.
    */
   provenance?: unknown;
 }
+
+/**
+ * How a record's finished units of work map onto completions.
+ *
+ * `path` points at an array *within each plant record* — a service's recent
+ * builds, a board's closed tickets. Each element states when it finished and how
+ * it went; the only judgement is which outcome values mean success, which
+ * `doneWhen` names. Everything else is failure, because a completion the source
+ * cannot vouch for as done is not something to hang a fruit on.
+ */
+export interface CompletionMapping {
+  /** Dotted path to the array of finished-work records within each plant record. */
+  path: FieldPath;
+  /** Dotted path, within a completion record, to when it finished: epoch ms or an ISO date. */
+  atPath: FieldPath;
+  /** Dotted path to the outcome value (a string, boolean, or code). */
+  outcomePath: FieldPath;
+  /** Dotted path to the short human line: "build #4821", "PROJ-12". */
+  labelPath: FieldPath;
+  /** Dotted path to a stable id. Falls back to `<label>@<at>`. */
+  idPath?: FieldPath;
+  /**
+   * Dotted path to the evidence — a URL, a log line, whatever the source can show
+   * for the claim. Falls back to the mapping's provenance note, then the label,
+   * because a fruit must never assert an outcome it cannot back (see `Completion`).
+   */
+  evidencePath?: FieldPath;
+  /**
+   * The outcome values that read as success, compared case-insensitively as
+   * strings. Everything else is failure. Defaults to a common set
+   * (`done`, `success`, `passed`, `ok`, `green`, `true`, `1`).
+   */
+  doneWhen?: string[];
+}
+
+const DEFAULT_DONE_WHEN = ['done', 'success', 'passed', 'pass', 'ok', 'green', 'true', '1'];
 
 export interface DeclarativeTranslationOptions {
   /** The moment to translate as of. Defaults to `now()` at call time. */
@@ -240,6 +290,9 @@ export function translateDeclarative(
     const emblemSource = mapping.emblemPath
       ? optionalStringAt(record, mapping.emblemPath) ?? label
       : label;
+    const completions = mapping.completions
+      ? readCompletions(record, id, mapping.completions, mapping.provenance)
+      : undefined;
 
     nodes[id] = {
       id,
@@ -252,6 +305,10 @@ export function translateDeclarative(
       polarity: mapping.polarity,
       ...vitals,
       blights: [],
+      // Only set when the config declares completion and the record carried
+      // some, so the field stays undefined for the many sources that never
+      // finish anything — exactly what `completions?` means on the node.
+      ...(completions && completions.length > 0 ? { completions } : {}),
       updatedAt: asOf,
       raw: {
         source: 'declarative',
@@ -293,6 +350,52 @@ export function readRecord(
       : clamp((vitality - previousVitality) * sensitivity, -1, 1);
 
   return { vitality, activity, maturity, trend };
+}
+
+/**
+ * The finished work a record declares, as completions. Exported alongside
+ * `readRecord` because it is the other interesting half — the verb that lets a
+ * config-driven source hang fruit and deadwood.
+ *
+ * A completion is a discrete event the source *states*, so unlike the four axes
+ * there is nothing to invent: the record says when it finished and how it went,
+ * and the only judgement is which outcome values count as success (`doneWhen`).
+ * A missing completion array is none; a malformed entry (no parseable time, no
+ * label) fails loudly with the path named, the same honesty the level path gets,
+ * because a garden that silently drops finished work is lying by omission.
+ */
+export function readCompletions(
+  record: unknown,
+  nodeId: string,
+  mapping: CompletionMapping,
+  provenance: unknown,
+): Completion[] | undefined {
+  const raw = getPath(record, mapping.path);
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(
+      `declarative: completions path '${mapping.path}' did not resolve to an array`,
+    );
+  }
+
+  const doneWhen = (mapping.doneWhen ?? DEFAULT_DONE_WHEN).map((v) => v.toLowerCase());
+  const fallbackEvidence =
+    typeof provenance === 'string' ? provenance : undefined;
+
+  return raw.map((entry) => {
+    const at = timeAt(entry, mapping.atPath);
+    const label = stringAt(entry, mapping.labelPath, 'completion label');
+    const outcomeRaw = String(getPath(entry, mapping.outcomePath) ?? '').toLowerCase();
+    const outcome = doneWhen.includes(outcomeRaw) ? 'done' : 'failed';
+    const id = mapping.idPath
+      ? stringAt(entry, mapping.idPath, 'completion id')
+      : `${nodeId}/${label}@${at}`;
+    const evidence =
+      (mapping.evidencePath ? optionalStringAt(entry, mapping.evidencePath) : undefined) ??
+      fallbackEvidence ??
+      label;
+    return { id, at, outcome, label, evidence };
+  });
 }
 
 /** The array of records within a payload, or the payload itself when it is one. */
@@ -341,4 +444,17 @@ function numberAt(record: unknown, path: FieldPath, what: string): number {
     );
   }
   return n;
+}
+
+/** A time field as epoch ms — a number already in ms, or an ISO/RFC date string. */
+function timeAt(record: unknown, path: FieldPath): number {
+  const value = getPath(record, path);
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  throw new Error(
+    `declarative: completion time path '${path}' is not epoch ms or an ISO date (got ${JSON.stringify(value)})`,
+  );
 }

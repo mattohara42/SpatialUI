@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 805 tests across 46 files (plus one live Prometheus test that skips
+Green. 814 tests across 46 files (plus one live Prometheus test that skips
 unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
@@ -81,15 +81,20 @@ network access could do.
   group-by for beds, provenance — into the same flat nodes the hand-written
   translators produce. It is the general case of what `prometheus.ts` proved for
   one wire shape; the three hand-written translators are its spec, and what it
-  does not yet express (edges, the world's as-of split, a completion verb) is
-  named in the file. The two shared primitives it needed — `scale`/`AxisScale`
-  and the container roll-up — were lifted out of `prometheus.ts` into
-  `ecosystem/scale.ts` and `ecosystem/rollup.ts`, since they were never
-  Prometheus-specific; Prometheus re-exports `scale`/`AxisScale` so nothing
-  downstream moved. What is still missing is the half a browser cannot do: the
-  fetch (arbitrary third-party hosts need a backend proxy) and a config UI. 21
-  tests, including a league-shaped and a market-shaped mapping run through the
-  interpreter as reference cases.
+  does not yet express (edges, the world's as-of split) is named in the file. It
+  *does* now speak **completion**: an optional `completions` block maps a record's
+  finished work (an array path plus `atPath`/`outcomePath`/`labelPath` and a
+  `doneWhen` set) onto the node's `completions`, so a config-driven CI feed or
+  to-do list hangs fruit and deadwood without a developer — safe as config because
+  a completion is an event the source *states*, not a comparison to invent. The
+  two shared primitives it needed — `scale`/`AxisScale` and the container roll-up —
+  were lifted out of `prometheus.ts` into `ecosystem/scale.ts` and
+  `ecosystem/rollup.ts`, since they were never Prometheus-specific; Prometheus
+  re-exports `scale`/`AxisScale` so nothing downstream moved. What is still missing
+  is the half a browser cannot do: the fetch (arbitrary third-party hosts need a
+  backend proxy) and a config UI. 30 tests, including a league-shaped and a
+  market-shaped mapping as reference cases and a pipelines-shaped one for
+  completion.
 - **The geometry cache evicts by last use.** It held 600 entries and threw out
   the oldest *inserted*, which is the same thing until something churns: a season
   scrub walks every plant through maturity buckets nobody wants again, and each
@@ -503,15 +508,17 @@ all numeric and all publisher-fed. What is still unexercised:
   unattended refresh loop a shut tab cannot be. Worth doing the moment there is
   network.
 
-**Completion vocabulary — built.** Plants do not finish; tasks, goals, builds,
-and harvests do, and the vocabulary now has a word for it. `Completion` sits on
-the node beside `Blight` with the opposite sign — a discrete terminal outcome
-carried as-of a timestamp, not a fifth health level — read as fruit for `done`
-and deadwood for `failed` (`ecosystem/completion.ts`, `scene/Completions.tsx`,
-designed in `docs/completion.md`). What is left is one increment above it: a way
-for the *declarative* source to declare completion, so a user pointing the garden
-at a CI feed or a to-do list gets fruit without a developer writing a translator.
-The node contract it would target already exists.
+**Completion vocabulary — built, config verb included.** Plants do not finish;
+tasks, goals, builds, and harvests do, and the vocabulary now has a word for it.
+`Completion` sits on the node beside `Blight` with the opposite sign — a discrete
+terminal outcome carried as-of a timestamp, not a fifth health level — read as
+fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
+`scene/Completions.tsx`, designed in `docs/completion.md`). And the declarative
+source now declares it: a `completions` block maps a record's finished work onto
+the node, so a user pointing the garden at a CI feed or a to-do list gets fruit
+without a developer writing a translator. What is left is only a source shaped
+*entirely* around finishing — a dedicated pipelines garden — for which the
+mock/live plumbing, not the vocabulary, is the remaining work.
 
 **Cross-garden comparison.** One garden is live at a time, which is what stops
 green meaning two things at once, and that is right. But "how is the AFC West

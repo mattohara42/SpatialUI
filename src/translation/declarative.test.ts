@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { isKnownDomain, KNOWN_DOMAINS } from '../ecosystem/types';
+import { shownCompletions, tally } from '../ecosystem/completion';
 import {
-  declarativeBedId,
   declarativeNodeId,
+  declarativeBedId,
   getPath,
+  readCompletions,
   readRecord,
   translateDeclarative,
   type DeclarativeMapping,
@@ -270,6 +272,121 @@ describe('getPath resolves dotted paths and misses safely', () => {
   it('returns undefined off any miss rather than throwing', () => {
     expect(getPath({ a: 1 }, 'a.b.c')).toBeUndefined();
     expect(getPath(null, 'a')).toBeUndefined();
+  });
+});
+
+describe('completion: a config-driven source can hang fruit and deadwood', () => {
+  const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
+  const HOUR = 3_600_000;
+
+  // A pipelines-shaped source: services, each carrying its recent builds.
+  const PIPELINES: DeclarativeMapping = {
+    gardenId: 'ci',
+    gardenLabel: 'CI',
+    domain: 'devops',
+    labelPath: 'name',
+    levelPath: 'successRate',
+    vitality: { min: 0, max: 1 },
+    polarity: 'nurture',
+    bedPath: 'team',
+    provenance: 'jenkins@ci.internal',
+    completions: {
+      path: 'builds',
+      atPath: 'finishedAt',
+      outcomePath: 'status',
+      labelPath: 'id',
+      evidencePath: 'url',
+    },
+  };
+
+  const records = [
+    {
+      name: 'checkout',
+      team: 'payments',
+      successRate: 0.9,
+      builds: [
+        { id: 'build #41', status: 'success', finishedAt: NOW - HOUR, url: 'ci/41' },
+        { id: 'build #42', status: 'failure', finishedAt: NOW - 2 * HOUR, url: 'ci/42' },
+      ],
+    },
+    { name: 'ledger', team: 'payments', successRate: 0.7, builds: [] },
+  ];
+
+  it('maps declared builds onto the node, split into fruit and deadwood', () => {
+    const { nodes } = translateDeclarative(records, PIPELINES, { asOf: NOW });
+    const checkout = nodes[declarativeNodeId('ci', 'checkout')];
+    expect(checkout.completions).toHaveLength(2);
+
+    const shown = shownCompletions(checkout.completions, NOW);
+    const counts = tally(checkout.completions, NOW);
+    expect(counts).toEqual({ done: 1, failed: 1 });
+    expect(shown.find((c) => c.outcome === 'done')!.label).toBe('build #41');
+    expect(shown.find((c) => c.outcome === 'failed')!.label).toBe('build #42');
+  });
+
+  it('carries the evidence, so a fruit can show what it stands on', () => {
+    const { nodes } = translateDeclarative(records, PIPELINES, { asOf: NOW });
+    const done = nodes[declarativeNodeId('ci', 'checkout')].completions!.find(
+      (c) => c.outcome === 'done',
+    )!;
+    expect(done.evidence).toBe('ci/41');
+  });
+
+  it('leaves completions undefined when a record declares none', () => {
+    const { nodes } = translateDeclarative(records, PIPELINES, { asOf: NOW });
+    // ledger has an empty builds array — no completions field, not an empty one.
+    expect(nodes[declarativeNodeId('ci', 'ledger')].completions).toBeUndefined();
+  });
+
+  it('never sets completions when the mapping does not declare them', () => {
+    const noVerb: DeclarativeMapping = { ...PIPELINES, completions: undefined };
+    const { nodes } = translateDeclarative(records, noVerb, { asOf: NOW });
+    expect(nodes[declarativeNodeId('ci', 'checkout')].completions).toBeUndefined();
+  });
+
+  it('reads only doneWhen values as success; everything else is failure', () => {
+    const entry = {
+      builds: [
+        { id: 'a', status: 'passed', finishedAt: NOW },
+        { id: 'b', status: 'aborted', finishedAt: NOW },
+      ],
+    };
+    const completions = readCompletions(entry, 'ci/x', PIPELINES.completions!, undefined)!;
+    expect(completions.find((c) => c.label === 'a')!.outcome).toBe('done'); // passed ∈ default set
+    expect(completions.find((c) => c.label === 'b')!.outcome).toBe('failed');
+  });
+
+  it('parses an ISO date string as well as epoch ms', () => {
+    const iso = '2026-08-11T10:00:00.000Z';
+    const entry = { builds: [{ id: 'a', status: 'success', finishedAt: iso }] };
+    const completions = readCompletions(entry, 'ci/x', PIPELINES.completions!, undefined)!;
+    expect(completions[0].at).toBe(Date.parse(iso));
+  });
+
+  it('falls back to the provenance note for evidence when no path is given', () => {
+    const mapping: DeclarativeMapping['completions'] = {
+      path: 'builds',
+      atPath: 'finishedAt',
+      outcomePath: 'status',
+      labelPath: 'id',
+    };
+    const entry = { builds: [{ id: 'a', status: 'success', finishedAt: NOW }] };
+    const completions = readCompletions(entry, 'ci/x', mapping!, 'jenkins@ci.internal')!;
+    expect(completions[0].evidence).toBe('jenkins@ci.internal');
+  });
+
+  it('fails loudly on a malformed completion time', () => {
+    const entry = { builds: [{ id: 'a', status: 'success', finishedAt: 'not-a-date' }] };
+    expect(() =>
+      readCompletions(entry, 'ci/x', PIPELINES.completions!, undefined),
+    ).toThrow(/completion time path/);
+  });
+
+  it('throws when the completions path is present but not an array', () => {
+    const entry = { builds: 5 };
+    expect(() =>
+      readCompletions(entry, 'ci/x', PIPELINES.completions!, undefined),
+    ).toThrow(/did not resolve to an array/);
   });
 });
 
