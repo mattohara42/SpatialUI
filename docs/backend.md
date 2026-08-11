@@ -337,11 +337,14 @@ with the Prometheus mock and an in-memory store.
   pure exported function precisely so "going live is one argument" is a tested
   fact, not a claim (`proxyFetch.test.ts`).
 
-What is **not** here, and why: the HTTP route, the scheduler, and the persistent
-`CollectorStorage` — each a shell around a tested seam, each needing a running
-process this environment does not have. The `prometheus.live.test.ts` tripwire
-(`provenance.kind === 'live'`) is preserved across the proxy hop and checked in
-`proxyFetch.test.ts`.
+The three shells that were "not here" — the HTTP route, the scheduler, and the
+persistent `CollectorStorage` — **now exist for Netlify** in `netlify/functions/`
+(`prometheus-proxy.ts`, `collect-scheduled.ts`, and a Blobs-backed store), wired to
+this same core; `docs/deploy-netlify.md` is the operator checklist. They live
+outside the app's `tsc`/`vitest` scope because their runtime is Netlify's, not the
+browser's — the deliberate seam between the tested core and the deploy target. The
+`prometheus.live.test.ts` tripwire (`provenance.kind === 'live'`) is preserved
+across the proxy hop and checked in `proxyFetch.test.ts`.
 
 ## The minimal viable backend
 
