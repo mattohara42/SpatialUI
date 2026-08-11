@@ -271,7 +271,10 @@ invent; the only judgement is which outcome values count as success.
 6. **A backend** for the fetch proxy and the unattended collector loop — now the
    critical-path blocker for everything with "needs network" on it. The observation
    record already stores in the shape this wants, so it is a change of backend, not
-   of format.
+   of format. **Its contract is now drawn** in `docs/backend.md`: the proxy route,
+   the collector loop, the single-argument client swap, and what stays
+   offline-testable when there is no egress — pinned to the `FetchLike`,
+   `refresh`/`adopt`, and `ObservedRecord` seams that already exist.
 
 The test the whole feature has to pass is the one every source so far has passed:
 a stranger glancing at the garden reads health correctly without being told the
