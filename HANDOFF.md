@@ -462,6 +462,16 @@ signal, which is what makes it affordable. See "what is decoration" in
 - **Docs drift, and it is not automatically caught.** CI verifies the code, not
   the prose about it. The five false claims in #9 were all of the second kind.
   The counts most likely to go stale are the ones tied to constants —
-  `DEFAULT_ARCHIVE_CAPACITY`, `WEEKS_PLAYED`, `SESSIONS` — and asserting a few
-  of them in a test would hold the docs to the same standard as the code. Not
-  done.
+  `DEFAULT_ARCHIVE_CAPACITY`, `WEEKS_PLAYED`, `SESSIONS`. `src/docs.drift.test.ts`
+  now holds a first slice of them to the code's standard: it reads the docs,
+  computes each expected number from the code — an exported constant, or a count
+  taken by running the real adapter → translation pipeline — and asserts the doc
+  quotes it, so a constant that moves fails the doc that still carries the old
+  number. It covers the three named constants (via `throughWeek`, and the market's
+  session count derived from distinct daily bars), the two history-tier sizes, and
+  the three gardens' bed/plant counts. Deliberately *not* asserted: the
+  machine-specific numbers in the performance tables (ms, MB, fps), which are
+  honest one-machine measurements and are meant to vary. What is left is to widen
+  the net as more constant-tied numbers earn a mention — the NFL backfill count
+  (85) is derivable but was left out because it needs the backfill run rather than
+  a constant read.
