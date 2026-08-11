@@ -229,12 +229,15 @@ targets already exists.
 
 ## Recommended sequence
 
-1. ~~**Prometheus as a hand-written `LiveSource`**~~ — **done offline.**
-   `translation/prometheus.ts` + `adapters/prometheus/` translate captured wire
-   fixtures, and `prometheus.live.test.ts` proves the live pull the moment a
-   server is reachable (it 403s here by egress policy, not by any gap in the code).
-   `promSource` is deliberately not in `SOURCES` yet — wiring it live is the
-   backend's job (step 6), not the source's.
+1. ~~**Prometheus as a hand-written `LiveSource`**~~ — **done, and wired into
+   `SOURCES` behind a mock fetch.** `translation/prometheus.ts` +
+   `adapters/prometheus/` translate the wire, `prometheus.live.test.ts` proves the
+   live pull the moment a server is reachable (it 403s here by egress policy, not
+   by any gap in the code), and `promSource` is now the eighth garden — pointed at
+   `mockPromFetch` (`adapters/prometheus/mock.ts`) instead of a socket. It fetches
+   through the exact `fetchImpl` seam a real server drops into, primed
+   synchronously and refreshed on the beat (see `docs/prometheus.md`). Going live
+   is a swap of that one argument plus the unattended refresh loop of step 6.
 2. ~~**Open `Domain`**~~ — **done.** Now `KnownDomain | (string & {})` with
    `'general'` as the named fallback; no material map was needed, because nothing
    keyed materials off `domain` in the first place (see above).

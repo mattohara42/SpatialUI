@@ -5,7 +5,7 @@ import {
   type VitalsHistory,
 } from '../ecosystem/history';
 import { emblemFrom, type Emblem } from '../ecosystem/labels';
-import { afterQuietFor, type StaleSchedule } from '../ecosystem/staleness';
+import type { StaleSchedule } from '../ecosystem/staleness';
 import { rollUpContainers } from '../ecosystem/rollup';
 import { clamp, scale, type AxisScale } from '../ecosystem/scale';
 import type { PlantingType } from '../ecosystem/planting';
@@ -116,9 +116,17 @@ export interface TranslatedEcosystem {
  * it, the way it registers the market's exchange calendar.
  */
 export function promStaleSchedule(scrapeIntervalMs: number): StaleSchedule {
-  // Two intervals of grace: one missed scrape is noise, two is a pattern — the
-  // same reasoning as the market's two-bar grace and any sane alert's `for`.
-  return afterQuietFor(2 * scrapeIntervalMs);
+  // A scrape target speaks every interval, so a reading is *owed* one interval
+  // after the last sample — the single fact answering both questions the schedule
+  // unifies: "is there something new to fetch" (the poll) and "should I have heard
+  // by now" (staleness). One further interval of grace before it greys: one missed
+  // scrape is noise, two is a pattern, the same reasoning as the market's two-bar
+  // grace. Owed-at-`lastUpdate` (a bare `afterQuietFor`) would instead make the
+  // source due on *every* beat, which is right for nothing that scrapes.
+  return {
+    dueAfter: (lastUpdate) => lastUpdate + scrapeIntervalMs,
+    graceMs: scrapeIntervalMs,
+  };
 }
 
 /** `<garden>/<sanitized-id>`, stable across polls so a target keeps its plant. */

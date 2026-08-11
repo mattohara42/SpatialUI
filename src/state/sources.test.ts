@@ -190,9 +190,11 @@ describe('the store, polling for real', () => {
     expect(before.size).toBeGreaterThan(0);
 
     // Far enough ahead that a bar is certainly owed whenever these tests happen
-    // to run — including over a weekend, when nothing would be due for days.
+    // to run — including over a weekend, when nothing would be due for days. The
+    // Prometheus source is also long overdue this far out (it scrapes every few
+    // seconds), so the market is one of the gardens refreshed, not the only one.
     const later = Date.now() + 30 * 24 * HOUR_MS;
-    expect(useEcosystem.getState().poll(later)).toEqual([MARKET_GARDEN_ID]);
+    expect(useEcosystem.getState().poll(later)).toContain(MARKET_GARDEN_ID);
 
     const after = marketPlants();
     expect(after).toHaveLength(before.size);
@@ -241,5 +243,26 @@ describe('the poll closes the loop staleness opened', () => {
     for (const node of livePlants(late)) {
       expect(isStale(node, late, MARKET_STALE_SCHEDULE), `${node.label} asked`).toBe(false);
     }
+  });
+});
+
+describe('the Prometheus mock is composed into the live store', () => {
+  it('lands a primed Prometheus garden, with history and a schedule, from compose', () => {
+    const state = useEcosystem.getState();
+
+    const promPlants = Object.values(state.nodes).filter(
+      (n) => n.gardenId === 'prometheus' && n.kind === 'plant',
+    );
+    // The whole fleet is present on the first render, because it was primed
+    // synchronously before compose read it — no empty-then-populate flicker.
+    expect(promPlants).toHaveLength(7);
+
+    // Compose laid a history buffer in for each plant, so the timeline and scrub
+    // have something to stand on rather than a garden with no past at all.
+    expect(promPlants.every((p) => state.history[p.id])).toBe(true);
+
+    // And its stale schedule was registered, so `dueAt` can answer for it — the
+    // thing that makes the poll re-read it on its scrape cadence.
+    expect(dueAt(state.nodes, 'prometheus')).not.toBeNull();
   });
 });
