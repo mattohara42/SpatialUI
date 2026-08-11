@@ -1,0 +1,13 @@
+# Netlify deploy config. See docs/deploy-netlify.md for the env vars and the
+# one dependency the functions add (@netlify/blobs).
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# The proxy routes itself via `config.path` in prometheus-proxy.ts, and the
+# collector via `config.schedule` in collect-scheduled.ts — no redirects needed.
