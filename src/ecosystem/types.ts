@@ -10,15 +10,51 @@ import type { PlantingType } from './planting';
  * renderer never reads.
  */
 
-/** Which input source produced this node. Used for grouping and materials. */
-export type Domain =
+/**
+ * Which input source produced this node.
+ *
+ * Used for grouping and for the inspection HUD's label. It does *not* gate a
+ * plant's look — appearance comes from `plantingType` and the L-system archetype,
+ * both chosen in translation — which is why an unfamiliar domain is safe: the
+ * only thing that reads `domain` renders it as text.
+ *
+ * Open on purpose. The seven below are the domains this repo ships and are worth
+ * autocompleting, but a user-defined source (a fundraising feed, a FIFA league)
+ * names its own, so the type admits any string with `'general'` as the documented
+ * fallback bucket. `KNOWN_DOMAINS` / `isKnownDomain` are for code that wants to
+ * branch on the built-in set — never as a gate that rejects a string it does not
+ * recognise, which would be the closed enum back again.
+ */
+export type KnownDomain =
   | 'devops'
   | 'pkm'
   | 'security'
   | 'markets'
   | 'sports'
   | 'learning'
-  | 'geopolitics';
+  | 'geopolitics'
+  /** The fallback bucket for a source that is none of the above. */
+  | 'general';
+
+// `string & {}` keeps the literal suggestions in editors while still admitting
+// any string — the standard way to write an "open" union in TypeScript.
+export type Domain = KnownDomain | (string & {});
+
+/** The domains this repo ships, for code that branches on the built-in set. */
+export const KNOWN_DOMAINS: readonly KnownDomain[] = [
+  'devops',
+  'pkm',
+  'security',
+  'markets',
+  'sports',
+  'learning',
+  'geopolitics',
+  'general',
+];
+
+export function isKnownDomain(domain: string): domain is KnownDomain {
+  return (KNOWN_DOMAINS as readonly string[]).includes(domain);
+}
 
 /**
  * Where the node sits in the hierarchy.

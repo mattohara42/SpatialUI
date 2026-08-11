@@ -6,6 +6,8 @@ import {
 } from '../ecosystem/history';
 import { emblemFrom, type Emblem } from '../ecosystem/labels';
 import { afterQuietFor, type StaleSchedule } from '../ecosystem/staleness';
+import { rollUpContainers } from '../ecosystem/rollup';
+import { clamp, scale, type AxisScale } from '../ecosystem/scale';
 import type { PlantingType } from '../ecosystem/planting';
 import type {
   Blight,
@@ -48,13 +50,10 @@ import type { PromSample, PromSnapshot } from '../adapters/prometheus/types';
  *   health. It becomes a down blight and the plant stops advancing its clock.
  */
 
-/** How a sample's value lands on an axis in [0, 1]. `min > max` inverts. */
-export interface AxisScale {
-  /** The value that reads as 0. */
-  min: number;
-  /** The value that reads as 1. Put it below `min` when lower is better. */
-  max: number;
-}
+// The axis-scaling primitive now lives in `ecosystem/scale.ts`, shared with the
+// general declarative source. Re-exported here so existing importers of
+// `AxisScale`/`scale` from this module keep working.
+export { scale, type AxisScale } from '../ecosystem/scale';
 
 /** The declarative mapping from one PromQL result to one garden. */
 export interface PromMapping {
@@ -129,16 +128,6 @@ export function promNodeId(gardenId: string, plantKey: string): string {
 
 export function promBedId(gardenId: string, bed: string): string {
   return `${gardenId}/bed/${bed.replace(/[^A-Za-z0-9_.-]+/g, '_')}`;
-}
-
-/**
- * Clamp a value onto [0, 1] under a scale. Runs backwards when `min > max`, so
- * an error rate and a request rate use the same function and only differ in
- * which end the operator called good.
- */
-export function scale(value: number, { min, max }: AxisScale): number {
-  if (max === min) return 0.5; // a degenerate scale has no gradient to read
-  return clamp01((value - min) / (max - min));
 }
 
 export function translatePromSnapshot(
@@ -301,49 +290,3 @@ function keyOf(sample: PromSample, idLabel: string): string {
   return parts.length > 0 ? parts.join(',') : sample.labels.__name__ ?? 'series';
 }
 
-/**
- * A bed summarizes its plants and the garden its beds, so a job reads at a
- * glance and the whole scrape does too. `updatedAt` takes the newest child: a
- * bed is as current as its freshest target, and one down node must not drag the
- * whole bed's clock back and make live targets look stale by association.
- */
-function rollUpContainers(nodes: Record<string, EcosystemNode>): void {
-  const childIds: Record<string, string[]> = {};
-  for (const node of Object.values(nodes)) {
-    if (node.parentId) (childIds[node.parentId] ??= []).push(node.id);
-  }
-
-  const beds = Object.values(nodes).filter((n) => n.kind === 'bed');
-  for (const bed of beds) rollUp(nodes, bed.id, childIds[bed.id] ?? []);
-  const garden = Object.values(nodes).find((n) => n.kind === 'garden');
-  if (garden) rollUp(nodes, garden.id, childIds[garden.id] ?? []);
-}
-
-function rollUp(
-  nodes: Record<string, EcosystemNode>,
-  id: string,
-  childIds: string[],
-): void {
-  const children = childIds.map((childId) => nodes[childId]);
-  if (children.length === 0) return;
-  nodes[id] = {
-    ...nodes[id],
-    vitality: mean(children.map((c) => c.vitality)),
-    activity: mean(children.map((c) => c.activity)),
-    maturity: mean(children.map((c) => c.maturity)),
-    trend: mean(children.map((c) => c.trend)),
-    updatedAt: Math.max(...children.map((c) => c.updatedAt)),
-  };
-}
-
-function mean(values: number[]): number {
-  return values.reduce((sum, v) => sum + v, 0) / (values.length || 1);
-}
-
-function clamp(n: number, lo: number, hi: number): number {
-  return n < lo ? lo : n > hi ? hi : n;
-}
-
-function clamp01(n: number): number {
-  return clamp(n, 0, 1);
-}

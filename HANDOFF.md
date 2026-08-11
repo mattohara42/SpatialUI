@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 772 tests across 44 files (plus one live Prometheus test that skips
+Green. 793 tests across 45 files (plus one live Prometheus test that skips
 unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
@@ -37,6 +37,30 @@ is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
 
+- **The garden builder's offline groundwork — the half that does not need a
+  network.** Two of the three things `docs/sources.md` named as blocking a
+  general user-defined source are cleared. **`Domain` is open**: it was a closed
+  enum of seven, and the recorded fear was that it "feeds materials" so a new
+  domain would have no look — but the code disagreed, nothing keys materials off
+  `domain` (a plant's look is `plantingType` + archetype, chosen in translation),
+  and the only reader is the HUD, which renders it as text. So it is now
+  `KnownDomain | (string & {})` with `'general'` as the named fallback, and a user
+  source names its own with nothing downstream to teach (`ecosystem/types.ts`,
+  `isKnownDomain`). **The declarative interpreter is built**: `translation/
+  declarative.ts` turns a mapping over plain fetched JSON — records path, dotted
+  field paths, the axis scale, mandatory polarity, optional activity field,
+  group-by for beds, provenance — into the same flat nodes the hand-written
+  translators produce. It is the general case of what `prometheus.ts` proved for
+  one wire shape; the three hand-written translators are its spec, and what it
+  does not yet express (edges, the world's as-of split, a completion verb) is
+  named in the file. The two shared primitives it needed — `scale`/`AxisScale`
+  and the container roll-up — were lifted out of `prometheus.ts` into
+  `ecosystem/scale.ts` and `ecosystem/rollup.ts`, since they were never
+  Prometheus-specific; Prometheus re-exports `scale`/`AxisScale` so nothing
+  downstream moved. What is still missing is the half a browser cannot do: the
+  fetch (arbitrary third-party hosts need a backend proxy) and a config UI. 21
+  tests, including a league-shaped and a market-shaped mapping run through the
+  interpreter as reference cases.
 - **The geometry cache evicts by last use.** It held 600 entries and threw out
   the oldest *inserted*, which is the same thing until something churns: a season
   scrub walks every plant through maturity buckets nobody wants again, and each
@@ -405,10 +429,13 @@ is nearly there, and non-developer runtime configuration, which is the real work
 The crux is turning the translator from *code* into a *declarative mapping*,
 because it decides things the raw data does not carry: the four axes as
 comparisons in [0, 1], and above all polarity, the one rule the whole
-environment model exists to hold. Prometheus is the archetype and the right first
-source; `Domain` being a closed enum and the completion-vocabulary gap are the
-two things to fix before the general case. Needs the same network — and, for a
-real connection past the browser's CORS wall, a backend.
+environment model exists to hold. **That mapping now exists in first-cut form**
+(`translation/declarative.ts`), and the two blockers this bullet used to name —
+`Domain` being a closed enum, and the completion-vocabulary gap — are both
+cleared (opened, and fruit/deadwood shipped). What is left is above and below the
+interpreter, not in it: a real fetch past the browser's CORS wall needs a backend
+proxy, and a non-developer needs a config UI over the `DeclarativeMapping` shape.
+Both wait on the same network and the same backend the collector move waits on.
 
 `NewsSource` is the one to do first if you get network, and not because it is
 the easiest. It is the only source whose generated half is *text about real
@@ -442,15 +469,15 @@ all numeric and all publisher-fed. What is still unexercised:
   and it needs a live server to be interesting. Worth doing the moment there is
   one.
 
-**Completion vocabulary.** Plants do not finish; tasks, goals, builds, and
-harvests do. Fruit and deadwood are the obvious candidates and `Produce.tsx`
-already draws fruit for other reasons. This is the gap that blocks a whole
-class of sources — and it is now **planned in detail in `docs/completion.md`**:
-completion modelled as an *event* on the Blight pattern (a discrete terminal
-outcome carried as-of a timestamp, not a fifth health level), read as fruit for
-success and deadwood for failure, exercised first by a self-contained mock
-pipelines garden. The open decisions the owner should settle before code are
-listed there.
+**Completion vocabulary — built.** Plants do not finish; tasks, goals, builds,
+and harvests do, and the vocabulary now has a word for it. `Completion` sits on
+the node beside `Blight` with the opposite sign — a discrete terminal outcome
+carried as-of a timestamp, not a fifth health level — read as fruit for `done`
+and deadwood for `failed` (`ecosystem/completion.ts`, `scene/Completions.tsx`,
+designed in `docs/completion.md`). What is left is one increment above it: a way
+for the *declarative* source to declare completion, so a user pointing the garden
+at a CI feed or a to-do list gets fruit without a developer writing a translator.
+The node contract it would target already exists.
 
 **Cross-garden comparison.** One garden is live at a time, which is what stops
 green meaning two things at once, and that is right. But "how is the AFC West
