@@ -1,17 +1,52 @@
 # The garden builder — an end-user UI
 
-A proposal, not a description of built state. It plans the one piece of the
-"user-defined source" sequence that this repository can finish without a
-network: **the UI a non-developer uses to point the garden at their own data.**
-It is step 5 of the sequence in `docs/sources.md`, and this file argues it is
-reachable now — not, as that file assumes, only after the backend of step 6.
+**Built, the offline half.** This began as a proposal for the one piece of the
+"user-defined source" sequence that this repository could finish without a
+network — **the UI a non-developer uses to point the garden at their own data** —
+and that half now ships. It is step 5 of the sequence in `docs/sources.md`, and
+the file's argument held: the config UI was reachable now, not (as that file
+assumed) only after the backend of step 6. What remains deferred is only the
+*fetch*, which genuinely needs the backend.
 
 Read `docs/sources.md` for the two-problems-in-one-sentence framing and the
 declarative interpreter this builds on, `translation/declarative.ts` for the
-`DeclarativeMapping` shape a form would produce, and `DESIGN.md` for the reading
+`DeclarativeMapping` shape the form produces, and `DESIGN.md` for the reading
 language the UI must not let a user break. This file is the part those do not
 carry: which half of the UI is buildable offline, what shape it takes, and the
 one thing it exists to prevent.
+
+---
+
+## What shipped
+
+The builder is a modal, opened from a quiet `+ garden` at the end of the garden
+row and — for editing — a `configure` button that appears **only while standing
+in a garden the user built**. That placement is the whole posture: a garden is
+configured once, occasionally tweaked, and otherwise never seen, because the
+mapping persists and the garden is just another button. The config is not daily
+chrome.
+
+- **`src/GardenBuilder.tsx`** — the form and the live preview, side by side. The
+  form is opinionated on purpose (see below); the preview runs the *real*
+  interpreter (`previewMapping`), so what it shows is exactly what will ship, and
+  the interpreter's own path-named errors are the validation.
+- **`src/state/userSources.ts`** — the pure core: `userSourceFromConfig` builds a
+  generated-shaped `LiveSource` over the pasted snapshot (no `refresh`,
+  `pollable: false`, a plain-duration stale policy), `previewMapping` translates
+  and summarizes, and `loadUserConfigs`/`saveUserConfigs` persist the mapping —
+  never fabricated data — under `spatialui.gardens.v1`, apart from the observation
+  record. 14 tests.
+- **`src/state/ecosystemStore.ts`** — `composeEcosystem` folds persisted user
+  gardens in beside the built-in sources, defensively (a stored mapping that no
+  longer translates is skipped, not fatal); `addUserGarden`/`removeUserGarden`
+  fold and purge at runtime, an edit purging the old garden's nodes before the new
+  ones land.
+
+Deferred, and only this: the **live fetch** (arbitrary hosts need the backend
+proxy of `docs/sources.md` step 6) and, following it, real polling. A user garden
+today is one hand-pasted snapshot that greys into staleness honestly, because
+nothing is updating it. The `completions` block the interpreter supports is not
+in the form yet — the next increment.
 
 ---
 
@@ -143,11 +178,13 @@ into `SOURCES`.
 
 ## How an authored mapping enters the app
 
-A built mapping becomes a generator-style `LiveSource` over the pasted snapshot:
+A built mapping becomes a generator-style `LiveSource` over the pasted snapshot
+(`userSourceFromConfig`):
 
-- `read(now)` calls `translateDeclarative(payload, mapping, { asOf: now,
-  previous })`, threading the previous poll's scaled vitality so trend is a real
-  delta on any later re-read.
+- `read(now)` calls `translateDeclarative(payload, mapping, { asOf: now })`. No
+  `previous` is threaded, so trend is 0 — which is the honest answer for one
+  static snapshot: nothing has moved since there is no earlier reading to have
+  moved from. Trend becomes real only once a fetch supplies a second one.
 - No `refresh`. A pasted snapshot has no next reading to fetch — that is the
   fetch half, deferred. So the source reads the one payload it was given; the
   garden greys into staleness honestly, because for a hand-pasted snapshot that
@@ -155,16 +192,16 @@ A built mapping becomes a generator-style `LiveSource` over the pasted snapshot:
 - `pollable: false`, for the same reason. A generated source that is re-asked
   must extend, never slide (see `HANDOFF.md`, the decisions-most-likely-to-be-
   misread); a static snapshot has nothing to extend, so it is not polled.
-- A `StaleSchedule` the form supplies as a plain duration — the degenerate
-  schedule, exactly what the league uses — since a pasted snapshot carries no
-  calendar to point `dueAfter` at.
+- A `StaleSchedule` as a plain duration — the degenerate schedule, exactly what
+  the league uses — since a pasted snapshot carries no calendar to point
+  `dueAfter` at. The form offers a small set (1h / 6h / 1d), defaulting to six.
 
-`SOURCES` is a module constant today. The builder needs it to become a
-registry the store can append to at runtime — a small, contained change:
-`state/sources.ts` exposes an `addSource` that the store's composition point
-already walks. Nothing downstream of the store learns that a source arrived at
-runtime rather than at module load; the scene already renders whatever gardens
-the node map contains.
+Rather than mutate the `SOURCES` constant, the store folds user gardens in from
+`localStorage`: `composeEcosystem` reads `loadUserConfigs()` and lays each one's
+nodes over the built-ins at startup, and `addUserGarden`/`removeUserGarden` do
+the same fold (and, for a garden already present, a purge first) at runtime.
+Nothing downstream of the store learns a source arrived from a form rather than
+at module load; the scene renders whatever gardens the node map contains.
 
 ---
 
@@ -177,9 +214,9 @@ the node map contains.
 - **Real polling.** Follows the fetch: a source with a `refresh` that pulls the
   next payload. The seam is Prometheus's `fetchImpl`; the builder's source is the
   generator shape until there is something to fetch.
-- **Persistence across reloads.** Storing the *mapping* (not the data) so a
-  user's garden survives a refresh is an easy, offline increment — see the scope
-  ladder. Left out of the first cut only to keep it small.
+- **The completion verb.** The interpreter maps a `completions` block, but the
+  form does not offer it yet. A source shaped around finishing (a CI feed, a
+  to-do list) can be authored the moment the form grows those fields.
 - **Edges and the published-vs-described split.** The interpreter does not
   express these yet (named in `translation/declarative.ts`), so the form cannot
   either. A first-cut source skips edges and translates one snapshot as-of one
@@ -189,15 +226,16 @@ the node map contains.
 
 ## Scope, as a ladder
 
-Each rung is a shippable stop, and every rung is fully offline.
+Each rung is a shippable stop, and every rung is fully offline. The first two
+shipped together; the third waits on nothing but its own worth.
 
-1. **Author + preview + session use.** Paste → form → live preview → add as a
-   garden for this session. Mappings vanish on reload. This is the whole
-   authoring loop and the honesty check; it is the recommended first cut.
-2. **Persist the mapping.** Save the `DeclarativeMapping` (and its sample
-   payload, or not — a design choice) to `localStorage`, keyed apart from the
-   observation record, so an authored garden survives a reload. Store the
-   mapping, never fabricated data — the same rule the collector holds.
+1. ~~**Author + preview + session use.**~~ **Done.** Paste → form → live preview →
+   add as a garden. The whole authoring loop and the honesty check.
+2. ~~**Persist the mapping.**~~ **Done.** The `DeclarativeMapping` and its sample
+   payload persist to `localStorage` under `spatialui.gardens.v1`, apart from the
+   observation record, so an authored garden survives a reload and the builder
+   need not be reopened — configure once. The mapping and the one pasted snapshot
+   are stored; no fabricated data, the same rule the collector holds.
 3. **The mock-fetch poll seam.** Wire a saved mapping through a mock `fetchImpl`
    the way Prometheus does, so it "polls" and advances and greys on a real
    schedule — the closest a source gets to live without a backend, and the last
@@ -205,24 +243,24 @@ Each rung is a shippable stop, and every rung is fully offline.
 
 ---
 
-## Decisions to settle before building
+## Decisions taken
 
-- **Where the builder lives in the chrome.** `App.tsx` calls its own panel "a
-  placeholder for walking somewhere else." The builder is more than a button; it
-  is a form and a preview canvas. Does it open as a modal over the scene, a
-  second panel, or a distinct route? The preview wants real estate the corner
-  panel does not have.
-- **Whether the sample payload is stored with the mapping.** Persisting it makes
-  a reloaded garden show something without a re-fetch, but it stores someone
-  else's data in the client — the third-party-terms trap `docs/sources.md`
-  flags. Storing only the mapping keeps the client clean but leaves a persisted
-  garden empty until it can fetch. This is a real fork, and it is the owner's.
-- **How hard the form pushes back on a saturated axis.** "How to work on this"
-  in `HANDOFF.md` is emphatic that a saturated axis is invisible — it looks
-  exactly like a signal that is always on. The preview could print the
-  distribution of each axis across the authored garden, so a user (or reviewer)
-  can see a channel that is dead-flat before committing. Worth deciding whether
-  that lives in the builder or stays a developer's discipline.
+- **The builder is a modal.** Opened from a quiet `+ garden` at the end of the
+  garden row, and edited from a `configure` button that shows only while standing
+  in a user garden. It is setup, not daily chrome, so it stays out of the way and
+  the preview gets the room a corner panel could not give it.
+- **The sample payload is stored with the mapping.** A garden has to render on
+  reload without a fetch it cannot yet make, so the one pasted snapshot persists
+  beside the mapping. This does store the user's own pasted data in their own
+  browser — acceptable because it is theirs and local; the third-party-terms trap
+  `docs/sources.md` flags is about *ingesting a vendor's* content, which the
+  paste path does not do. Revisit if the fetch path ever stores fetched text.
+- **The saturated-axis check lives in the preview.** The summary reports each
+  axis's spread and names any *data-driven* axis (vitality always, activity when
+  mapped) that is flat across the garden — the hardest failure to see, met before
+  the user commits rather than months later in a distribution. Maturity, a
+  constant by design, is never flagged: warning on it would be noise that hides
+  the real one.
 
 The test the whole feature has to pass is the one every source so far has passed,
 and the builder must pass it *for a stranger's data the developer never saw*: a

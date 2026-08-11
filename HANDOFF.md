@@ -12,12 +12,15 @@ are still open.
 
 ## State
 
-Green. 814 tests across 46 files (plus one live Prometheus test that skips
+Green. 828 tests across 47 files (plus one live Prometheus test that skips
 unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
-Eight gardens. Four are real, in the sense that they come through the
-adapter → translation pipeline from feed-shaped records:
+Eight gardens ship, and now a user can add their own at runtime through the
+garden builder (`docs/garden-builder.md`) — a pasted JSON snapshot, mapped and
+persisted, standing beside the built-ins. The eight built-in ones: four are real,
+in the sense that they come through the adapter → translation pipeline from
+feed-shaped records:
 
 | garden | beds | plants | source |
 | --- | --- | --- | --- |
