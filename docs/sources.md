@@ -260,9 +260,14 @@ invent; the only judgement is which outcome values count as success.
    `translation/declarative.ts` now maps a record's finished work onto the node's
    `completions` via an optional `completions` block — so a config-driven CI feed
    or to-do list hangs fruit without a developer writing a translator.
-5. **A configuration UI** over the mapping — at which point FIFA and fundraising
-   are things a user sets up, not things a developer writes. The `DeclarativeMapping`
-   interface is the shape a form would produce.
+5. **A configuration UI** over the mapping — **first cut done, offline half**
+   (`docs/garden-builder.md`). A modal (`src/GardenBuilder.tsx`) turns a pasted
+   JSON snapshot and a `DeclarativeMapping` into a garden, previewed through the
+   real interpreter and persisted so it survives a reload; FIFA and fundraising
+   are now things a user sets up, not things a developer writes. What it does not
+   do is *fetch* — a user brings one snapshot by hand, because the live pull past
+   the browser's CORS wall is step 6. The config UI was reachable without the
+   network; only the fetch was not.
 6. **A backend** for the fetch proxy and the unattended collector loop — now the
    critical-path blocker for everything with "needs network" on it. The observation
    record already stores in the shape this wants, so it is a change of backend, not

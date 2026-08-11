@@ -6,6 +6,8 @@ import { useEcosystem, markVisited, flushObservations } from './state/ecosystemS
 import { DAY_MS, HOUR_MS } from './ecosystem/history';
 import { scrubBy } from './ecosystem/scrub';
 import { Timeline } from './Timeline';
+import { GardenBuilder } from './GardenBuilder';
+import type { UserGardenConfig } from './state/userSources';
 
 /**
  * Deliberately plain chrome. This exists to look at the garden, not to be the
@@ -29,8 +31,15 @@ export default function App() {
   const poll = useEcosystem((s) => s.poll);
   const select = useEcosystem((s) => s.select);
   const changesSinceLastVisit = useEcosystem((s) => s.changesSinceLastVisit);
+  const userGardens = useEcosystem((s) => s.userGardens);
 
   const [live, setLive] = useState(true);
+
+  // The garden builder is setup, not daily chrome: closed by default, opened from
+  // a small affordance, and pre-filled when configuring an existing user garden.
+  // `undefined` closed, `null` a new garden, a config an edit.
+  const [builder, setBuilder] = useState<UserGardenConfig | null | undefined>(undefined);
+  const activeUserGarden = userGardens.find((c) => c.mapping.gardenId === activeGardenId) ?? null;
 
   // Which grain of space is live: the body on the path, or the whole garden on a
   // table. See scene/bonsai.ts. Held here, next to the other bits of chrome,
@@ -133,8 +142,12 @@ export default function App() {
         <Garden viewMode={viewMode} />
       </Canvas>
 
+      {builder !== undefined && (
+        <GardenBuilder editing={builder} onClose={() => setBuilder(undefined)} />
+      )}
+
       <div style={panel}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
           {gardens.map((garden) => (
             <button
               key={garden.id}
@@ -150,6 +163,15 @@ export default function App() {
               {garden.label}
             </button>
           ))}
+          {/* Setup, tucked at the end of the row and deliberately quiet: a garden
+              is configured once and then just another button above. */}
+          <button
+            title="Add a garden from your own data"
+            onClick={() => setBuilder(null)}
+            style={{ ...button, background: 'transparent', opacity: 0.6 }}
+          >
+            + garden
+          </button>
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -162,6 +184,16 @@ export default function App() {
           >
             {viewMode === 'table' ? 'walk in' : 'overview'}
           </button>
+          {/* Only when standing in a garden you built — the tweak-it-later path,
+              surfaced exactly where it is relevant and nowhere else. */}
+          {activeUserGarden && (
+            <button
+              onClick={() => setBuilder(activeUserGarden)}
+              style={{ ...button, background: '#242b30', opacity: 0.85 }}
+            >
+              configure
+            </button>
+          )}
         </div>
 
         <label style={row}>

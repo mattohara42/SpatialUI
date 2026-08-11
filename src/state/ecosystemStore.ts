@@ -7,9 +7,16 @@ import { reachOf } from '../ecosystem/timeline';
 import type { VitalsHistory } from '../ecosystem/history';
 import { generateMockEcosystem, tickMockEcosystem } from '../mock/mockEcosystemData';
 import { NFL_GARDEN_ID } from '../translation/nfl';
-import { SOURCES, dueSources } from './sources';
+import { SOURCES, dueSources, type TranslatedGarden } from './sources';
 import { browserStorage, createCollector } from './collector';
 import type { ObservedRecord } from './persist';
+import {
+  loadUserConfigs,
+  saveUserConfigs,
+  upsertConfig,
+  userSourceFromConfig,
+  type UserGardenConfig,
+} from './userSources';
 
 /**
  * The store holds state and nothing derived. Geometry, layout, adjacency, and
@@ -43,7 +50,23 @@ interface EcosystemStore extends EcosystemState {
    */
   selectedId: string | null;
 
+  /**
+   * The gardens a user built, mirrored from `localStorage` so the chrome can list
+   * them for editing. The nodes themselves live in `nodes` like any other garden;
+   * this is only the configuration that produced them, kept so the builder can be
+   * reopened pre-filled.
+   */
+  userGardens: UserGardenConfig[];
+
   enterGarden: (gardenId: string) => void;
+  /**
+   * Add or replace a user garden, fold its nodes into the scene, and stand in it.
+   * Replacing (same garden id — an edit) purges the old garden's nodes first, so
+   * a remapping that changes the plants does not leave the old ones behind.
+   */
+  addUserGarden: (config: UserGardenConfig) => void;
+  /** Remove a user garden's nodes and its stored config, leaving for the league. */
+  removeUserGarden: (gardenId: string) => void;
   /** Open the detail panel for a plant, or close it with null. */
   select: (nodeId: string | null) => void;
   /** Null returns the scene to live. */
@@ -95,12 +118,54 @@ function composeEcosystem(now = Date.now()): EcosystemState {
     setStaleSchedule(source.gardenId, source.policy);
   }
 
+  // The user's own gardens, read the same way — a declarative mapping over the
+  // snapshot they pasted, folded in beside the built-in sources with nothing
+  // downstream told they came from a form rather than a translator. Defensive per
+  // config: a stored mapping whose payload no longer translates is skipped rather
+  // than fatal, so one broken garden cannot keep the app from starting, and the
+  // builder can be reopened to fix it.
+  for (const config of loadUserConfigs()) {
+    try {
+      const source = userSourceFromConfig(config);
+      const garden = source.read(now);
+      Object.assign(state.nodes, garden.nodes);
+      Object.assign(state.edges, garden.edges);
+      Object.assign(state.history, garden.history);
+      Object.assign(state.archive, garden.archive);
+      setStaleSchedule(source.gardenId, source.policy);
+    } catch {
+      // Skipped; see above.
+    }
+  }
+
   // Last, and the order is load-bearing: what previous sittings watched happen
   // goes into the gaps the sources left, never over what they have just said.
   // See `recordIfAbsent`.
   collector.restore(state.history, state.archive);
 
   return state;
+}
+
+/**
+ * A copy of the record with one garden's plants removed from every tier. Used
+ * when a user garden is edited (its old nodes must go before the new ones land)
+ * or removed. Keyed off `node.gardenId`, which every node in a garden carries —
+ * plants, beds, and the garden node itself — so one pass finds them all; the
+ * history and archive are keyed by node id, so the same set of ids clears both.
+ * User declarative gardens carry no edges, so edges are left untouched.
+ */
+function withoutGarden(
+  state: EcosystemState,
+  gardenId: string,
+): Pick<EcosystemState, 'nodes' | 'history' | 'archive'> {
+  const removed = new Set(
+    Object.values(state.nodes)
+      .filter((node) => node.gardenId === gardenId)
+      .map((node) => node.id),
+  );
+  const keep = <T>(map: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(Object.entries(map).filter(([id]) => !removed.has(id)));
+  return { nodes: keep(state.nodes), history: keep(state.history), archive: keep(state.archive) };
 }
 
 /**
@@ -149,6 +214,7 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
   lastViewedAt: {},
   ...windowsFor(initial, initial.activeGardenId),
   selectedId: null,
+  userGardens: loadUserConfigs(),
 
   enterGarden: (gardenId) =>
     set((state) => ({
@@ -160,6 +226,74 @@ export const useEcosystem = create<EcosystemStore>((set, get) => ({
       // after entering still has the previous visit to compare against.
       lastViewedAt: { ...state.lastViewedAt },
     })),
+
+  addUserGarden: (config) =>
+    set((state) => {
+      const gardenId = config.mapping.gardenId;
+      const now = Date.now();
+      const source = userSourceFromConfig(config);
+      let garden: TranslatedGarden;
+      try {
+        garden = source.read(now);
+      } catch {
+        // The builder validates before it calls this, so a throw here means the
+        // config drifted out from under it. Leave the scene as it is rather than
+        // half-applying a garden that will not translate.
+        return {};
+      }
+      setStaleSchedule(gardenId, source.policy);
+
+      // Purge first so an edit that drops or renames plants does not leave the old
+      // ones stranded, then lay the new garden over the cleared tiers.
+      const cleared = withoutGarden(state, gardenId);
+      const userGardens = upsertConfig(state.userGardens, config);
+      saveUserConfigs(userGardens);
+
+      const merged: EcosystemState = {
+        ...state,
+        nodes: { ...cleared.nodes, ...garden.nodes },
+        edges: { ...state.edges, ...garden.edges },
+        history: { ...cleared.history, ...garden.history },
+        archive: { ...cleared.archive, ...garden.archive },
+        activeGardenId: gardenId,
+        cursor: null,
+      };
+
+      return {
+        nodes: merged.nodes,
+        edges: merged.edges,
+        history: merged.history,
+        archive: merged.archive,
+        userGardens,
+        activeGardenId: gardenId,
+        cursor: null,
+        selectedId: null,
+        ...windowsFor(merged, gardenId, now),
+      };
+    }),
+
+  removeUserGarden: (gardenId) =>
+    set((state) => {
+      const cleared = withoutGarden(state, gardenId);
+      const userGardens = state.userGardens.filter((c) => c.mapping.gardenId !== gardenId);
+      saveUserConfigs(userGardens);
+
+      // If they were standing in it, fall back to the league — the garden they
+      // were looking at is gone, so the cursor and selection that framed it are too.
+      const active = state.activeGardenId === gardenId ? NFL_GARDEN_ID : state.activeGardenId;
+      const merged: EcosystemState = { ...state, ...cleared, activeGardenId: active };
+
+      return {
+        nodes: cleared.nodes,
+        history: cleared.history,
+        archive: cleared.archive,
+        userGardens,
+        activeGardenId: active,
+        selectedId: null,
+        cursor: active === state.activeGardenId ? state.cursor : null,
+        ...windowsFor(merged, active),
+      };
+    }),
 
   select: (nodeId) => set({ selectedId: nodeId }),
 
