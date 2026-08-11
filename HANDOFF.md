@@ -12,7 +12,8 @@ are still open.
 
 ## State
 
-Green. 694 tests across 38 files, `tsc --noEmit` clean, `vite build` clean, and
+Green. 772 tests across 44 files (plus one live Prometheus test that skips
+unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
 CI runs all three on every push and every pull request.
 
 Seven gardens. Three are real, in the sense that they come through the
@@ -35,6 +36,30 @@ that a live feed can be dropped into with nothing downstream changing. That swap
 is the single highest-value thing an environment with network access could do.
 
 ### What shipped in the most recent session
+
+- **The geometry cache evicts by last use.** It held 600 entries and threw out
+  the oldest *inserted*, which is the same thing until something churns: a season
+  scrub walks every plant through maturity buckets nobody wants again, and each
+  one pushed out whatever went in first — a plant in front of you, which rebuilt
+  next frame and was evicted again. Same bound, different 600. The policy is
+  `lsystem/lru.ts` and it is tested twice, once in isolation and once against the
+  real cache, because the bug was in the wiring rather than in a data structure.
+- **The collector survives a second tab.** Found by writing the scenario down:
+  one key, two tabs, each with its own copy, and the last to write discarded
+  everything the other had seen since it loaded. Silently. Writes now merge what
+  is stored before replacing it, with a `savedAt`-and-length check so the
+  single-tab case never pays for the decode.
+- **What a write costs, measured rather than assumed.** At the budget it is about
+  21ms of synchronous main thread. Two changes came out of that: values are
+  rounded when observed rather than when encoded, which drops the encode from
+  14.8ms to 9.7ms and makes the in-memory record byte-identical to the stored
+  one; and the write interval is now the measured cost of the last write times a
+  duty cycle, floored at thirty seconds, so the cadence tunes itself to the
+  hardware. The first figure taken for all this was 118ms and it was a cold
+  sample — worth knowing, because it was nearly the justification for a much
+  larger change.
+
+### What shipped in the session before
 
 - **The first graphics fidelity pass.** The plain look was always a choice, not a
   ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
@@ -119,6 +144,8 @@ is the single highest-value thing an environment with network access could do.
   at one instant. The lesson is in "How to work on this" below: a saturated axis
   is invisible, because it looks exactly like a signal that is always on.
 
+### And the session before that
+
 - **The collector**, which was the item at the top of this list. History was
   backfilled at module load and thrown away on reload, so the archive tier could
   hold twenty weeks and held twenty weeks of fiction regenerated on the spot.
@@ -129,14 +156,13 @@ is the single highest-value thing an environment with network access could do.
   The limit is stated rather than engineered away — it collects while a tab is
   open and not while one is not — and the format is the one a server-side
   collector would want. See ARCHITECTURE.md, "Collection".
-- **A false risk retired and a true one sharpened.** "The geometry cache still
-  needs an explicit bound" had been in the risk list a long time and was not
-  true: `useLSystem.ts` has capped it at 600 entries with FIFO eviction since
-  before the scrub shipped. What is left is smaller and real — FIFO evicts by
-  insertion order, so a plant you are standing in front of can be thrown out for
-  one you scrubbed past. Item 2 below is now that, and only that.
+- **A false risk retired.** "The geometry cache still needs an explicit bound"
+  had been in the risk list a long time and was not true: it had been capped at
+  600 entries since before the scrub shipped. What was left of it — the eviction
+  policy — shipped as the geometry cache's LRU eviction, in the most recent
+  session above.
 
-### What shipped in the session before
+### Earlier
 
 - **Session-aware staleness**, which was the item at the top of that list and the
   largest open piece of design. `staleness` now takes a `StaleSchedule` — a
@@ -244,6 +270,24 @@ can usually still be asked about last week; past its window, the daily tier is
 the only place those days exist. Even out the eviction "for fairness" and the
 budget starts eating the irreplaceable half first.
 
+**Every write merges before it replaces.** One key, several tabs, each with its
+own copy — drop the merge and the last tab to write silently discards what the
+others saw. The `savedAt`-and-length check that skips the merge is an
+optimisation for the single-tab case and nothing more; if the format ever moves
+`savedAt` out of the header, `peekSavedAt` stops finding it and every write
+quietly starts paying for a full decode.
+
+**The write interval is derived, not chosen.** It is the measured cost of the
+last write times `WRITE_DUTY`. Pin it back to a constant and it is right on the
+hardware it was measured on and wrong on everything slower — which was the
+original bug, just with a number that happened to be fine here.
+
+**The size estimate is deliberately generous.** `recordBytes` is sized for
+values that use all four decimals, so real data — full of values that round
+short — comes in under it. Tune the constants to real data and the estimate goes
+*under* the truth the moment a garden stops rounding short, which is how a budget
+quietly stops being one.
+
 **Beds are raised by lowering the floor.** Plants sit at `y = 0` and grafts,
 dust, and sway all measure from there. Raising the soil would force every one of
 those to learn a bed height. `FLOOR_Y` is negative for this reason.
@@ -272,31 +316,37 @@ plausible numbers is indistinguishable from data.
 
 ---
 
-## Open work, in the order I would take it
+## Open work
 
-### 1. Make the geometry cache LRU rather than FIFO
+The list this file has carried since it was written is now empty, and what
+replaces it is one item that code in this repository cannot finish.
 
-Small, and the last thing left on the original list. `useLSystem.ts` caps the
-cache at 600 entries and evicts the oldest *inserted*, so a plant you are
-standing in front of can be thrown out to make room for one you scrubbed past,
-and the next frame rebuilds it. Touching an entry on read and evicting by last
-use fixes it inside the same 600. The measured 94% hit rate is against present
-behaviour, so what this buys is a slice of the remaining 6% — worth doing
-because it is ten lines, not because anything is visibly wrong.
+### Move the collector somewhere a tab is not required
 
-### 2. Move the collector somewhere a tab is not required
+Everything a page can do about this is done: the record survives a reload,
+survives several tabs at once, and costs about 21ms of main thread at its
+largest. What no page can do is collect while no page is open, and that is the
+half the original architecture note was actually about. A tab that is shut
+records nothing, so a client-side record has holes exactly across the nights and
+weekends you would most want to inspect.
 
-What exists collects while a tab is open, which is the honest limit of a browser
-with no server behind it, and it is stated as such in three places rather than
-glossed. The next real step is a process: the same loop, the same
-`ObservedRecord` on the wire, reading through `LiveSource` and writing somewhere
-that is not `localStorage`. That is a deployment question more than a code one,
-and it is the point at which "the archive holds a season" stops depending on
-somebody leaving a tab open.
+The next real step is a process — the same loop, the same `ObservedRecord` on
+the wire, reading through `LiveSource` and writing somewhere that is not
+`localStorage`. That is a deployment question rather than a coding one, and it
+is the point at which "the archive holds a season" stops depending on somebody
+leaving a tab open. Two things are already shaped for it: `ObservedRecord` is a
+wire format and not a browser structure, and `LiveSource` is the read side a
+collector would want. The one thing that would change inside this repo is
+storage — and note that the `localStorage`-over-IndexedDB decision is only
+correct while the write has to survive `pagehide`. In a worker there is no
+teardown to race, and the choice reverses.
 
 A smaller intermediate step, if a server is not on the table: a service worker
-with periodic background sync. Availability is patchy enough that it would be an
-addition to the current path rather than a replacement for it.
+with periodic background sync. It is Chromium-only, needs an installed PWA, and
+is granted at the browser's discretion, so it would be an addition to the
+current path rather than a replacement for it — and it would want IndexedDB,
+since a service worker cannot reach `localStorage` at all. Worth doing only if
+the alternative is nothing.
 
 ---
 

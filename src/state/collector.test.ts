@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_WRITE_INTERVAL_MS,
   RECORD_BUDGET_BYTES,
   STORAGE_KEY,
+  WRITE_DUTY,
   WRITE_INTERVAL_MS,
   collectorBytes,
   createCollector,
@@ -47,14 +49,25 @@ class FakeStorage implements CollectorStorage {
   /** Bytes it will accept in one value. Infinity for an honest one. */
   quota = Infinity;
   failReads = false;
+  /** Busy-waited, to stand in for a large synchronous `localStorage` write. */
+  writeDelayMs = 0;
+
+  reads = 0;
 
   getItem(key: string): string | null {
     if (this.failReads) throw new Error('blocked');
+    this.reads++;
     return this.items.get(key) ?? null;
   }
 
   setItem(key: string, value: string): void {
     if (value.length > this.quota) throw new Error('QuotaExceededError');
+    if (this.writeDelayMs > 0) {
+      const until = performance.now() + this.writeDelayMs;
+      while (performance.now() < until) {
+        /* a real localStorage write blocks the thread, so this one does too */
+      }
+    }
     this.items.set(key, value);
     this.writes++;
   }
@@ -74,6 +87,66 @@ describe('createCollector', () => {
 
     collector.note([plant('a')], NOW + WRITE_INTERVAL_MS);
     expect(storage.writes).toBe(1);
+  });
+
+  /**
+   * A fixed interval was wrong at the top of the range: at the budget, encoding
+   * and writing is about 90ms of synchronous main thread, and every thirty
+   * seconds that is a hitch. The gap is grown from what a write actually costs.
+   */
+  it('holds the floor while writes are cheap', () => {
+    const storage = new FakeStorage();
+    const collector = createCollector({ storage, now: NOW });
+    collector.note([plant('a')], NOW);
+    collector.flush(NOW);
+    expect(collector.intervalMs).toBe(WRITE_INTERVAL_MS);
+  });
+
+  it('backs off when a write is expensive, and stops writing every beat', () => {
+    const storage = new FakeStorage();
+    storage.writeDelayMs = 40;
+    const collector = createCollector({ storage, now: NOW });
+
+    collector.note([plant('a')], NOW);
+    collector.flush(NOW);
+    expect(collector.intervalMs).toBeGreaterThan(WRITE_INTERVAL_MS);
+    expect(collector.intervalMs).toBeLessThanOrEqual(MAX_WRITE_INTERVAL_MS);
+
+    // A beat that would have written under the old fixed interval now does not.
+    const writes = storage.writes;
+    collector.note([plant('a')], NOW + WRITE_INTERVAL_MS);
+    expect(storage.writes).toBe(writes);
+
+    collector.note([plant('a')], NOW + collector.intervalMs);
+    expect(storage.writes).toBe(writes + 1);
+  });
+
+  /**
+   * Regression. The derived interval used to carry a fraction of a millisecond,
+   * and `lastWriteAt + interval` cannot represent that exactly at epoch scale —
+   * a double's spacing near 1.78e12 is about 0.0002ms — so the subtraction came
+   * back a hair under the threshold and the write never fired. It depended on
+   * the fraction, which is to say on luck, and it passed locally and failed on
+   * CI.
+   */
+  it('derives a whole number of milliseconds, so the deadline is representable', () => {
+    const storage = new FakeStorage();
+    storage.writeDelayMs = 7;
+    const collector = createCollector({ storage, now: NOW });
+    collector.flush(NOW);
+
+    expect(Number.isInteger(collector.intervalMs)).toBe(true);
+    const deadline = NOW + collector.intervalMs;
+    expect(deadline - NOW).toBeGreaterThanOrEqual(collector.intervalMs);
+  });
+
+  it('never backs off past its cap, however slow the store is', () => {
+    const storage = new FakeStorage();
+    // Just past MAX_WRITE_INTERVAL_MS / WRITE_DUTY, which is where the cap bites.
+    storage.writeDelayMs = MAX_WRITE_INTERVAL_MS / WRITE_DUTY + 20;
+    const collector = createCollector({ storage, now: NOW });
+    collector.flush(NOW);
+    expect(collector.intervalMs).toBe(MAX_WRITE_INTERVAL_MS);
   });
 
   it('flushes on demand whatever the schedule thinks', () => {
@@ -118,6 +191,83 @@ describe('createCollector', () => {
 
     const collector = createCollector({ storage, now: NOW });
     expect(collector.record.coarse['a']).toBeUndefined();
+  });
+});
+
+/**
+ * Pages come in multiples, and one key is shared by all of them. Before the
+ * merge, the last tab to write discarded everything every other tab had seen
+ * since it loaded — silently, which is the worst way for a record to be wrong.
+ */
+describe('two tabs', () => {
+  it('keeps what the other tab saw, whichever writes last', () => {
+    const storage = new FakeStorage();
+    const a = createCollector({ storage, now: NOW });
+    a.note([plant('watched-by-a')], NOW);
+    a.flush(NOW);
+
+    const b = createCollector({ storage, now: NOW + HOUR_MS });
+    b.note([plant('watched-by-b')], NOW + HOUR_MS);
+    b.flush(NOW + HOUR_MS);
+
+    a.note([plant('watched-by-a')], NOW + 2 * HOUR_MS);
+    a.flush(NOW + 2 * HOUR_MS);
+
+    const stored = decodeRecord(storage.items.get(STORAGE_KEY)!)!;
+    expect(Object.keys(stored.fine).sort()).toEqual(['watched-by-a', 'watched-by-b']);
+  });
+
+  it('picks up the other tab\'s slots for a node both are watching', () => {
+    const storage = new FakeStorage();
+    const a = createCollector({ storage, now: NOW });
+    const b = createCollector({ storage, now: NOW });
+
+    a.note([plant('shared')], NOW);
+    a.flush(NOW);
+    b.note([plant('shared')], NOW + HOUR_MS);
+    b.flush(NOW + HOUR_MS);
+
+    const stored = decodeRecord(storage.items.get(STORAGE_KEY)!)!;
+    expect(stored.fine['shared'].slots).toHaveLength(2);
+  });
+
+  /**
+   * The cost of the merge is a decode, and the ordinary case is one tab. Reading
+   * back a value nothing has touched must not pay for it.
+   */
+  /**
+   * The merge costs a decode and the ordinary case is a single tab, so a value
+   * the collector recognises as its own is skipped on `savedAt` and length
+   * alone. Proved by planting an impostor with the same signature and a
+   * different body: a collector taking the fast path never sees it.
+   */
+  it('skips the decode when the stored value looks like its own', () => {
+    const storage = new FakeStorage();
+    const collector = createCollector({ storage, now: NOW });
+    collector.note([plant('node-a')], NOW);
+    collector.flush(NOW);
+
+    const impostor = storage.items.get(STORAGE_KEY)!.replaceAll('node-a', 'node-b');
+    expect(impostor).toHaveLength(storage.items.get(STORAGE_KEY)!.length);
+    storage.items.set(STORAGE_KEY, impostor);
+
+    collector.flush(NOW); // same savedAt, so the same signature
+    expect(collector.record.fine['node-b']).toBeUndefined();
+  });
+
+  it('does decode once the signature no longer matches', () => {
+    const storage = new FakeStorage();
+    const collector = createCollector({ storage, now: NOW });
+    collector.note([plant('node-a')], NOW);
+    collector.flush(NOW);
+
+    const other = emptyRecord(NOW + 1);
+    observe(other, [plant('node-b')], NOW);
+    other.savedAt = NOW + 1;
+    storage.items.set(STORAGE_KEY, encodeRecord(other));
+
+    collector.flush(NOW + HOUR_MS);
+    expect(collector.record.fine['node-b']).toBeDefined();
   });
 });
 

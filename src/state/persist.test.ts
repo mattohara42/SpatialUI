@@ -6,7 +6,9 @@ import {
   decodeRecord,
   emptyRecord,
   encodeRecord,
+  mergeRecord,
   observe,
+  peekSavedAt,
   pruneRecord,
   recordBytes,
   restoreRecord,
@@ -257,6 +259,84 @@ describe('encode and decode', () => {
   });
 });
 
+describe('mergeRecord', () => {
+  it('takes a node the target has never heard of', () => {
+    const mine = emptyRecord(NOW);
+    const theirs = emptyRecord(NOW);
+    observe(mine, [plant('a')], NOW);
+    observe(theirs, [plant('b')], NOW);
+
+    expect(mergeRecord(mine, theirs)).toBe(2); // both tiers of b
+    expect(Object.keys(mine.fine).sort()).toEqual(['a', 'b']);
+  });
+
+  it('interleaves slots and leaves the result ascending', () => {
+    const mine = emptyRecord(NOW);
+    const theirs = emptyRecord(NOW);
+    observe(mine, [plant('a')], NOW - 4 * HOUR_MS);
+    observe(mine, [plant('a')], NOW);
+    observe(theirs, [plant('a')], NOW - 3 * HOUR_MS);
+    observe(theirs, [plant('a')], NOW - HOUR_MS);
+
+    mergeRecord(mine, theirs);
+    const { slots } = mine.fine['a'];
+    expect(slots).toHaveLength(4);
+    expect(slots).toEqual([...slots].sort((x, y) => x - y));
+  });
+
+  /**
+   * A disagreement can only be inside one in-progress slot, and the writer's own
+   * observation is the one it actually watched arrive.
+   */
+  it('keeps its own value where both hold the same slot', () => {
+    const mine = emptyRecord(NOW);
+    const theirs = emptyRecord(NOW);
+    observe(mine, [plant('a', 0.11)], NOW);
+    observe(theirs, [plant('a', 0.99)], NOW);
+
+    expect(mergeRecord(mine, theirs)).toBe(0);
+    expect(mine.fine['a'].vitality).toEqual([0.11]);
+  });
+
+  it('does not alias the other record, so later writes cannot reach back', () => {
+    const mine = emptyRecord(NOW);
+    const theirs = emptyRecord(NOW);
+    observe(theirs, [plant('a')], NOW);
+    mergeRecord(mine, theirs);
+    observe(theirs, [plant('a')], NOW + HOUR_MS);
+    expect(mine.fine['a'].slots).toHaveLength(1);
+  });
+
+  it('skips a series whose grain disagrees rather than interleaving nonsense', () => {
+    const mine = emptyRecord(NOW);
+    observe(mine, [plant('a')], NOW);
+    const theirs = emptyRecord(NOW);
+    // An hourly series carrying a daily grain, which decode would have refused
+    // and an in-memory merge has to refuse too.
+    theirs.fine['a'] = { stepMs: DAY_MS, slots: [1], vitality: [0.5], activity: [0.5], maturity: [0.5], trend: [0] };
+    expect(mergeRecord(mine, theirs)).toBe(0);
+    expect(mine.fine['a'].slots).toHaveLength(1);
+  });
+});
+
+describe('peekSavedAt', () => {
+  it('reads the timestamp without parsing the record', () => {
+    const rec = emptyRecord(NOW);
+    observe(rec, [plant('markets/Energy/XOM')], NOW);
+    expect(peekSavedAt(encodeRecord(rec))).toBe(NOW);
+  });
+
+  it('is null for something that is not one of ours', () => {
+    expect(peekSavedAt('{"someone":"else"}')).toBeNull();
+  });
+
+  /** It only looks at the head, so a `savedAt` buried in the body must not count. */
+  it('does not find a timestamp past the header', () => {
+    const text = `{"schema":1,"fine":{"${'x'.repeat(200)}":1},"savedAt":${NOW}}`;
+    expect(peekSavedAt(text)).toBeNull();
+  });
+});
+
 describe('recordBytes', () => {
   /**
    * The estimate exists so a budget check and a shed pass do not each serialize
@@ -300,6 +380,29 @@ describe('recordBytes', () => {
     const rec = emptyRecord(NOW);
     observe(rec, [varied('markets/Sector 0/TICK0', 1)], NOW);
     expect(recordBytes(rec)).toBeGreaterThanOrEqual(encodeRecord(rec).length);
+  });
+
+  /**
+   * The 5% above holds for values that use all four decimals, which is what the
+   * constants are sized for and the only direction that can go wrong: `0.5`
+   * costs three characters and not six, so data that rounds short makes the
+   * estimate generous rather than tight. Benchmarked against a live record in
+   * Chromium it ran 6.6% over; against vitals that all round to one decimal,
+   * which is the floor, it runs about 40% over.
+   *
+   * Both are fine and neither is worth tuning out. Sizing the constants to real
+   * data would put the estimate *under* the truth the moment a garden stopped
+   * rounding short, and an under-estimate is how a budget quietly stops being
+   * one. What this pins is the direction.
+   */
+  it('errs generous on data that rounds short, never under', () => {
+    const rec = emptyRecord(NOW);
+    const round = Array.from({ length: 24 }, (_, i) => plant(`garden/bed ${i}/plant-${i}`));
+    for (let s = 0; s < 60; s++) observe(rec, round, NOW - s * DAY_MS);
+
+    const actual = encodeRecord(rec).length;
+    expect(recordBytes(rec)).toBeGreaterThan(actual);
+    expect(recordBytes(rec) / actual).toBeLessThan(1.45);
   });
 
   /** Two megabytes has to be a season of every garden, or the budget is a lie. */
