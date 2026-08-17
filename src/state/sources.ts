@@ -19,6 +19,7 @@ import {
   WORLD_STALE_SCHEDULE,
   translateWorldSnapshot,
 } from '../translation/world';
+import { liveNflSource } from '../adapters/nfl';
 import { promSource } from '../adapters/prometheus';
 import type { FetchLike } from '../adapters/prometheus/query';
 import {
@@ -28,6 +29,7 @@ import {
   syntheticPromSnapshot,
 } from '../adapters/prometheus/mock';
 import { promProxyFetch } from '../backend/proxyFetch';
+import { nflProxyFetch } from '../backend/nflProxyFetch';
 
 /**
  * The real sources, and the one question that turned out to have two uses.
@@ -147,13 +149,38 @@ const prometheus = promSource({
 // live label would be exactly the dishonesty the provenance marker exists to stop.
 if (!PROM_PROXY_URL) prometheus.adopt(syntheticPromSnapshot());
 
+/** The id the client names in an NFL proxy request; the host lives server-side. */
+export const NFL_SOURCE_ID = 'nfl';
+
+/**
+ * The NFL proxy URL, or nothing — the one switch that takes the league live,
+ * exactly as `VITE_PROM_PROXY_URL` does for Prometheus. Set it and the NFL garden
+ * pulls a real season from ESPN through the backend proxy; leave it unset (dev,
+ * and every test) and it stays the seeded season, which needs no egress.
+ */
+const NFL_PROXY_URL = import.meta.env.VITE_NFL_PROXY_URL as string | undefined;
+
+/** The seeded season: a generator, re-asking slides its fiction, so not pollable. */
+const syntheticNflEntry: LiveSource = {
+  gardenId: NFL_GARDEN_ID,
+  policy: NFL_STALE_AFTER_MS,
+  read: (now) => translateNflSnapshot(nfl.snapshot(now), { asOf: now }),
+  pollable: false,
+};
+
+/**
+ * The NFL source: live through the proxy when a URL is configured, else the
+ * generator. The live source starts empty and fills on its first refresh — a
+ * seeded season behind a live label would be exactly the dishonesty provenance
+ * exists to stop — and unlike the generator it *is* pollable, because a real feed
+ * genuinely has something new each week.
+ */
+const nflSource: LiveSource = NFL_PROXY_URL
+  ? liveNflSource({ baseUrl: '', fetchImpl: nflProxyFetch(NFL_PROXY_URL, NFL_SOURCE_ID) })
+  : syntheticNflEntry;
+
 export const SOURCES: readonly LiveSource[] = [
-  {
-    gardenId: NFL_GARDEN_ID,
-    policy: NFL_STALE_AFTER_MS,
-    read: (now) => translateNflSnapshot(nfl.snapshot(now), { asOf: now }),
-    pollable: false,
-  },
+  nflSource,
   {
     gardenId: MARKET_GARDEN_ID,
     policy: MARKET_STALE_SCHEDULE,

@@ -12,9 +12,9 @@ are still open.
 
 ## State
 
-Green. 828 tests across 47 files (plus one live Prometheus test that skips
-unless a server is reachable), `tsc --noEmit` clean, `vite build` clean, and
-CI runs all three on every push and every pull request.
+Green. 879 tests across 56 files (plus two live tests — one Prometheus, one NFL —
+that skip unless a server is reachable), `tsc --noEmit` clean, `vite build` clean,
+and CI runs all three on every push and every pull request.
 
 Eight gardens ship, and now a user can add their own at runtime through the
 garden builder (`docs/garden-builder.md`) — a pasted JSON snapshot, mapped and
@@ -24,7 +24,7 @@ feed-shaped records:
 
 | garden | beds | plants | source |
 | --- | --- | --- | --- |
-| **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season |
+| **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season, **live via ESPN** behind the proxy |
 | **Markets** | 8 sectors | 32 holdings | `adapters/market` — seeded tape |
 | **World** | 22 UN subregions | 193 states | `adapters/world` + `adapters/news` |
 | **Prometheus** | 3 jobs | 7 targets | `adapters/prometheus` — **mock fetch** |
@@ -40,10 +40,42 @@ a broken setup. Each source implements a one-method interface (`NflSource`,
 `MarketSource`, `WorldSource`, `NewsSource`) or the `LiveSource.read`/`refresh`
 fetch seam (Prometheus), so a live feed drops in with nothing downstream changing
 — for Prometheus, by swapping the mock `fetchImpl` for the platform `fetch` and a
-real endpoint. That swap is the single highest-value thing an environment with
-network access could do.
+real endpoint. Two of the four now have that live path *built*, not just designed:
+Prometheus (behind a mock fetch) and the NFL (behind the backend proxy, fetching
+ESPN). Standing one of them up against a real socket in a networked deploy is the
+single highest-value thing left.
 
 ### What shipped in the most recent session
+
+- **The NFL garden goes live — a real season from ESPN.** The first real source is
+  now the first one whose live path reaches an actual feed. `liveNflSource`
+  (`adapters/nfl/live.ts`) fetches through `adapters/nfl/espn.ts` — ESPN's public,
+  keyless API — and fills the same `NflSeasonSnapshot` the seeded generator did:
+  scores from the scoreboard, full box-score lines from each game summary, age and
+  experience from the roster, designations from the injury report. Nothing below
+  the adapter changed — `derive.ts` still turns box scores into standings,
+  `translation/nfl.ts` is still the only place football meets a plant — which is the
+  claim the synthetic source was only ever standing in for, now cashed. It rides the
+  exact Prometheus seam: `read` translates the held snapshot synchronously, `refresh`
+  is the async fetch, and it **accumulates** (a final box score never changes, so a
+  mid-season refresh fetches the new week's finals, not the season). The proxy is
+  Prometheus's sibling with a **path allowlist** instead of a query one
+  (`backend/nflProxy.ts`, `netlify/functions/nfl-proxy.ts`, routed `/api/proxy/nfl`):
+  the client names a `sourceId` and one of four permitted ESPN resource paths, never
+  a host. One switch turns it on — `VITE_NFL_PROXY_URL`, exactly like
+  `VITE_PROM_PROXY_URL` — and unset it stays the seeded season with no egress. The
+  one honest approximation is the starter split: ESPN's roster is a player list, not
+  a depth chart, so maturity's per-player age and experience are fully real but which
+  eleven "start" is derived by experience — it moves the starter-average terms a
+  little, never the league table, and a depth-chart endpoint would close it. Pinned
+  offline against captured ESPN shapes (`espn.fixtures.ts`, `espn.test.ts`,
+  `live.test.ts`, `backend/nflProxy.test.ts`); the one hop the tests cannot run here
+  is the socket, and `nfl.live.test.ts` is its `skipIf`-no-`NFL_LIVE_URL` tripwire.
+  Written up in `docs/nfl-live.md`. What is not here yet is the unattended collector
+  loop — the proxy makes the garden live while a tab is open, and for a weekly feed a
+  seven-day staleness window means that is nearly enough.
+
+### What shipped in the session before
 
 - **Prometheus is wired into `SOURCES`, behind a mock fetch.** The archetype the
   whole idea was built for is now a live garden in the app — eight gardens, not
@@ -120,7 +152,7 @@ network access could do.
   sample — worth knowing, because it was nearly the justification for a much
   larger change.
 
-### What shipped in the session before
+### And the session before that
 
 - **The first graphics fidelity pass.** The plain look was always a choice, not a
   ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
@@ -205,7 +237,7 @@ network access could do.
   at one instant. The lesson is in "How to work on this" below: a saturated axis
   is invisible, because it looks exactly like a signal that is always on.
 
-### And the session before that
+### Earlier
 
 - **The collector**, which was the item at the top of this list. History was
   backfilled at module load and thrown away on reload, so the archive tier could
@@ -223,7 +255,7 @@ network access could do.
   policy — shipped as the geometry cache's LRU eviction, in the most recent
   session above.
 
-### Earlier
+### Earlier still
 
 - **Session-aware staleness**, which was the item at the top of that list and the
   largest open piece of design. `staleness` now takes a `StaleSchedule` — a
@@ -454,12 +486,15 @@ a scrub that works from the table view is worth a thought.
 **A live adapter behind any of the four interfaces.** The highest-value single
 change, and the cheapest, because every seam was built for it: implement
 `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
-and nothing below changes. Prometheus has now walked this the whole way short of
-the socket — it fetches through `promSource`'s `fetchImpl` seam, with a mock in
-that slot (`adapters/prometheus/mock.ts`), so going live is swapping the mock for
-the platform `fetch` and a real endpoint. It also converts every "seeded fiction"
-caveat in the docs into a real claim. Needs network access this environment does
-not have.
+and nothing below changes. **Two are now built to the socket's edge.** Prometheus
+fetches through `promSource`'s `fetchImpl` seam with a mock in that slot, and the
+**NFL now fetches ESPN for real** through `liveNflSource` behind the backend proxy
+(`adapters/nfl/espn.ts`, `docs/nfl-live.md`) — both convert every "seeded fiction"
+caveat in the docs into a real claim, and both are one networked deploy away from a
+live garden. What still needs the network this environment lacks is *running* that
+path, not building it: set `VITE_NFL_PROXY_URL` (or `VITE_PROM_PROXY_URL`) on a
+deploy with egress and the `skipIf` live tests certify it end to end. Market and
+News are the two interfaces still awaiting their live adapter.
 
 **User-defined data sources** — letting an end user point the garden at their own
 feed (FIFA, Prometheus, political fundraising) rather than a developer writing a
