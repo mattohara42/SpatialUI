@@ -1,6 +1,6 @@
 import { createCollectorLoop } from '../../src/backend/collectorLoop';
 import type { FetchLike } from '../../src/adapters/prometheus/query';
-import { registryFromEnv } from './_registry';
+import { promConfigured, registryFromEnv } from './_registry';
 import { loadRecordCell } from './_blobStorage';
 
 /**
@@ -20,6 +20,11 @@ import { loadRecordCell } from './_blobStorage';
  * for the staleness/poll cadence within a run.
  */
 export default async function handler(): Promise<void> {
+  // The collector is Prometheus's; an NFL-only deploy has nothing here to poll.
+  // Skip before touching Blobs or the registry, so a deploy that never set
+  // `PROM_ENDPOINT` runs a clean no-op each minute instead of throwing.
+  if (!promConfigured()) return;
+
   const { storage, persist } = await loadRecordCell();
 
   const loop = createCollectorLoop({

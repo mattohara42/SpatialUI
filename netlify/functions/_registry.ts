@@ -27,6 +27,20 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * Whether a Prometheus source is configured at all.
+ *
+ * `registryFromEnv` throws on a missing `PROM_ENDPOINT` — deliberately, because a
+ * proxy request for a source that was never set up should fail loudly. But the
+ * scheduled collector fires every minute regardless, and a deploy that only wants
+ * the NFL garden live has no Prometheus to collect; without this it would throw
+ * per minute forever. So the collector checks this first and no-ops when the
+ * answer is no, turning "not configured" from an error into a quiet skip.
+ */
+export function promConfigured(): boolean {
+  return Boolean(process.env.PROM_ENDPOINT);
+}
+
 export function registryFromEnv() {
   const source: RegisteredPromSource = {
     // Must match the client's PROM_SOURCE_ID — the name the proxy POST carries.
