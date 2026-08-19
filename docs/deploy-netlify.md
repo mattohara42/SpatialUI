@@ -22,6 +22,11 @@ Three things, all already in the repo:
   Function that runs the tested `createCollectorLoop.tick()` every minute,
   persisting the `ObservedRecord` to **Netlify Blobs** so a season survives across
   invocations and a shut tab.
+- **The NFL proxy** (`netlify/functions/nfl-proxy.ts`) — the sibling of the
+  Prometheus one, for ESPN's public feed. Routes itself at `/api/proxy/nfl`; the
+  client POSTs `{ sourceId, path }`, it checks the path against the four permitted
+  ESPN resources and returns ESPN's JSON. All logic is the tested
+  `handleNflProxyRequest`. See `docs/nfl-live.md` for what it fetches.
 
 ---
 
@@ -51,7 +56,8 @@ functions at request time and never reach the browser.
 
 | var | value |
 | --- | --- |
-| `VITE_PROM_PROXY_URL` | `/api/proxy/prometheus` — points the source at the proxy. Unset keeps the in-process mock. |
+| `VITE_PROM_PROXY_URL` | `/api/proxy/prometheus` — points the Prometheus source at the proxy. Unset keeps the in-process mock. |
+| `VITE_NFL_PROXY_URL` | `/api/proxy/nfl` — points the NFL source at the proxy for a real ESPN season. Unset keeps the seeded season. |
 
 ### Server (function runtime) — the registry, the allowlist's operator face
 
@@ -73,6 +79,19 @@ functions at request time and never reach the browser.
 `vitality` is required and has no default on purpose: it is the one thing the
 numbers cannot say — *what value is healthy* — and defaulting it would let the
 garden show a confident wrong plant, the exact failure `docs/sources.md` forbids.
+
+The NFL proxy needs nothing required — ESPN's feed is free and keyless, so setting
+`VITE_NFL_PROXY_URL` is the whole of it:
+
+| var | required | meaning |
+| --- | --- | --- |
+| `NFL_ENDPOINT` |  | ESPN football base. Defaults to `https://site.api.espn.com/apis/site/v2/sports/football`; override only to front ESPN with your own gateway. |
+| `NFL_TOKEN` |  | Bearer token, only if that gateway wants one. ESPN's public feed does not. |
+
+Because ESPN needs no operator-set vitality — a football result *is* its own
+health, `win` is `thriving` — the NFL source carries no `vitality` var and no
+confident-wrong-plant risk from a missing one: the mapping is `translation/nfl.ts`,
+not env config. See `docs/nfl-live.md`.
 
 ---
 
