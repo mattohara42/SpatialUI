@@ -1,5 +1,8 @@
 # Spatial Ecosystem
 
+![The World garden from the path: countries planted in subregion beds under
+the glass, a vineyard bearing in the centre bed.](docs/images/social-preview.jpg)
+
 System health as a living garden. Services, notes, tickers, threats, a football
 league — anything with a pulse — rendered as plants that thrive, wilt, and sway
 so you can read the state of a system at a glance instead of scanning a
