@@ -123,7 +123,10 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
 
   // Scaling happens in place over the typed arrays. Nothing is copied and no
   // intermediate objects are built.
-  const height = geometry.bounds.max[1] - geometry.bounds.min[1];
+  // A form that answers to fixed structure declares the height it should be
+  // measured against, so falling short of it reads as falling short rather than
+  // being scaled back up to full size. See `RawGeometry.referenceHeight`.
+  const height = geometry.referenceHeight ?? geometry.bounds.max[1] - geometry.bounds.min[1];
   const scale = height > 1e-6 ? input.growthScale / height : 1;
   // A raw grammar has no archetype, so it takes the timber default.
   const radiusScale =

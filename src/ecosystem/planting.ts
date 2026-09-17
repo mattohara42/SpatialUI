@@ -54,6 +54,17 @@ export interface PlantingArrangement {
   jitter: number;
   /** Multiplies plant height, so a hedge sits low and a stand stands tall. */
   heightScale: number;
+  /**
+   * A fixed height in metres, overriding the maturity-driven one.
+   *
+   * For a planting trained against fixed structure. A vineyard row is uniform in
+   * height because every vine is tied to the same wires — that is what training
+   * *is* — so letting maturity vary it would put each cordon at a different
+   * height along one trellis. Maturity still reads on such a plant, through the
+   * thickness of its trunk and how much it carries; height is simply not the
+   * channel it reads in. Unset for everything that grows to its own size.
+   */
+  fixedHeight?: number;
 }
 
 export interface PlantingSpec {
@@ -125,8 +136,17 @@ export const PLANTINGS: Record<PlantingType, PlantingSpec> = {
     invasive: false,
     live: true,
     // A single row of vines, so the cordons line up along the trellis. Low: a
-    // vine is a waist-high cordon on a wire, not a tree.
-    arrangement: { columns: 0, spacing: 1.5, rowSpacing: 1.8, jitter: 0.04, heightScale: 0.68 },
+    // vine is a waist-high cordon on a wire, not a tree. The height is fixed
+    // rather than maturity-driven because the row is trained to one set of
+    // wires — see `fixedHeight`.
+    arrangement: {
+      columns: 0,
+      spacing: 1.5,
+      rowSpacing: 1.8,
+      jitter: 0.04,
+      heightScale: 0.68,
+      fixedHeight: 1.6,
+    },
   },
   topiary: {
     label: 'Topiary',

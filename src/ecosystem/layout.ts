@@ -149,9 +149,12 @@ export function layoutGarden(
       plants.push({
         nodeId: plant.id,
         position,
+        // A planting trained against fixed structure states its own height, so
+        // every plant in the row stands to the same wires (see `fixedHeight`).
         growthScale:
+          arr.fixedHeight ??
           (heightRange[0] + (heightRange[1] - heightRange[0]) * plant.maturity) *
-          arr.heightScale,
+            arr.heightScale,
       });
     });
 

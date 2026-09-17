@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { VINE_REFERENCE, VINE_WIRES } from '../lsystem/bespoke';
 import type { BedPlacement } from '../ecosystem/layout';
 
 /**
@@ -11,21 +12,42 @@ import type { BedPlacement } from '../ecosystem/layout';
  * at the height the trained cordons reach, so the vines read as growing on it.
  */
 
-/** Post height and the two wire heights, in metres, tuned to the vine cordon. */
-const POST_H = 1.7;
-const WIRES = [0.8, 1.35];
-const POST_R = 0.04;
-const WIRE_R = 0.015;
-/** Metres between posts along the row. */
+/**
+ * Wire heights are not chosen here. They are the vine's own, read from
+ * `VINE_WIRES` and scaled by how tall the row is trained — so the low wire is
+ * the one the cordon is tied to, the middle and top are the ones its shoots
+ * catch with tendrils, and how far a vine has climbed can be read against them.
+ *
+ * Tuning these independently is how the structure and the plant drift apart into
+ * two things that merely stand near each other.
+ */
+function wireHeights(rowHeight: number): number[] {
+  return [VINE_WIRES.low, VINE_WIRES.middle, VINE_WIRES.top].map(
+    (u) => (u / VINE_REFERENCE) * rowHeight,
+  );
+}
+
+/** How far the posts stand proud of the top wire. */
+const POST_HEADROOM = 0.16;
+const POST_R = 0.045;
+const WIRE_R = 0.012;
+/** Metres between posts along the row, matching the vine spacing so each vine
+ *  has a post to its left and one to its right. */
 const POST_SPACING = 1.5;
 
 const POST_COLOR = '#6b5a44';
 const WIRE_COLOR = '#3a3a3a';
 
-export function Trellis({ beds }: { beds: BedPlacement[] }) {
+export interface TrellisRow {
+  bed: BedPlacement;
+  /** How tall the vines in this bed are trained, in metres. */
+  height: number;
+}
+
+export function Trellis({ rows: input }: { rows: TrellisRow[] }) {
   const rows = useMemo(
     () =>
-      beds.map((bed) => {
+      input.map(({ bed, height }) => {
         const [w] = bed.size;
         const cx = bed.center[0];
         const z = bed.center[2];
@@ -33,9 +55,11 @@ export function Trellis({ beds }: { beds: BedPlacement[] }) {
         const x1 = cx + w / 2;
         const posts = Math.max(2, Math.round(w / POST_SPACING) + 1);
         const xs = Array.from({ length: posts }, (_, i) => x0 + (w * i) / (posts - 1));
-        return { id: bed.nodeId, x0, x1, z, length: w, xs };
+        const wires = wireHeights(height);
+        const postH = wires[wires.length - 1] + POST_HEADROOM;
+        return { id: bed.nodeId, x0, x1, z, length: w, xs, wires, postH };
       }),
-    [beds],
+    [input],
   );
 
   if (rows.length === 0) return null;
@@ -45,12 +69,12 @@ export function Trellis({ beds }: { beds: BedPlacement[] }) {
       {rows.map((row) => (
         <group key={row.id}>
           {row.xs.map((x, i) => (
-            <mesh key={i} position={[x, POST_H / 2, row.z]} castShadow>
-              <cylinderGeometry args={[POST_R, POST_R * 1.3, POST_H, 5]} />
+            <mesh key={i} position={[x, row.postH / 2, row.z]} castShadow>
+              <cylinderGeometry args={[POST_R, POST_R * 1.3, row.postH, 6]} />
               <meshStandardMaterial color={POST_COLOR} roughness={1} />
             </mesh>
           ))}
-          {WIRES.map((h, i) => (
+          {row.wires.map((h, i) => (
             <mesh
               key={`w${i}`}
               position={[(row.x0 + row.x1) / 2, h, row.z]}
