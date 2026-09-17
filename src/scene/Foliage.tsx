@@ -93,21 +93,61 @@ function isBlade(kind: LeafKind): boolean {
  * single geometry, so distinct shapes have to be distinct meshes. A garden uses
  * at most four, so this is four draw calls, not one per plant.
  */
+/**
+ * One plant's contribution to one leaf mesh. A plant with an understory appears
+ * in two of these — once for its petals and once for its stem leaves — and each
+ * takes the half of its markers that belongs to it.
+ */
+interface LeafGroup {
+  plant: PlacedPlant;
+  understory: boolean;
+}
+
+/**
+ * Whether leaf `l` belongs to this group.
+ *
+ * A plant with no understory has one group and every leaf is in it. A plant with
+ * one is split by bracket depth: markers written straight onto a stem are
+ * shallow and are its leaves, and markers inside a bracket are deeper and are
+ * its petals (see `UnderstoryStyle`).
+ */
+function leafBelongs(plant: PlacedPlant, l: number, understory: boolean): boolean {
+  const style = plant.understory;
+  if (!style) return !understory;
+  const shallow = plant.geometry.leafDepth[l] <= style.maxDepth;
+  return understory ? shallow : !shallow;
+}
+
+/** How many of a plant's leaves this group draws. */
+function groupCount(group: LeafGroup): number {
+  const { plant, understory } = group;
+  if (!plant.understory) return understory ? 0 : plant.geometry.leafCount;
+  let n = 0;
+  for (let l = 0; l < plant.geometry.leafCount; l++) {
+    if (leafBelongs(plant, l, understory)) n++;
+  }
+  return n;
+}
+
 export function Foliage({ plants, daylight }: { plants: PlacedPlant[]; daylight: Daylight }) {
   const groups = useMemo(() => {
-    const byKind = new Map<LeafKind, PlacedPlant[]>();
+    const byKind = new Map<LeafKind, LeafGroup[]>();
+    const push = (kind: LeafKind, group: LeafGroup) => {
+      const list = byKind.get(kind);
+      if (list) list.push(group);
+      else byKind.set(kind, [group]);
+    };
     for (const plant of plants) {
-      const list = byKind.get(plant.leafKind);
-      if (list) list.push(plant);
-      else byKind.set(plant.leafKind, [plant]);
+      push(plant.leafKind, { plant, understory: false });
+      if (plant.understory) push(plant.understory.kind, { plant, understory: true });
     }
     return byKind;
   }, [plants]);
 
   return (
     <>
-      {[...groups].map(([kind, kindPlants]) => (
-        <LeafLayer key={kind} kind={kind} plants={kindPlants} daylight={daylight} />
+      {[...groups].map(([kind, kindGroups]) => (
+        <LeafLayer key={kind} kind={kind} groups={kindGroups} daylight={daylight} />
       ))}
     </>
   );
@@ -115,19 +155,19 @@ export function Foliage({ plants, daylight }: { plants: PlacedPlant[]; daylight:
 
 function LeafLayer({
   kind,
-  plants,
+  groups,
   daylight,
 }: {
   kind: LeafKind;
-  plants: PlacedPlant[];
+  groups: LeafGroup[];
   daylight: Daylight;
 }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
   const shape = SHAPES[kind];
 
   const count = useMemo(
-    () => plants.reduce((sum, p) => sum + p.geometry.leafCount, 0),
-    [plants],
+    () => groups.reduce((sum, g) => sum + groupCount(g), 0),
+    [groups],
   );
 
   const geometry = useMemo(() => shape.geometry(), [shape]);
@@ -147,18 +187,20 @@ function LeafLayer({
     const colour = new THREE.Color();
     const amount = kind === 'bloom' ? PETAL_GRAIN : LEAF_GRAIN;
     let i = 0;
-    for (const plant of plants) {
+    for (const { plant, understory } of groups) {
       // Petals wear the plant's varietal bloom colour, which is decorative and
       // seeded, not the health tint; a flower's health reads through how many
-      // petals it still carries, never through their hue.
+      // petals it still carries, never through their hue. A stem leaf on the
+      // same plant is ordinary foliage and takes the health tint like any other.
       const base = kind === 'bloom' ? plant.bloomTint : plant.tint.foliage;
       for (let l = 0; l < plant.geometry.leafCount; l++) {
+        if (!leafBelongs(plant, l, understory)) continue;
         colour.set(base).multiplyScalar(grain(plant.node.id, l, amount));
         instanced.setColorAt(i++, colour);
       }
     }
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
-  }, [plants, count, kind]);
+  }, [groups, count, kind]);
 
   const scratch = useMemo(
     () => ({
@@ -180,13 +222,15 @@ function LeafLayer({
     const [ax, ay, az] = shape.aspect;
 
     let i = 0;
-    for (const plant of plants) {
+    for (const { plant, understory } of groups) {
       const { geometry: geo, position, node } = plant;
       const motion = plant.stale > 1 ? 0 : 1;
       swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t, motion);
       const vit = smoothVitality(node.id, plant.vitality, t);
+      const sizing = understory ? (plant.understory?.scale ?? 1) : 1;
 
       for (let l = 0; l < geo.leafCount; l++) {
+        if (!leafBelongs(plant, l, understory)) continue;
         const l3 = l * 3;
         dummy.position
           .set(
@@ -211,7 +255,7 @@ function LeafLayer({
           .normalize();
         dummy.quaternion.setFromUnitVectors(UP, direction);
 
-        const scale = geo.leafScale[l];
+        const scale = geo.leafScale[l] * sizing;
         dummy.scale.set(scale * ax, scale * ay, scale * az);
         dummy.updateMatrix();
         instanced.setMatrixAt(i++, dummy.matrix);

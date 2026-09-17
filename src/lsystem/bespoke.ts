@@ -142,16 +142,39 @@ export function generateVine(rng: Rng, params: TurtleParams): RawGeometry {
       // the whole way along the wire; hanging a single shoot off each arm tip
       // left the cordon bare between them, which is most of why the bed read as
       // a row of dead sticks rather than a vineyard in leaf.
-      fruitingShoot(b, midpoint(c, next), rng, params);
+      const mid = midpoint(c, next);
+      fruitingShoot(b, mid, rng, params);
+      fruitingSpur(b, mid, rng, params);
       c = next;
       fruitingShoot(b, c, rng, params);
+      fruitingSpur(b, c, rng, params);
     }
   }
 
   return b.build();
 }
 
-/** A short shoot that hangs off the cordon, carrying a few leaves. */
+/**
+ * A fruiting spur: a stub hanging just under the cordon, carrying one leaf that
+ * is marked at a depth of its own.
+ *
+ * That depth is the whole point of it. Fruit is placed on leaf points, and once
+ * the shoots were trained upward every leaf on the plant was in the top of the
+ * canopy — so every bunch hung there too, which is the one place a vineyard's
+ * fruit never is. `GRAPE_STYLE.depth` picks out exactly these, so the bunches
+ * hang in a band under the wire the way a trained row does.
+ */
+function fruitingSpur(b: Builder, from: Vec3, rng: Rng, params: TurtleParams): void {
+  const tip: Vec3 = [
+    from[0] + signed(rng) * 0.12,
+    from[1] - 0.34,
+    from[2] + signed(rng) * 0.16,
+  ];
+  b.segment(from, tip, params.baseRadius * 0.18, params.baseRadius * 0.12, 3);
+  b.leaf(tip, [signed(rng) * 0.4, -0.7, signed(rng) * 0.4], leafSize(params, rng) * 0.7, 3);
+}
+
+/** An upright shoot rising off the cordon, carrying the canopy. */
 /** Halfway between two points, for hanging a shoot along an arm. */
 function midpoint(a: Vec3, b: Vec3): Vec3 {
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
@@ -164,9 +187,13 @@ function fruitingShoot(b: Builder, from: Vec3, rng: Rng, params: TurtleParams): 
   const outward = signed(rng);
   for (let i = 0; i < steps; i++) {
     const next: Vec3 = [
-      p[0] + outward * 0.24,
-      p[1] - 0.5 - Math.abs(signed(rng)) * 0.18, // droops downward
-      p[2] + signed(rng) * 0.36,
+      p[0] + outward * 0.18,
+      // Upward. A trained vine sends its shoots up between the catch wires and
+      // hangs its fruit underneath — that is the whole shape of a vineyard row.
+      // Drooping them instead left the plant a bare letter T with everything
+      // dangling off the crossbar.
+      p[1] + 0.72 + Math.abs(signed(rng)) * 0.22,
+      p[2] + signed(rng) * 0.3,
     ];
     b.segment(p, next, r, r * 0.8, 2);
     r *= 0.8;
@@ -177,11 +204,11 @@ function fruitingShoot(b: Builder, from: Vec3, rng: Rng, params: TurtleParams): 
     // rather than as the normal state, which two per node did not.
     for (let k = 0; k < 4; k++) {
       if (rng() >= params.leafSurvival) continue;
-      const dir = norm([signed(rng), -0.3, signed(rng)]);
+      const dir = norm([signed(rng), 0.35, signed(rng)]);
       const off: Vec3 = [
-        p[0] + dir[0] * 0.26,
-        p[1] + dir[1] * 0.1,
-        p[2] + dir[2] * 0.26,
+        p[0] + dir[0] * 0.3,
+        p[1] + dir[1] * 0.12,
+        p[2] + dir[2] * 0.3,
       ];
       b.leaf(off, dir, leafSize(params, rng), 2);
     }
