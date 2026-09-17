@@ -9,6 +9,7 @@ import { Canvas } from '@react-three/fiber';
 import { Branches } from './scene/Branches';
 import { Foliage } from './scene/Foliage';
 import { Produce } from './scene/Produce';
+import { Trellis } from './scene/Trellis';
 import { daylightAt } from './scene/daylight';
 import { generatePlant } from './lsystem/generate';
 import { leafKindFor, understoryFor, type PresetName } from './lsystem/presets';
@@ -35,6 +36,10 @@ const ONLY = (params.get('only') ?? '').split(',').filter(Boolean);
 const SHOWN = ONLY.length ? ORDER.filter((e) => ONLY.includes(e.preset)) : ORDER;
 const SPACING = ONLY.length ? 2.4 : 3.2;
 const DIST = ONLY.length ? 6 + SHOWN.length * 1.6 : 15;
+/** `?row=vineyard` shows a trained row against its trellis, at three
+ *  vitalities, which is the only way to judge a vine against the wires it
+ *  is tied to. */
+const ROW = params.get('row');
 
 function node(id: string): EcosystemNode {
   return {
@@ -52,6 +57,55 @@ function node(id: string): EcosystemNode {
     blights: [],
     updatedAt: Date.now(),
   } as EcosystemNode;
+}
+
+/** A trained vineyard row: three vines at their real spacing and height, with
+ *  the trellis they answer to, at rising vitality left to right. */
+function VineyardRow({ daylight }: { daylight: ReturnType<typeof daylightAt> }) {
+  const HEIGHT = 1.6;
+  const SPACING = 1.5;
+  const vitalities = [0.2, 0.55, 0.95];
+  const plants = useMemo<PlacedPlant[]>(
+    () =>
+      vitalities.map((v, i) => ({
+        node: { ...node(`vine-${i}`), vitality: v },
+        position: [(i - 1) * SPACING, 0, 0] as [number, number, number],
+        geometry: generatePlant({
+          seed: `vine-${i}`,
+          vitality: v,
+          maturity: 0.85,
+          growthScale: HEIGHT,
+          preset: 'vine',
+        }),
+        // The health tint the garden would give it: brown at nothing, green at
+        // full. This is what "fewer leaves in a less bright colour" looks like.
+        tint: { bark: '#6b563d', foliage: v > 0.6 ? '#7ea34e' : v > 0.35 ? '#8a8a45' : '#96683a' },
+        leafKind: leafKindFor('vine'),
+        understory: understoryFor('vine'),
+        bloomTint: '#e8657f',
+        produceTint: '#5b3a72',
+        grape: true,
+        vitality: v,
+        stale: 0,
+      })),
+    [],
+  );
+
+  return (
+    <>
+      <Trellis
+        rows={[
+          {
+            bed: { nodeId: 'row', center: [0, 0, 0], size: [SPACING * 3, 1] },
+            height: HEIGHT,
+          },
+        ]}
+      />
+      <Branches plants={plants} />
+      <Foliage plants={plants} daylight={daylight} />
+      <Produce plants={plants} />
+    </>
+  );
 }
 
 function Scene() {
@@ -90,9 +144,15 @@ function Scene() {
       />
       <directionalLight position={[10, 16, 9]} intensity={daylight.sunIntensity} castShadow />
       <directionalLight position={[-6, 4, 8]} intensity={0.4} color="#bcd2ec" />
-      <Branches plants={plants} />
-      <Foliage plants={plants} daylight={daylight} />
-      <Produce plants={plants} />
+      {ROW === 'vineyard' ? (
+        <VineyardRow daylight={daylight} />
+      ) : (
+        <>
+          <Branches plants={plants} />
+          <Foliage plants={plants} daylight={daylight} />
+          <Produce plants={plants} />
+        </>
+      )}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
         <meshStandardMaterial color="#6d7f4c" roughness={1} />
@@ -103,7 +163,7 @@ function Scene() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Canvas shadows camera={{ position: [0, 1.5, DIST], fov: 42 }} gl={{ toneMappingExposure: 1.1 }}>
+    <Canvas shadows camera={{ position: [0, 1.1, ROW ? 4.6 : DIST], fov: 42 }} gl={{ toneMappingExposure: 1.1 }}>
       <Scene />
     </Canvas>
   </StrictMode>,

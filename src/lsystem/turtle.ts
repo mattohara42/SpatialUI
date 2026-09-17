@@ -20,7 +20,24 @@ interface TurtleState {
   radius: number;
 }
 
-export type RawGeometry = Omit<PlantGeometry, 'symbolCount' | 'truncated'>;
+export type RawGeometry = Omit<PlantGeometry, 'symbolCount' | 'truncated'> & {
+  /**
+   * The height this form should be scaled *as if* it were, instead of the height
+   * it actually reached.
+   *
+   * Normally a plant is normalized by its own bounds, so whatever it grows to
+   * ends up `growthScale` tall. That is right for a tree, where health reads in
+   * the shape rather than the stature — and wrong for anything trained against
+   * fixed structure. A vine that fails to reach the top wire has to end up
+   * *shorter*; normalizing by its bounds would simply scale the shortfall away
+   * and put the cordon back at the same height. Declaring a reference pins the
+   * scale, so reaching less far stays reaching less far.
+   *
+   * The turtle never sets this; only a bespoke form that answers to something
+   * outside itself does.
+   */
+  referenceHeight?: number;
+};
 
 /**
  * Walks the expanded symbol string and writes straight into typed arrays.

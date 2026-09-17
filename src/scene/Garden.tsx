@@ -257,9 +257,20 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
     [edges, activeGardenId],
   );
 
-  // Beds that need a trellis standing behind their vines.
-  const vineyardBeds = useMemo(
-    () => layout.beds.filter((b) => nodes[b.nodeId]?.plantingType === 'vineyard'),
+  // Beds that need a trellis standing behind their vines, each with the height
+  // its row is trained to — the trellis puts its wires where the vines expect
+  // them rather than at heights of its own (see Trellis).
+  const vineyardRows = useMemo(
+    () =>
+      layout.beds
+        .filter((b) => nodes[b.nodeId]?.plantingType === 'vineyard')
+        .map((bed) => {
+          const height = layout.plants
+            .filter((p) => nodes[p.nodeId]?.parentId === bed.nodeId)
+            .reduce((tallest, p) => Math.max(tallest, p.growthScale), 0);
+          return { bed, height };
+        })
+        .filter((row) => row.height > 0),
     [layout, nodes],
   );
 
@@ -418,7 +429,7 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
       <group ref={assembly}>
         <group position={[-layout.size[0] / 2, 0, -layout.size[1] / 2]}>
           <Beds beds={layout.beds} />
-          <Trellis beds={vineyardBeds} />
+          <Trellis rows={vineyardRows} />
           <Branches plants={plants} />
           <Foliage plants={plants} daylight={daylight} />
           <Produce plants={plants} />

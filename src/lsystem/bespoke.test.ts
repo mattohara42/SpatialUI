@@ -35,7 +35,29 @@ describe.each(['vine', 'topiary'] as const)('%s', (preset) => {
   it('scales to the requested height', () => {
     for (const growthScale of [0.6, 1.5, 3]) {
       const g = generatePlant({ seed: 'p/h', vitality: 0.9, growthScale, preset });
-      expect(g.bounds.max[1] - g.bounds.min[1]).toBeCloseTo(growthScale, 4);
+      const height = g.bounds.max[1] - g.bounds.min[1];
+      if (preset === 'vine') {
+        // A vine is trained against a trellis rather than grown to its own size,
+        // so `growthScale` is the *top wire* and reaching it is what good health
+        // looks like. It normalizes against that reference instead of its own
+        // bounds, which is what lets it fall short — see VINE_REFERENCE.
+        expect(height).toBeLessThanOrEqual(growthScale + 1e-4);
+        expect(height).toBeGreaterThan(growthScale * 0.5);
+      } else {
+        expect(height).toBeCloseTo(growthScale, 4);
+      }
+    }
+  });
+
+  it('climbs higher the healthier it is, and only a vine does', () => {
+    const at = (vitality: number) =>
+      generatePlant({ seed: 'p/climb', vitality, growthScale: 2, preset }).bounds.max[1];
+    if (preset === 'vine') {
+      expect(at(0.9)).toBeGreaterThan(at(0.2));
+    } else {
+      // Every other form is scaled to fill its height whatever its health;
+      // vitality reads in its shape, not its stature.
+      expect(at(0.9)).toBeCloseTo(at(0.2), 4);
     }
   });
 

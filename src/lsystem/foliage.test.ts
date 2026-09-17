@@ -121,7 +121,13 @@ describe('every preset generates cleanly', () => {
   it('scales to the requested height for each preset', () => {
     for (const preset of ALL) {
       const g = generatePlant({ seed: `h/${preset}`, vitality: 0.8, growthScale: 3, preset });
-      expect(g.bounds.max[1] - g.bounds.min[1]).toBeCloseTo(3, 4);
+      const height = g.bounds.max[1] - g.bounds.min[1];
+      // The vine is the one exception, and deliberately: it is trained against a
+      // trellis, so its height is how far it has *climbed* and falling short of
+      // the top wire is the reading. Everything else fills the height it is
+      // given, because its health reads in shape rather than stature.
+      if (preset === 'vine') expect(height).toBeLessThanOrEqual(3 + 1e-4);
+      else expect(height).toBeCloseTo(3, 4);
     }
   });
 
