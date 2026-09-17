@@ -321,6 +321,15 @@ domain rather than read off the data is usually too wide.**
 
 Three recent additions carry no signal at all, and that is the point of them.
 
+The shape of a single leaf is decoration of the same kind. A leaf is a blade with
+a shoulder, a fold along its midrib and a curl at its tip, and which profile it
+wears follows the archetype — and so the bed's planting — rather than anything
+that moves. It is worth being explicit about why that is safe, because leaf shape
+sounds like it ought to carry health: **a sick plant's leaves are missing, not
+misshapen.** Wilt reads through how many leaves survive and how far the plant
+droops, and giving a better-shaped leaf to a struggling plant does not make it
+look well, because it has hardly any of them.
+
 Individual variety within a bed — whether a plant grows as a broadleaf or a
 bushy crown in an orchard — is chosen by a hash of the node id, not by any
 metric. It exists so a bed looks grown rather than stamped, and it is free
@@ -342,6 +351,20 @@ across every leaf on a plant — which is what made the scene read as a diagram 
 a garden rather than a garden. Grain fixes that at two scales: a generated map
 *within* a surface (turf, soil, bark) and a small stable jitter *between*
 instances, so a canopy breaks into leaves and a bunch of grapes into berries.
+
+Ground cover is the fourth, and it is the one that found a harder edge than the
+others. Grass tufts outside the glass and stones and litter on the path make the
+two largest surfaces in the scene read as ground rather than as a picture of it.
+The obvious extension — scattering it through the beds too, denser under healthy
+plants — is the one thing it may never do, and not merely because density would
+start carrying signal. **A bed is where polarity reads.** A tuft of grass growing
+in the soil is a weed, and a thriving weed being alarming on sight is the single
+load-bearing shape read in the whole language. So the scatter is excluded from
+the planting by construction, the bed footprint is passed to it as an exclusion
+rather than left to chance, and its density is keyed on position and a fixed seed
+so it is identical at every vitality. Decoration is affordable while it means
+nothing; this is the case where the same decoration in a different place would
+have meant something, and something alarming.
 
 The rule is that **grain modulates luminance and never hue**. The maps are
 achromatic by construction and the jitter is a scalar multiply, so both darken
