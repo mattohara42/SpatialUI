@@ -16,6 +16,7 @@ import { Sky } from './Sky';
 import { Horizon } from './Horizon';
 import { Greenhouse } from './Greenhouse';
 import { Props } from './Props';
+import { Meadow, PathLitter } from './Scatter';
 import { Tags } from './Tags';
 import { Detail } from './Detail';
 import { FLOOR_Y, shellFor, viewpointFor } from './greenhouse';
@@ -187,6 +188,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   // fixed, so the league gets a bigger building and not a cramped one.
   const shell = useMemo(() => shellFor(layout.size), [layout]);
   const view = useMemo(() => viewpointFor(shell), [shell]);
+
+  // The planting's footprint, which the path scatter has to keep off.
+  const plot = useMemo(
+    () => ({ width: layout.size[0], depth: layout.size[1] }),
+    [layout],
+  );
 
   // The same garden as a miniature: the scale that shrinks it and where the
   // camera stands to look down at it. Derived from the layout's `size`, the field
@@ -433,6 +440,11 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
             particular bed landed. */}
         <Greenhouse shell={shell} />
         <Props shell={shell} />
+        {/* Stones and fallen leaves on the grit. The planting's own footprint is
+            passed in because it is what the scatter steps around: nothing may
+            land in a bed, where a pebble would read as something growing and a
+            tuft would read as a weed (see scatter.ts). */}
+        <PathLitter shell={shell} plot={plot} />
       </group>
 
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
@@ -451,6 +463,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           roughness={1}
         />
       </mesh>
+      {/* An apron of grass around the house, thinning out until the turf texture
+          takes over. Out here with the ground and the hills rather than in the
+          assembly, because it belongs to the field the house stands in: a model
+          greenhouse set down in real grass is the reading the table wants, and a
+          model set in model grass would just be the same picture again. */}
+      <Meadow shell={shell} />
       <group position={[0, FLOOR_Y, 0]}>
         <Horizon />
       </group>
