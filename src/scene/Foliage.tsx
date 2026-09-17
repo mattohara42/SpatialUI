@@ -5,6 +5,7 @@ import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
 import type { LeafKind } from '../lsystem/presets';
 import { grain } from './textures';
+import { bladeGeometry, LEAF_PROFILES } from './leaf';
 import { makeLeafMaterial } from './translucency';
 import type { Daylight } from './daylight';
 
@@ -37,18 +38,34 @@ const LEAF_GRAIN = 0.15;
 const PETAL_GRAIN = 0.07;
 
 const SHAPES: Record<LeafKind, LeafShape> = {
-  broad: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [1.0, 0.4, 0.85], roughness: 0.7 },
-  blade: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.45, 1.25, 0.2], roughness: 0.65 },
+  broad: { geometry: () => bladeGeometry(LEAF_PROFILES.broad), aspect: [0.92, 0.52, 0.5], roughness: 0.7 },
+  blade: { geometry: () => bladeGeometry(LEAF_PROFILES.blade), aspect: [0.42, 1.3, 0.34], roughness: 0.65 },
+  // A needle keeps its cone. A conifer needle really is a spike with no blade,
+  // no shoulder and no fold, so giving it a leaf outline would be fidelity spent
+  // making it less true; see leaf.ts.
   needle: { geometry: () => new THREE.ConeGeometry(1, 1, 5), aspect: [0.16, 1.35, 0.16], roughness: 0.6 },
-  round: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [0.85, 0.8, 0.85], roughness: 0.8 },
-  // A petal: rounded and slightly cupped, brighter than a leaf. A cluster of
+  round: { geometry: () => bladeGeometry(LEAF_PROFILES.round), aspect: [0.8, 0.84, 0.66], roughness: 0.8 },
+  // A petal: rounded and strongly cupped, brighter than a leaf. A cluster of
   // these fanned around a stem tip reads as a flower head.
-  bloom: { geometry: () => new THREE.IcosahedronGeometry(1, 0), aspect: [1.0, 0.55, 1.0], roughness: 0.45 },
-  // A palm leaflet: much longer than it is wide and nearly flat. Strung in pairs
-  // down an arcing rachis (see `generatePalm`), a run of these reads as one
-  // frond rather than as a line of separate leaves.
-  frond: { geometry: () => new THREE.OctahedronGeometry(1, 0), aspect: [0.28, 2.3, 0.1], roughness: 0.6 },
+  bloom: { geometry: () => bladeGeometry(LEAF_PROFILES.bloom), aspect: [0.94, 0.7, 0.6], roughness: 0.45 },
+  // A palm leaflet: much longer than it is wide and only faintly folded. Strung
+  // in pairs down an arcing rachis (see `generatePalm`), a run of these reads as
+  // one frond rather than as a line of separate leaves.
+  frond: { geometry: () => bladeGeometry(LEAF_PROFILES.frond), aspect: [0.26, 2.3, 0.22], roughness: 0.6 },
 };
+
+/**
+ * Which kinds are blades rather than solids, and so want shading that reads as a
+ * curved surface and faces that read from both sides.
+ *
+ * A solid was closed, so flat shading gave it crisp facets and back faces were
+ * never seen. A blade is a sheet: smooth shading is what lets its fold read as a
+ * fold instead of as two creased panels, and a leaf seen from underneath is an
+ * ordinary thing to see, so its back face has to be drawn.
+ */
+function isBlade(kind: LeafKind): boolean {
+  return kind !== 'needle';
+}
 
 /**
  * Every leaf in the garden, one InstancedMesh per leaf shape.
@@ -63,6 +80,13 @@ const SHAPES: Record<LeafKind, LeafShape> = {
  * luminance jitter (see `grain`) so individual leaves catch the light
  * differently. It is decoration and must stay decoration — luminance only, and
  * small enough that nobody could mistake a bright leaf for a signal.
+ *
+ * The shapes themselves are blades rather than solids (see `leaf.ts`): an
+ * outline with a shoulder and a point, folded along its midrib and curled at the
+ * tip. That is a shape decision per leaf *kind*, which follows the archetype and
+ * so the bed's planting, and it never moves with a vital — health still reads
+ * through how many leaves survive and how far the plant droops, because a sick
+ * plant's leaves are missing rather than misshapen.
  *
  * Splitting by kind keeps the one-draw-call-per-mesh property while letting a
  * conifer wear needles and a hardwood wear broad leaves: an InstancedMesh has a
@@ -111,7 +135,10 @@ function LeafLayer({
 
   // A leaf material that lets the sun through when the canopy is backlit. Built
   // once per leaf shape and aimed at the sun each frame; see `translucency.ts`.
-  const leaf = useMemo(() => makeLeafMaterial(shape.roughness), [shape]);
+  const leaf = useMemo(
+    () => makeLeafMaterial(shape.roughness, !isBlade(kind), isBlade(kind)),
+    [shape, kind],
+  );
   useLayoutEffect(() => () => leaf.dispose(), [leaf]);
 
   useLayoutEffect(() => {
