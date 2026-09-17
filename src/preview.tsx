@@ -10,6 +10,7 @@ import { Branches } from './scene/Branches';
 import { Foliage } from './scene/Foliage';
 import { Produce } from './scene/Produce';
 import { Trellis } from './scene/Trellis';
+import { Signal } from './scene/Signal';
 import { daylightAt } from './scene/daylight';
 import { generatePlant } from './lsystem/generate';
 import { leafKindFor, understoryFor, type PresetName } from './lsystem/presets';
@@ -40,6 +41,12 @@ const DIST = ONLY.length ? 6 + SHOWN.length * 1.6 : 15;
  *  vitalities, which is the only way to judge a vine against the wires it
  *  is tied to. */
 const ROW = params.get('row');
+/** `?plume=0.5` puts a rising plume on every plant shown, `?plume=-0.5` a
+ *  falling one, so the trend cue can be tuned against each form's canopy
+ *  instead of against whichever club happens to be on a run (see scene/signal).
+ *  Zero, the default, draws nothing at all — which is what most of a garden
+ *  looks like. */
+const PLUME = Number(params.get('plume') ?? 0);
 
 function node(id: string): EcosystemNode {
   return {
@@ -86,6 +93,7 @@ function VineyardRow({ daylight }: { daylight: ReturnType<typeof daylightAt> }) 
         produceTint: '#5b3a72',
         grape: true,
         vitality: v,
+        signal: PLUME,
         stale: 0,
       })),
     [],
@@ -129,6 +137,7 @@ function Scene() {
         produceTint: entry.produce,
         grape: entry.preset === 'vine',
         vitality: VITALITY,
+        signal: PLUME,
         stale: 0,
       })),
     [],
@@ -151,6 +160,7 @@ function Scene() {
           <Branches plants={plants} />
           <Foliage plants={plants} daylight={daylight} />
           <Produce plants={plants} />
+          <Signal plants={plants} night={0} />
         </>
       )}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>

@@ -25,7 +25,7 @@ channel, which is the one reading that has to stay unambiguous.
 | polarity | archetype: plant or weed | across the room |
 | staleness | desaturation, dust, no leaf motion | across the room |
 | blight severity | pests and discoloration | a few metres |
-| trend | fresh growth or shedding | a few metres |
+| trend | a plume: rising and amber, or falling and washed out | across the room |
 | activity | animation rate, ambient audio | ambient, not read directly |
 | maturity | trunk thickness, structure size | structural, not read directly |
 | edge strength | graft thickness and flow brightness | on approach |
@@ -39,6 +39,72 @@ Colour is deliberately not load-bearing. Health already reads through droop,
 splay, and leaf density, so a red and green palette, which is the worst possible
 pairing for the commonest colour blindness, is a redundant encoding rather than
 the encoding. Keep that property on purpose.
+
+## The plume: spending the trend channel
+
+Trend had a row in that table from the first pass and nothing behind it. Every
+translator computed the axis, history carried it, the detail panel printed it,
+and the scene never drew it — the calibration note further down this file says
+as much in passing, that the fresh-growth channel was left unspent. A plant that
+was climbing and one that was sliding looked identical until you walked up and
+tapped the tag.
+
+It is spent now, and not as fresh growth. A plant that is moving throws a
+**plume**: specks rising through its canopy in warm amber when the signal is
+improving, and sinking to the soil in washed-out slate when it is not.
+
+**Direction is the reading; colour restates it.** Up and down is the whole
+message, and it survives being seen in silhouette, at a distance, in the dark,
+and by anyone who cannot separate the two hues at all. The colours are chosen so
+that the ones who can get it twice: amber against slate-blue is the one pairing
+that survives every common colour blindness, which is the deliberate opposite of
+the red-and-green this document has warned about since the first pass.
+
+**Growth would have been the wrong channel.** The obvious reading of "fresh
+growth or shedding" is to put trend into the plant's own geometry — new shoots
+on a climbing plant, bare twigs on a sliding one. That spends the wilt channel
+twice. A plant shedding to bare twigs already means *this is in trouble*, and a
+struggling-but-recovering service would have to be drawn both ways at once.
+Keeping the delta in the air around the plant and the level in the plant itself
+is what lets a 4-9 club that has won three straight read as exactly that: low,
+and rising.
+
+**It is absent far more often than it is present.** Below a deadband nothing is
+drawn at all, so a garden that is merely sitting somewhere has no plumes in it
+and the ones that appear are the plants worth walking over to. That is the
+property being bought: something to notice on a new viewing, which a cue that is
+on everywhere cannot be.
+
+**Silence has no direction.** A stale plant never plumes, whatever its last
+reported trend was, because that number is old and the thing may have moved
+since. It also keeps the cue clear of the dust: both are falling specks, and
+without the rule a plant could wear both and mean two things at once. With it, a
+falling speck on a coloured, swaying plant means *this is going down*, and on a
+grey, still one it means *nobody has heard from this*.
+
+**Polarity applies before anything is drawn.** A backlog growing fast is bad
+news. `signalTrend` inverts it for suppress-polarity nodes exactly as
+`signalHealth` inverts the level, so the plume can never say a spreading
+outbreak is going well.
+
+### The deadband is measured, and it found a real inconsistency
+
+Where to put the deadband was decided against the actual pipelines rather than
+argued from the axis. Run at a fixed clock, the three real sources disagree
+sharply about what a unit of trend is: the league's clubs spread across the
+whole range with a median near a third of it, the book's holdings bunch low and
+never reach half, and the world's countries saturate — more than half of them
+sit past 0.5. A tenth of a point is inside the noise of all three; a quarter
+silences most of the book. 0.15 is the value that leaves every garden with both
+movers and non-movers, which is the only property the cue actually needs.
+
+The disagreement itself is the finding, and it is not a rendering problem. Every
+translator calibrates *vitality* against the worst case that can really occur —
+that rule is written down twice in this file — and nothing has ever held *trend*
+to the same standard. So the same number means "quietly drifting" in one garden
+and "the fastest thing here" in another. **Trend needs the same calibration pass
+vitality got**, per source, and until it gets one the plume is honest about the
+data as it is rather than as the axis claims.
 
 ## Beds are plantings
 

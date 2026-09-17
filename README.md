@@ -94,10 +94,11 @@ src/
                collector that writes down what was observed so a reload does not
                throw the past away
   scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
-               Grafts, Beds, Tags, Detail, Motes, Sky, SunScrub, Horizon, and the
-               two cameras — StandControl on the path, TableControl above the
-               bonsai table — plus the pure sway, daylight, dust, greenhouse,
-               label, bonsai (table framing), and fly (transition) modules
+               Grafts, Beds, Tags, Detail, Motes, Dust, Signal, Sky, SunScrub,
+               Horizon, and the two cameras — StandControl on the path,
+               TableControl above the bonsai table — plus the pure sway,
+               daylight, dust, signal, greenhouse, label, bonsai (table framing),
+               and fly (transition) modules
   mock/        Mock ecosystem + drift tick
 ```
 
@@ -371,6 +372,24 @@ every other plant through buckets nobody will ask for again.
   tuned colour and can never tint it, which is what keeps it clear of the reading
   budget entirely. Soil furrows run along the bed's rows, so the ground looks
   worked for what is planted in it.
+- **A plume where something is moving.** The `trend` axis had a row in the
+  channel table from the start and nothing behind it: a club on a three-game run
+  and one on a three-game slide stood there looking identical, and the only place
+  the difference showed was a number in the panel. Now a plant that is climbing
+  throws warm amber specks *up* through its canopy and one that is sliding sheds
+  washed-out slate ones *down* to the soil, so a new viewing has something in it
+  that says look here.
+
+  Direction carries the reading and colour only restates it, which is why amber
+  against slate rather than green against red: the pairing survives every common
+  colour blindness, and in silhouette or in the dark the up and the down still
+  read. Below a deadband nothing is drawn at all, so most of a quiet garden has no
+  plume in it. A **stale plant never plumes** — an old number has no direction —
+  which is also what keeps this clear of the dust, the other falling speck in the
+  garden. Polarity is applied first, so a backlog growing fast sheds rather than
+  rises. The threshold is tuned against the real pipelines rather than argued from
+  the axis; `src/scene/signal.ts` carries the numbers and what they exposed about
+  how differently the sources calibrate trend.
 - Ambient motion: per-plant sway + breathing, drifting motes. Any value that
   updates on a telemetry tick (activity, vitality) is smoothed so it eases in
   rather than snapping — see the comments in `src/scene/sway.ts`.

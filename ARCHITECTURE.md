@@ -200,6 +200,14 @@ src/
     dust.test.ts
     Dust.tsx         Draws the dust, one Points object for every stale plant in
                      the garden and nothing at all when none are.
+    signal.ts        The trend cue: the deadband, the density ramp, and the
+                     column step. Pure, no renderer, like dust and sway.
+    signal.test.ts   Includes the calibration, asserted against the real
+                     adapter to translation pipelines rather than argued.
+    Signal.tsx       Draws the plume — rising and amber where the signal is
+                     improving, falling and washed out where it is not. One
+                     Points object per direction, none at all in a garden
+                     where nothing is moving.
   xr/                Planned, not yet created. Session setup, hand rays, and
                      world-anchored HUDs will live here. Named now so nothing
                      gets built in a way that blocks it.
