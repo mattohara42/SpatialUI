@@ -108,6 +108,11 @@ export const VINE_REFERENCE = VINE_WIRES.top;
  *  row reaches its neighbours without growing through them. */
 const CORDON_REACH = 1.9;
 
+/** How far an arm climbs between the head and its tip. Roughly half the gap up
+ *  to the middle wire, which is enough for the fan to read as rising without the
+ *  arms overtaking the shoots they carry. */
+const ARM_RISE = (VINE_WIRES.middle - VINE_WIRES.low) * 0.55;
+
 /**
  * A grapevine trained on a wire trellis.
  *
@@ -135,51 +140,66 @@ export function generateVine(rng: Rng, params: TurtleParams): RawGeometry {
   const vigour = clamp01(params.leafSurvival);
   const { low } = VINE_WIRES;
 
-  // Trunk: out of the ground to the fruiting wire, wandering as an old stem does.
+  // Trunk: out of the ground to the fruiting wire, wandering as an old stem does
+  // — but wandering *along* the row only. Across it is the one direction a
+  // trained vine may not grow, because that is the direction the trellis holds
+  // it flat in.
   let r = params.baseRadius;
   let pos: Vec3 = [0, 0, 0];
   const trunkSteps = 4;
   for (let i = 0; i < trunkSteps; i++) {
-    const next: Vec3 = [
-      pos[0] + signed(rng) * 0.18,
-      pos[1] + low / trunkSteps,
-      pos[2] + signed(rng) * 0.12,
-    ];
+    const next: Vec3 = [pos[0] + signed(rng) * 0.16, pos[1] + low / trunkSteps, 0];
     b.segment(pos, next, r, r * 0.92, 0);
     r *= 0.92;
     pos = next;
   }
 
-  // Cordon: tied along the low wire, one arm each way down the row.
+  // The arms, and they climb as they reach. A cordon laid flat along one wire
+  // reads as a crossbar — a letter T with a crop hung off it — because nothing
+  // in a plant runs dead level. These fan out *and* up, rising toward the middle
+  // wire as they go, which is how a vine is actually trained: spread wide enough
+  // to fill its share of the row, and lifting all the way.
+  //
+  // In one plane, though. The rise is the freedom; depth across the row is not.
   const head = pos;
   const arms = 3;
+  const armPoints: Vec3[] = [];
   for (const dir of [1, -1]) {
     let c = head;
     let cr = r * 0.9;
     for (let a = 0; a < arms; a++) {
+      const t = (a + 1) / arms;
       const next: Vec3 = [
-        c[0] + (dir * CORDON_REACH) / arms,
-        low + signed(rng) * 0.1,
-        c[2] + signed(rng) * 0.08,
+        head[0] + dir * CORDON_REACH * t,
+        low + ARM_RISE * t + signed(rng) * 0.08,
+        0,
       ];
       b.segment(c, next, cr, cr * 0.9, 1);
       cr *= 0.9;
+      armPoints.push(midpoint(c, next), next);
       c = next;
-
-      // Two shoots off each length of cordon, and a struggling vine throws the
-      // second one only sometimes.
-      climbingShoot(b, midpoint(head, next), rng, params, vigour);
-      if (rng() < 0.35 + vigour * 0.65) climbingShoot(b, c, rng, params, vigour);
     }
   }
 
-  // The crop, spread through a band about the fruiting wire rather than hung in
-  // a line along it.
+  // Shoots rise from the arms, so the canopy follows the fan rather than
+  // standing in a rank off a level bar. A struggling vine throws the second
+  // shoot on each length only sometimes.
+  for (let i = 0; i < armPoints.length; i++) {
+    if (i % 2 === 1 && rng() >= 0.35 + vigour * 0.65) continue;
+    climbingShoot(b, armPoints[i], rng, params, vigour);
+  }
+
+  // The crop hangs under the arms, so it follows their rise and sits at varying
+  // heights the way a real one does — rather than in a line at one height.
   const bunches = Math.round(2 + vigour * 7);
   for (let i = 0; i < bunches; i++) {
-    const along = (rng() * 2 - 1) * CORDON_REACH * 0.95;
-    const y = low + (rng() * 1.5 - 0.45);
-    fruitingSpur(b, [along, y, signed(rng) * 0.12], rng, params);
+    const anchor = armPoints[Math.floor(rng() * armPoints.length)] ?? head;
+    fruitingSpur(
+      b,
+      [anchor[0] + signed(rng) * 0.2, anchor[1] - 0.12, signed(rng) * 0.08],
+      rng,
+      params,
+    );
   }
 
   const raw = b.build();
@@ -227,7 +247,14 @@ function climbingShoot(
   vigour: number,
 ): void {
   const { low, middle, top } = VINE_WIRES;
-  const reach = low + (top - low) * (0.32 + 0.68 * vigour);
+  // Where this shoot is trying to get to. Arms rise, so a shoot starting from an
+  // outer one begins above where a poor vine's target would be — hence the
+  // floor, which keeps every shoot growing *some* way up rather than being
+  // dropped for having started too high.
+  const reach = Math.max(
+    from[1] + 0.5,
+    low + (top - low) * (0.32 + 0.68 * vigour),
+  );
   const steps = 4;
   let p = from;
   let r = params.baseRadius * 0.26;
@@ -240,7 +267,8 @@ function climbingShoot(
       // picket fence, and a row of pickets is the one thing a vine is not.
       p[0] + lean * 0.5 + signed(rng) * 0.13,
       from[1] + (reach - from[1]) * t,
-      p[2] + signed(rng) * 0.19,
+      // A whisker of depth, so the trained hedge is not a sheet of cardboard.
+      p[2] + signed(rng) * 0.07,
     ];
     if (next[1] <= p[1]) break;
     b.segment(p, next, r, r * 0.82, 2);
