@@ -108,6 +108,14 @@ export interface LeafTranslucency {
 export function makeLeafMaterial(
   roughness: number,
   flatShading = true,
+  /**
+   * Draw both faces. A closed solid never showed its back, but a blade is a
+   * sheet and a leaf seen from underneath is an ordinary thing to see — culled,
+   * half the canopy would wink out as the camera passed it. three picks the
+   * matching `shadowSide` on its own, so the shadow a two-sided leaf casts stays
+   * the leaf's.
+   */
+  doubleSided = false,
   options: BacklightOptions = LEAF_BACKLIGHT,
 ): LeafTranslucency {
   const uniforms = {
@@ -119,7 +127,11 @@ export function makeLeafMaterial(
     uScale: { value: options.scale },
   };
 
-  const material = new THREE.MeshStandardMaterial({ roughness, flatShading });
+  const material = new THREE.MeshStandardMaterial({
+    roughness,
+    flatShading,
+    side: doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+  });
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.fragmentShader = shader.fragmentShader

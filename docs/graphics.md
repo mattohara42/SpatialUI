@@ -132,18 +132,35 @@ camera-side fill — and it already scrubs with the sun for free. Almost all of 
 This rung is a materials swap and a shader or two. It does not touch the store,
 the layout, the instancing structure, or the health reads.
 
-### 2. Post-processing
+### 2. Post-processing — **shipped, without a dependency**
 
-There is no post-processing library in the dependencies today. Adding
-`postprocessing` (or drei's `<EffectComposer>`) opens a set of near-free wins:
+Still no post-processing library in the dependencies, and there does not need to
+be one: everything below is built on three's own passes and two hand-written
+shaders, which is the same bargain the tilt-shift made. `scene/Post.tsx` is now
+the single chain, because a pass that composites owns the render loop and two
+components each running their own would fight.
 
 - **Depth of field, as tilt-shift on the bonsai table.** The table view
   (`scene/bonsai.ts`) is a miniature seen from outside; a shallow focus plane
   makes it read as a *physical model* the way a tilt-shift photograph makes a city
   look like a train set. This is the effect that most rewards the mode that
   shipped most recently, and it is a few lines.
-- **SSAO** to seat plants in their beds and give the greenhouse frame weight.
-- **Bloom**, restrained, on the sun and on bright blooms.
+- **Ambient occlusion** to seat plants in their beds and give the greenhouse
+  frame weight — *done* (`scene/ao.ts`), and **written rather than imported for a
+  reason that will apply to anything else that wants scene depth.** three's
+  `SSAOPass` and `GTAOPass` both re-render through `scene.overrideMaterial`,
+  which replaces the taper shader, so every limb would enter the AO buffers as
+  the one-metre cylinder it is before the taper runs. Reading the depth the
+  beauty pass already wrote sidesteps that completely and costs one scene render
+  instead of three. Normals come from depth derivatives, which is the
+  approximation: it is wrong along a silhouette, so the radius stays small.
+- **Bloom**, restrained, on the sun and on bright blooms — *done*, and the
+  threshold is the whole decision. The beauty buffer is linear and unclamped, so
+  a bright sky sits near white: **a threshold below one catches the sky**, and a
+  bloom over the whole sky is a soft filter over the whole garden that lifts the
+  black point and flattens the contrast between a full canopy and a thin one.
+  That is the colour-grading trap arriving by a side door. Above one, only things
+  genuinely brighter than white glow.
 - **Colour grading** — *the one to hold at arm's length.* A filmic grade is the
   fastest way to make a scene feel authored and the fastest way to spend the
   colour channel by accident. Any grade has to be neutral with respect to the
@@ -154,19 +171,31 @@ There is no post-processing library in the dependencies today. Adding
 *Cost:* post is a full-screen pass per effect and the first real bite out of the
 XR frame budget. This rung may be desktop-mostly.
 
-### 3. Richer geometry
+### 3. Richer geometry — **shipped**
 
-- **Better leaf and petal meshes** — a curved, slightly cupped blade instead of a
-  solid — authored low-poly so the silhouette improves without inflating the
-  per-instance count. Detail lives in the normal map.
-- **Per-instance taper and UV scale on branches.** `Branches.tsx` already notes
-  the gap: a cylinder cannot narrow along its length and a twig gets a trunk's
-  worth of bark grain, both for want of a custom instanced shader. The radii are
-  already in the buffer waiting for it. This is one shader that closes two visible
-  compromises at once.
-- **Ground and understory scatter** — grass tufts, pebbles, leaf litter — as an
-  instanced layer, denser under healthy plants. *Channel-watch:* density here must
-  not start reading as health; it is ground cover, not a plant.
+- **Better leaf and petal meshes** — *done* (`scene/leaf.ts`). Not authored and
+  not normal-mapped: a procedural blade with a shoulder, a fold along the midrib
+  and a curl at the tip, at eleven vertices and twelve triangles against the
+  octahedron's six and eight. The detail is in *where* the vertices sit rather
+  than in how many there are, which is the only kind of leaf improvement that
+  survives the instancing multiplier. A conifer needle deliberately keeps its
+  cone: a needle really is a spike, and giving it a blade would be fidelity spent
+  making it less true.
+- **Per-instance taper and UV scale on branches** — *done* (`scene/taper.ts`).
+  One shader closed both compromises, as predicted. Each instance carries its two
+  radii and the UV repeats its size asks for; the vertex stage interpolates the
+  cross-section, tilts the side normals onto the resulting cone, and scales the
+  map UVs so bark is a fixed number of cycles per metre. **The catch worth
+  knowing:** radius left the instance matrix, so the mesh needs a matching
+  `customDepthMaterial` or every branch casts a one-metre cylinder's shadow.
+- **Ground and understory scatter** — *done* (`scene/scatter.ts`, `Scatter.tsx`),
+  and the channel-watch turned out to bite harder than "density must not read as
+  health". Ground cover **in a bed** is unsafe at any density, because a bed is
+  where polarity reads and a tuft in the soil is a weed — the one shape read the
+  whole language turns on. So the scatter is explicitly excluded from the
+  planting: grass outside the glass, stones and litter on the path, and the bed
+  footprint passed in as an exclusion rather than left to chance. Density is
+  keyed on position and a fixed seed, so it is identical at every vitality.
 
 ### 4. Authored assets — where Blender enters
 
@@ -218,44 +247,68 @@ is free; on the latter it has a deformation bill attached.
 
 ---
 
-## The first PR — shipped
+## What has shipped, and what is left
 
-Small, low-risk, and it landed the two effects with the highest ratio of "looks
-transformed" to "lines changed", both channel-safe. Both are now built:
+Rungs 1, 2 and 3 are built. The ladder below is now a record rather than a plan
+up to that point; rungs 4 and 5 are untouched and still described above.
 
-1. **Leaf translucency** (`scene/translucency.ts`) — a backlit-transmission term
-   folded into the leaf material via `onBeforeCompile`, aimed at the sun each
-   frame and riding its intensity, so the canopy glows when the sun is behind it
-   and fades to nothing at dusk. Instancing, per-instance colour, and shadows are
-   untouched. The response shape is pure and tested (`backlight`).
-2. **A tilt-shift depth of field on the bonsai table** (`scene/TiltShift.tsx`) —
-   a two-pass separable blur whose radius rises with distance from a sharp
-   central band, built on three's own `EffectComposer` rather than a new
-   dependency, and mounted *only* in table mode so the room view keeps the
-   default render. The band function is pure and tested (`blurAmount`).
+**Rung 1, materials and lighting.** Leaf translucency
+(`scene/translucency.ts`) — a backlit-transmission term folded into the leaf
+material via `onBeforeCompile`, aimed at the sun each frame and riding its
+intensity. Normal and roughness maps on bark, turf, soil and all timber
+(`textures.ts`), each derived from the same achromatic height field as the
+surface's albedo, so the ridge the map darkens is the one the relief raises.
 
-Since shipped, completing this rung: **normal and roughness maps** on bark, turf,
-soil, and all timber (`normalTexture`/`roughnessTexture` in `textures.ts`), each
-derived from the same achromatic height field as the surface's albedo `map`, so
-the ridge the map darkens is the one the relief raises and the crevice it darkens
-is the one the roughness map matts. Channel-safe from both sides — a normal is a
-direction and a roughness is a scalar, neither a hue — and verified reading
-correctly under a midday sun. Both pure cores are tested (`normalPixels`,
-`roughnessPixels`).
+**Rung 2, post-processing.** One chain in `scene/Post.tsx`: ambient occlusion,
+a restrained bloom, the tilt-shift on the table, and the output pass. No new
+dependency.
 
-The material pass is now complete. What is *not* done, deliberately: relief and
-roughness on the **leaves** (they are tiny and flat-shaded, so the cost outruns
-the gain) and on the **metal props** (many small hand-coloured materials for a
-modest return). The next rung up the ladder is authored assets or post — mind the
-XR budget, now a settled target.
+**Rung 3, richer geometry.** Branch taper and per-instance bark scale
+(`taper.ts`), leaf blades with a shoulder, a fold and a curl (`leaf.ts`), and
+ground scatter outside the glass and on the path (`scatter.ts`).
 
-What to hold back from that PR, deliberately: colour grading (spends the colour
-channel), authored assets (carry a deformation bill), and anything on the
-expensive tier. And measure the table DoF against the XR frame budget before
-assuming it can stay on in the headset — the room view may want it off.
+### The three things this pass learned that were not on the ladder
+
+**A custom vertex shader makes the scene's depth non-reproducible.** Anything
+that re-renders the scene through an override material — three's SSAO, GTAO, and
+most depth-prepass effects — will draw branches as untapered cylinders. Either
+read the depth the beauty pass wrote, or be prepared to patch every override
+material. This is now the single largest constraint on which library effects can
+be dropped in.
+
+**three's passes disagree about where their output goes.** A `ShaderPass` writes
+into the write buffer; `UnrealBloomPass` sets `needsSwap = false` and blends back
+into the *read* buffer it was handed. A hand-driven chain has to ask each stage
+where its result landed rather than assume it moved forward. Assuming cost a
+black screen and a bisect to find.
+
+**Bloom is a colour grade if its threshold is wrong.** The doc already flagged
+grading as the effect that spends the colour channel by accident. An
+under-thresholded bloom does the same thing without ever being called a grade,
+because it lifts the black point across the whole frame and takes contrast out of
+exactly the wilting-versus-thriving read the garden exists to carry.
+
+### Still deliberately not done
+
+Colour grading (spends the colour channel). Authored assets (carry the
+deformation bill described above). The expensive tier. Relief and roughness maps
+on the **leaves** — a blade is eleven vertices and its shape now does the work a
+normal map would have, so the cost still outruns the gain — and on the **metal
+props**, which are many small hand-coloured materials for a modest return.
+
+### What has genuinely not been measured
+
+**Frame time on a headset, or on any GPU.** This container renders through
+SwiftShader, a software rasterizer, at roughly 900ms a frame — which measures
+fill rate on a CPU and is not a ratio that transfers to hardware. So the XR
+step-down in `quality.ts` is built and correct in its logic, and the number it is
+defending against is still unmeasured. **Measuring it is the first thing anyone
+with a headset should do**, and the tier makes that a one-line change rather than
+a rewrite.
 
 The test of the whole pass is the one `textures.ts` already states: after it
-ships, a stranger should still read a wilting plant as wilting and a thriving weed
-as alarming, at a glance, from the edge of their vision. Fidelity that survives
-that is decoration doing its job. Fidelity that fails it has started carrying
-signal, and the garden was built to keep signal in the plant.
+ships, a stranger should still read a wilting plant as wilting and a thriving
+weed as alarming, at a glance, from the edge of their vision. That was checked in
+a real browser this time rather than asserted — the league's struggling divisions
+still read as bare sticks beside a full canopy, and the threats garden's thriving
+weed now reads as a bramble, which is more alarming than it was, not less.

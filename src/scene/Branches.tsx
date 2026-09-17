@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PlacedPlant } from './types';
 import { droopSag, GROUND_Y, smoothActivity, smoothVitality, swayMatrix } from './sway';
+import { limbAttribute, makeTaperedBark } from './taper';
 import {
   barkPixels,
   liftForTexture,
@@ -28,17 +29,21 @@ const UP = new THREE.Vector3(0, 1, 0);
  * is in view and moving geometry would otherwise need its bounds recomputed
  * every frame.
  *
- * Per-instance taper is lost, since a cylinder cannot narrow along its own
- * length without a custom shader. Segments are short enough that the stepping is
- * hard to see, and the radii are in the buffer when we want to fix it properly.
+ * Per-instance taper and bark scale used to be the two things this could not do,
+ * both for want of a custom shader, and both are now `taper.ts`. The instance
+ * matrix carries only the limb's length and heading; its two radii and the UV
+ * repeats its physical size asks for ride the `aLimb` attribute, and the vertex
+ * stage interpolates the cross-section between the ends. So a trunk narrows
+ * continuously into its twigs instead of stepping between barrels, and bark
+ * grain is a fixed number of cycles per metre whether it is on a trunk or a
+ * twig.
  *
- * The bark map has the same limitation from the same cause: UVs belong to the
- * shared geometry, so a twig and a trunk get the same number of grain cycles
- * along their length and the twig's grain is compressed. It survives because the
- * map is low-contrast luminance rather than detail — nobody reads the grain on a
- * twig — and the fix, a per-instance UV scale, is the same custom shader the
- * taper wants. Colour is per instance and unaffected.
+ * That moves radius out of the matrix, which is the one thing to know when
+ * reading the frame loop below: the scale set there is `(1, length, 1)`, and a
+ * shadow drawn without the same patch would be a one-metre cylinder — hence the
+ * matching `customDepthMaterial`.
  */
+
 export function Branches({ plants }: { plants: PlacedPlant[] }) {
   const mesh = useRef<THREE.InstancedMesh>(null);
 
@@ -61,6 +66,57 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true;
   }, [plants, count]);
 
+  // The cylinder every branch is drawn from. Six sides rather than five: the
+  // taper now makes a trunk read as one continuous limb, so its silhouette is
+  // looked at rather than glossed over, and the extra face is the cheapest way
+  // to stop a close trunk reading as a pentagonal post.
+  const geometry = useMemo(() => new THREE.CylinderGeometry(1, 1, 1, 6, 1), []);
+  useLayoutEffect(() => () => geometry.dispose(), [geometry]);
+
+  // One vec4 per segment: its two radii, and the UV repeats its length and girth
+  // ask for. Rebuilt when the plants change, which is when a vitality bucket
+  // moved and the generator handed back new geometry — never per frame, because
+  // none of it moves with the sway.
+  const limbs = useMemo(
+    () => new THREE.InstancedBufferAttribute(new Float32Array(Math.max(count, 1) * 4), 4),
+    [count],
+  );
+
+  useLayoutEffect(() => {
+    if (count === 0) return;
+    const array = limbs.array as Float32Array;
+    let i = 0;
+    for (const plant of plants) {
+      const { segmentStart, segmentEnd, segmentRadius, segmentCount } = plant.geometry;
+      for (let s = 0; s < segmentCount; s++) {
+        const s3 = s * 3;
+        // Rest length, not the swayed one. A lean moves a limb without
+        // stretching it, so the bark scale it implies is constant, and
+        // recomputing it every frame would buy an identical number.
+        const length = Math.hypot(
+          segmentEnd[s3] - segmentStart[s3],
+          segmentEnd[s3 + 1] - segmentStart[s3 + 1],
+          segmentEnd[s3 + 2] - segmentStart[s3 + 2],
+        );
+        const limb = limbAttribute(
+          segmentRadius[s * 2],
+          segmentRadius[s * 2 + 1],
+          length,
+        );
+        array.set(limb, i * 4);
+        i++;
+      }
+    }
+    limbs.needsUpdate = true;
+  }, [plants, count, limbs]);
+
+  useLayoutEffect(() => {
+    geometry.setAttribute('aLimb', limbs);
+    return () => {
+      geometry.deleteAttribute('aLimb');
+    };
+  }, [geometry, limbs]);
+
   // Bark grain, generated once. Streaks run along v, which cylinder UVs map to
   // the limb's own axis, so the grain runs up the trunk rather than around it.
   // The relief map is built from the same pixels, so the ridges the albedo
@@ -74,6 +130,31 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
     barkRelief.dispose();
     barkRough.dispose();
   }, [bark, barkRelief, barkRough]);
+
+  // The lifted white cancels the map's mean, so the per-instance health tint
+  // arrives at the brightness it was tuned to and the grain rides on top of it.
+  // See textures.ts.
+  const barkMaterial = useMemo(
+    () =>
+      makeTaperedBark({
+        map: bark,
+        normalMap: barkRelief,
+        roughnessMap: barkRough,
+        color: liftForTexture('#ffffff'),
+        roughness: 1,
+        metalness: 0,
+      }),
+    [bark, barkRelief, barkRough],
+  );
+  useLayoutEffect(() => () => barkMaterial.dispose(), [barkMaterial]);
+
+  // The shadow pass runs the depth material, not the colour one, and radius no
+  // longer lives in the instance matrix — so without this every branch would
+  // cast the shadow of a one-metre cylinder.
+  useLayoutEffect(() => {
+    const instanced = mesh.current;
+    if (instanced) instanced.customDepthMaterial = barkMaterial.depthMaterial;
+  }, [barkMaterial, count]);
 
   const scratch = useMemo(
     () => ({
@@ -94,20 +175,20 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
 
     let i = 0;
     for (const plant of plants) {
-      const { geometry, position, node } = plant;
+      const { geometry: plantGeometry, position, node } = plant;
       // A stale plant stops moving. Frozen where it stands, it stops passing for
       // a healthy one still swaying in the breeze.
       const motion = plant.stale > 1 ? 0 : 1;
       swayMatrix(sway, node.id, smoothActivity(node.id, node.activity, t), t, motion);
       const vit = smoothVitality(node.id, plant.vitality, t);
 
-      for (let s = 0; s < geometry.segmentCount; s++) {
+      for (let s = 0; s < plantGeometry.segmentCount; s++) {
         const s3 = s * 3;
         start
           .set(
-            geometry.segmentStart[s3],
-            geometry.segmentStart[s3 + 1],
-            geometry.segmentStart[s3 + 2],
+            plantGeometry.segmentStart[s3],
+            plantGeometry.segmentStart[s3 + 1],
+            plantGeometry.segmentStart[s3 + 2],
           )
           .applyMatrix4(sway);
         start.y -= droopSag(start.x, start.z, vit);
@@ -117,9 +198,9 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
         if (start.y < GROUND_Y) start.y = GROUND_Y;
         end
           .set(
-            geometry.segmentEnd[s3],
-            geometry.segmentEnd[s3 + 1],
-            geometry.segmentEnd[s3 + 2],
+            plantGeometry.segmentEnd[s3],
+            plantGeometry.segmentEnd[s3 + 1],
+            plantGeometry.segmentEnd[s3 + 2],
           )
           .applyMatrix4(sway);
         end.y -= droopSag(end.x, end.z, vit);
@@ -130,12 +211,12 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
 
         direction.subVectors(end, start);
         const length = direction.length() || 1e-6;
-        const radius =
-          (geometry.segmentRadius[s * 2] + geometry.segmentRadius[s * 2 + 1]) / 2;
 
         dummy.position.copy(start).addScaledVector(direction, 0.5);
         dummy.quaternion.setFromUnitVectors(UP, direction.divideScalar(length));
-        dummy.scale.set(radius, length, radius);
+        // Radius is the shader's now, from `aLimb` — see taper.ts. Scaling it
+        // here as well would apply it twice.
+        dummy.scale.set(1, length, 1);
         dummy.updateMatrix();
         instanced.setMatrixAt(i++, dummy.matrix);
       }
@@ -150,23 +231,10 @@ export function Branches({ plants }: { plants: PlacedPlant[] }) {
   return (
     <instancedMesh
       ref={mesh}
-      args={[undefined, undefined, count]}
+      args={[geometry, barkMaterial.material, count]}
       frustumCulled={false}
       castShadow
       receiveShadow
-    >
-      <cylinderGeometry args={[1, 1, 1, 5, 1]} />
-      {/* The lifted white cancels the map's mean, so the per-instance health
-          tint arrives at the brightness it was tuned to and the grain rides on
-          top of it. See textures.ts. */}
-      <meshStandardMaterial
-        map={bark}
-        normalMap={barkRelief}
-        roughnessMap={barkRough}
-        color={liftForTexture('#ffffff')}
-        roughness={1}
-        metalness={0}
-      />
-    </instancedMesh>
+    />
   );
 }

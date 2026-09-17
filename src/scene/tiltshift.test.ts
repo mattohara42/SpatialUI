@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blurAmount } from './TiltShift';
+import { blurAmount } from './tiltshift';
 
 const FOCUS = 0.52;
 const BAND = 0.07;

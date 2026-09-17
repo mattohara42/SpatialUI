@@ -16,14 +16,17 @@ import { Sky } from './Sky';
 import { Horizon } from './Horizon';
 import { Greenhouse } from './Greenhouse';
 import { Props } from './Props';
+import { Meadow, PathLitter } from './Scatter';
 import { Tags } from './Tags';
 import { Detail } from './Detail';
 import { FLOOR_Y, shellFor, viewpointFor } from './greenhouse';
 import { tableViewFor } from './bonsai';
 import { ease, FLIGHT_MS, progress } from './fly';
-import { TiltShift } from './TiltShift';
+import { PostChain } from './Post';
 import { SunScrub } from './SunScrub';
 import { MOON_COLOR, daylightAt, mixHex, type Daylight } from './daylight';
+import { settingsFor } from './quality';
+import { useQualityTier } from './useQuality';
 import type { PlacedPlant, Tint } from './types';
 import { useEcosystem } from '../state/ecosystemStore';
 import { edgesInGarden, nodesInGarden } from '../ecosystem/graph';
@@ -174,6 +177,10 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   const activeGardenId = useEcosystem((s) => s.activeGardenId);
   const revision = useEcosystem((s) => s.revision);
 
+  // How much rendering this frame can afford. Only the shadow map is read here;
+  // the full-screen passes are Post's own business (see quality.ts).
+  const { shadowMapSize } = settingsFor(useQualityTier());
+
   const state = { nodes, edges, history, archive, cursor, activeGardenId, revision };
 
   const gardenNodes = useMemo(
@@ -187,6 +194,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
   // fixed, so the league gets a bigger building and not a cramped one.
   const shell = useMemo(() => shellFor(layout.size), [layout]);
   const view = useMemo(() => viewpointFor(shell), [shell]);
+
+  // The planting's footprint, which the path scatter has to keep off.
+  const plot = useMemo(
+    () => ({ width: layout.size[0], depth: layout.size[1] }),
+    [layout],
+  );
 
   // The same garden as a miniature: the scale that shrinks it and where the
   // camera stands to look down at it. Derived from the layout's `size`, the field
@@ -368,7 +381,7 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
         intensity={daylight.sunIntensity}
         color={daylight.sunColor}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowMapSize, shadowMapSize]}
         shadow-camera-left={-SHADOW_EXTENT}
         shadow-camera-right={SHADOW_EXTENT}
         shadow-camera-top={SHADOW_EXTENT}
@@ -433,6 +446,11 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
             particular bed landed. */}
         <Greenhouse shell={shell} />
         <Props shell={shell} />
+        {/* Stones and fallen leaves on the grit. The planting's own footprint is
+            passed in because it is what the scatter steps around: nothing may
+            land in a bed, where a pebble would read as something growing and a
+            tuft would read as a weed (see scatter.ts). */}
+        <PathLitter shell={shell} plot={plot} />
       </group>
 
       {/* Ground runs out to meet the sky, so there is no plate edge floating in
@@ -451,6 +469,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           roughness={1}
         />
       </mesh>
+      {/* An apron of grass around the house, thinning out until the turf texture
+          takes over. Out here with the ground and the hills rather than in the
+          assembly, because it belongs to the field the house stands in: a model
+          greenhouse set down in real grass is the reading the table wants, and a
+          model set in model grass would just be the same picture again. */}
+      <Meadow shell={shell} />
       <group position={[0, FLOOR_Y, 0]}>
         <Horizon />
       </group>
@@ -473,11 +497,12 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
         <StandControl view={view} flyIn={flyingIntoStand} />
       )}
 
-      {/* Tilt-shift, only on the table: the shallow-focus band is what tells the
-          eye the miniature is a model. Mounted here so it exists only in the
-          mode that wants it — the room view keeps the default, cheaper render.
-          See scene/TiltShift.tsx for why it is off the headset's hot path. */}
-      {viewMode === 'table' && <TiltShift />}
+      {/* Every full-screen pass in one chain: occlusion, bloom, and — on the
+          table only — the tilt-shift that tells the eye the miniature is a
+          model. It mounts only when the quality tier asks for something, so a
+          stepped-down headset frame goes back to the plain render and pays
+          nothing for a chain it is not using. See scene/Post.tsx. */}
+      <PostChain viewMode={viewMode} />
     </>
   );
 }

@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 879 tests across 56 files (plus two live tests — one Prometheus, one NFL —
+Green. 957 tests across 59 files (plus two live tests — one Prometheus, one NFL —
 that skip unless a server is reachable), `tsc --noEmit` clean, `vite build` clean,
 and CI runs all three on every push and every pull request.
 
@@ -47,6 +47,60 @@ single highest-value thing left.
 
 ### What shipped in the most recent session
 
+- **A graphics fidelity pass: rungs 1 to 3 of `docs/graphics.md` are now built.**
+  Judged in the league garden, in a real browser, which is the part previous
+  sessions could not do — Playwright turns out to be available globally in this
+  container, so the scene was screenshotted before and after rather than argued
+  about on paper. Five pieces:
+  **branch taper** (`scene/taper.ts`), an instanced vertex shader that
+  interpolates each limb's cross-section between its two radii, tilts the side
+  normals onto the resulting cone, and scales the bark UVs to the limb's physical
+  size — closing both compromises `Branches.tsx` had named and been waiting on
+  one shader for.
+  **Leaf blades** (`scene/leaf.ts`), replacing the squashed octahedron with an
+  outline that has a shoulder and a point, a fold along the midrib and a curl at
+  the tip, for eleven vertices against six.
+  **Ground scatter** (`scene/scatter.ts`), grass outside the glass and stones and
+  litter on the path.
+  **Ambient occlusion** (`scene/ao.ts`), hand-written against the depth buffer.
+  **A restrained bloom**, and **one post chain** (`scene/Post.tsx`) that owns
+  every full-screen pass, the tilt-shift folded into it.
+  All of it rides a **quality tier** (`scene/quality.ts`): desktop-first, with
+  the passes that cost pixels dropping out and the chain unmounting the moment a
+  WebXR session starts.
+
+  Three things are worth not re-deriving, and they are written up at the foot of
+  `docs/graphics.md`. **A custom vertex shader makes the scene's depth
+  non-reproducible**, so any effect that re-renders through
+  `scene.overrideMaterial` — three's `SSAOPass` and `GTAOPass` among them — draws
+  branches as untapered cylinders; that is why the AO is written rather than
+  imported, and it constrains what can be dropped in later. **three's passes
+  disagree about where their output goes**: `UnrealBloomPass` sets
+  `needsSwap = false` and blends into the *read* buffer, so a hand-driven chain
+  has to ask each stage where its result landed. And **an under-thresholded bloom
+  is a colour grade** — the beauty buffer is linear, so a threshold below one
+  catches the sky and lifts the black point across the whole frame, taking
+  contrast out of the wilting-versus-thriving read.
+
+  What is **not** measured: frame time on a headset, or on any GPU. This
+  container renders through SwiftShader at roughly 900ms a frame, which measures
+  CPU fill rate and does not transfer. The step-down is built and its logic is
+  tested; the budget it defends is still unmeasured, and that is the first thing
+  to do with a headset in hand.
+
+- **A design smell worth a separate look: a bare tree is the bleakest sick state,
+  and the league spends a lot of the season in it.** `DESIGN.md` already records
+  this for the infrastructure garden — "a bare tree is the bleakest possible
+  sick-state and the one closest to the grey of staleness" — and the fix it
+  reached for was plantings. The league shows the same thing for a different
+  reason: early in a season most clubs are near .500 and several are below it, so
+  half the beds read as dead sticks while the garden is working exactly as
+  designed. Nothing in this pass changes that, and nothing in this pass should
+  have. It is a question about how vitality maps onto a season's shape, not about
+  rendering, which is why it is noted here rather than acted on.
+
+### What shipped in the session before that
+
 - **The NFL garden goes live — a real season from ESPN.** The first real source is
   now the first one whose live path reaches an actual feed. `liveNflSource`
   (`adapters/nfl/live.ts`) fetches through `adapters/nfl/espn.ts` — ESPN's public,
@@ -75,7 +129,7 @@ single highest-value thing left.
   loop — the proxy makes the garden live while a tab is open, and for a weekly feed a
   seven-day staleness window means that is nearly enough.
 
-### What shipped in the session before
+### And the session before that
 
 - **Prometheus is wired into `SOURCES`, behind a mock fetch.** The archetype the
   whole idea was built for is now a live garden in the app — eight gardens, not
@@ -152,7 +206,7 @@ single highest-value thing left.
   sample — worth knowing, because it was nearly the justification for a much
   larger change.
 
-### And the session before that
+### Three sessions back
 
 - **The first graphics fidelity pass.** The plain look was always a choice, not a
   ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
