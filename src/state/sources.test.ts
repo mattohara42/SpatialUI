@@ -114,6 +114,15 @@ describe('a source asked twice', () => {
 });
 
 describe('when a source is due', () => {
+  // These tests are each about one source's schedule, so they hand `dueSources`
+  // that source alone rather than the whole registry. Against the full registry
+  // they would also be asserting things about every *other* source's state in a
+  // fixture that never mentions it — which is how they used to quietly depend on
+  // a live source with an empty garden being skipped, the cold-start bug that
+  // `liveColdStart.test.ts` now pins.
+  const sourceFor = (gardenId: string) => [SOURCES.find((s) => s.gardenId === gardenId)!];
+  const market = () => sourceFor(MARKET_GARDEN_ID);
+
   it('reads the due time off the freshest plant, not the stalest', () => {
     // A halted symbol is legitimately silent and permanently overdue. Taking the
     // stalest would have it demanding a poll on every beat, forever.
@@ -132,8 +141,10 @@ describe('when a source is due', () => {
     const nodes = asMap(plant('fresh', lastClose));
     const due = nextBarClose(lastClose)!;
 
-    expect(dueSources(nodes, due - 1)).toEqual([]);
-    expect(dueSources(nodes, due).map((s) => s.gardenId)).toEqual([MARKET_GARDEN_ID]);
+    expect(dueSources(nodes, due - 1, market())).toEqual([]);
+    expect(dueSources(nodes, due, market()).map((s) => s.gardenId)).toEqual([
+      MARKET_GARDEN_ID,
+    ]);
   });
 
   it('asks for nothing at all while the exchange is shut', () => {
@@ -142,11 +153,15 @@ describe('when a source is due', () => {
     const friday = sessionOn(Date.UTC(2026, 3, 17, 15, 0)).close;
     const nodes = asMap(plant('fresh', friday));
     for (const hours of [3, 12, 24, 40]) {
-      expect(dueSources(nodes, friday + hours * HOUR_MS), `+${hours}h`).toEqual([]);
+      expect(dueSources(nodes, friday + hours * HOUR_MS, market()), `+${hours}h`).toEqual(
+        [],
+      );
     }
     // And then does, on Monday's first bar.
     const monday = hourlyCloses(Date.UTC(2026, 3, 20, 15, 0))[0];
-    expect(dueSources(nodes, monday).map((s) => s.gardenId)).toEqual([MARKET_GARDEN_ID]);
+    expect(dueSources(nodes, monday, market()).map((s) => s.gardenId)).toEqual([
+      MARKET_GARDEN_ID,
+    ]);
   });
 
   it('never polls a source whose fiction is anchored to when it was generated', () => {
@@ -161,12 +176,26 @@ describe('when a source is due', () => {
       NOON - 30 * 24 * HOUR_MS + NFL_STALE_AFTER_MS,
     );
     // Overdue by weeks, and still never asked.
-    expect(dueSources(nodes, NOON)).toEqual([]);
+    expect(dueSources(nodes, NOON, [league])).toEqual([]);
   });
 
   it('has nothing to say about a garden it has no plants for', () => {
     expect(dueAt({}, MARKET_GARDEN_ID, MARKET_STALE_SCHEDULE)).toBeNull();
-    expect(dueSources({}, NOON)).toEqual([]);
+    // A generated source answers synchronously from `read` and is never empty in
+    // the first place, so an empty fixture leaves it with nothing owed.
+    expect(dueSources({}, NOON, market())).toEqual([]);
+  });
+
+  // The other half of that, and the one the cold-start bug turned on: `dueAt`
+  // having no opinion is not the same as nothing being owed. A source that
+  // fetches and has not yet answered is owed its first reading, or it never gets
+  // one — see liveColdStart.test.ts for the loop that closed.
+  it('owes a first reading to a fetching source whose garden is still empty', () => {
+    const fetching = SOURCES.filter((s) => s.refresh !== undefined);
+    expect(fetching.length).toBeGreaterThan(0);
+    for (const source of fetching) {
+      expect(dueSources({}, NOON, [source]), source.gardenId).toHaveLength(1);
+    }
   });
 });
 

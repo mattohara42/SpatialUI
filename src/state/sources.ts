@@ -240,6 +240,24 @@ export function dueSources(
   return sources.filter((source) => {
     if (!source.pollable) return false;
     const due = dueAt(nodes, source.gardenId, source.policy);
-    return due !== null && now >= due;
+    // A garden with no plants in it has never been heard from, and `dueAt`
+    // honestly has no opinion about when a feed that has said nothing is next
+    // owed — it computes from the freshest plant, and there is no plant.
+    //
+    // Reading that as "nothing owed" is what closed a loop on the two sources
+    // that fetch. A live source populates its garden only from `refresh`,
+    // `refresh` is only called for a source this function returns, and this
+    // function skipped it for having nothing — so no nodes meant never due,
+    // never due meant no refresh, and no refresh meant no nodes. A live NFL or
+    // Prometheus garden could never populate itself from a cold load, and
+    // because the garden buttons are built by filtering nodes for a garden, the
+    // symptom was not a stale garden but a *missing* one.
+    //
+    // A source that can refresh and has nothing is owed its first reading now.
+    // The condition is deliberately `refresh`, not `pollable`: the generated
+    // sources answer synchronously from `read` and are never empty, so this
+    // says exactly "a feed that fetches and has not yet answered".
+    if (due === null) return source.refresh !== undefined;
+    return now >= due;
   });
 }
