@@ -55,12 +55,18 @@ export interface FoliageStyle {
 export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   broadleaf: { kind: 'broad', cluster: 3, scale: 1.18, spread: 0.6 },
   bushy: { kind: 'broad', cluster: 3, scale: 1.0, spread: 0.7 },
-  willow: { kind: 'blade', cluster: 3, scale: 1.15, spread: 0.72 },
+  // Whips carry leaves the whole way down, not a few scattered blades.
+  willow: { kind: 'blade', cluster: 5, scale: 0.85, spread: 0.8 },
   shrub: { kind: 'round', cluster: 2, scale: 0.7, spread: 0.5 },
-  spire: { kind: 'needle', cluster: 5, scale: 1.0, spread: 0.45 },
+  // Needles have to read as foliage mass from across the room. At the first
+  // size they were individually accurate and collectively invisible, so a
+  // whorl of them looked like bare twigs.
+  spire: { kind: 'needle', cluster: 6, scale: 2.2, spread: 0.5 },
   // Blooms are big relative to the short stem and pack tightly into a head.
-  flower: { kind: 'bloom', cluster: 6, scale: 2.6, spread: 0.28 },
-  wildflower: { kind: 'bloom', cluster: 4, scale: 2.3, spread: 0.34 },
+  // Sized for one head among several, not for a single bloom standing alone.
+  flower: { kind: 'bloom', cluster: 7, scale: 0.5, spread: 0.16 },
+  // Sized against the flower's head, which is no longer a single giant bloom.
+  wildflower: { kind: 'bloom', cluster: 5, scale: 0.75, spread: 0.3 },
   // Fine pinnate leaflets in a wide flat canopy: many small blades rather than
   // a few broad ones, which is what makes an acacia read as feathery from
   // across the room instead of as a small broadleaf.
@@ -75,10 +81,52 @@ export const FOLIAGE: Record<PresetName, FoliageStyle> = {
   acacia: { kind: 'blade', cluster: 8, scale: 0.7, spread: 0.85 },
   // Bespoke forms place their own leaves, so cluster and spread go unused; only
   // kind and scale reach them.
-  vine: { kind: 'broad', cluster: 1, scale: 1.1, spread: 0 },
+  vine: { kind: 'broad', cluster: 1, scale: 0.85, spread: 0 },
   topiary: { kind: 'round', cluster: 1, scale: 0.7, spread: 0 },
   palm: { kind: 'frond', cluster: 1, scale: 1.15, spread: 0 },
 };
+
+/**
+ * Trunk radius as a fraction of the plant's finished height, per archetype.
+ *
+ * This was one global constant, and a single number cannot be right for both an
+ * oak and a daisy: at 0.035 of height every form got a trunk the thickness of a
+ * tree's, so a flower stem came out 15cm across and a willow's drooping whips
+ * were as fat as the limb they hung from. Thickness is not a health signal — it
+ * is maturity, and maturity is structural — so the fix belongs here beside the
+ * other per-archetype form data rather than in the health response.
+ *
+ * Real trunks run about 0.02 to 0.05 of height. Anything herbaceous is an order
+ * of magnitude under that, which is the range this table actually spans.
+ */
+export const TRUNK_RATIO: Record<PresetName, number> = {
+  /** Timber. The original global value, kept for the forms it was tuned on. */
+  broadleaf: 0.035,
+  bushy: 0.035,
+  /** A willow is slender for its height, and its whips are strands. The first
+   *  cut of this table put it at 0.018 and the limbs still read as jointed
+   *  pipes rather than as anything that could hang; 0.01 went the other way and
+   *  left it wiry. */
+  willow: 0.014,
+  /** Many thin stems rather than one thick one. */
+  shrub: 0.02,
+  /** Conifers carry a narrow bole and fine whorls. */
+  spire: 0.022,
+  /** Herbaceous: a stalk you could snap between two fingers. */
+  flower: 0.005,
+  wildflower: 0.005,
+  acacia: 0.03,
+  /** Gnarled but short, and the cordon arms have to stay wiry. */
+  vine: 0.022,
+  topiary: 0.028,
+  /** A palm's trunk barely tapers, so it reads thick if it starts thick. */
+  palm: 0.024,
+};
+
+/** The trunk ratio for a preset, or the timber default for a raw grammar. */
+export function trunkRatioFor(preset?: PresetName): number {
+  return preset ? TRUNK_RATIO[preset] : 0.035;
+}
 
 /** Foliage for a plant with no preset (a raw hand-written grammar). */
 export const DEFAULT_FOLIAGE: FoliageStyle = {
@@ -132,19 +180,32 @@ export const PRESETS: Record<PresetName, Grammar> = {
   },
 
   /**
-   * Slender trunk hung with drooping leafy whips. B is a terminal strand — it
-   * carries no B of its own, so the whips stay short while the A recursion builds
-   * the cascade above them. The heavy pitch-down (&&&) gives the weep that
-   * gravity alone would not, since a healthy plant runs gravity near zero.
+   * Slender trunk hung with drooping leafy whips. `B` is a terminal strand — it
+   * carries no `B` of its own, so the whips stay finite while the `A` recursion
+   * builds the cascade above them. The heavy pitch-down (`&&&`) gives the weep
+   * that gravity alone would not, since a healthy plant runs gravity near zero.
+   *
+   * The whip is the whole form and it has to be *long*. At three segments with
+   * leaves only at their tips, the tree came out a bare pole carrying a tuft
+   * somewhere near its middle — nothing that could be mistaken for a willow. A
+   * strand now pitches down at every step and carries a leaf cluster at each,
+   * which is what makes it hang rather than merely point downward.
+   *
+   * `A` also stopped adding a second trunk segment per firing. The trunk grew
+   * twice as fast as the cascade could cover it, which is the other half of why
+   * the pole showed.
    */
   willow: {
     axiom: 'FFA',
     rules: {
       A: [
-        { successor: 'F[&&&B]/[&&&B]\\[&&&B]FA', weight: 1 },
-        { successor: 'F[&&B]//[&&B]FA', weight: 1 },
+        { successor: 'F[&&&B]/[&&&B]\\[&&&B]A', weight: 2 },
+        // Whips without extending the trunk, so the cascade thickens faster than
+        // the leader climbs. Without this the trunk outran its own foliage and
+        // left a bare spike standing above the crown.
+        { successor: '[&&B]//[&&B]/[&&&B]A', weight: 2 },
       ],
-      B: 'F[&FJ]&F[&FJ]&FJ',
+      B: 'FJ&FJ&FJ&FJ&FJ&FJ',
     },
     iterations: 8,
   },
@@ -161,28 +222,59 @@ export const PRESETS: Record<PresetName, Grammar> = {
     iterations: 6,
   },
 
-  /** Conifer. Cheap: a single trunk with whorls, so iterations grow linearly. */
+  /**
+   * Conifer: a straight bole hung with whorls of drooping limbs.
+   *
+   * The first cut made each whorl branch a single `F` with one leaf marker at
+   * its tip, which is a stub with a tuft floating on the end — and at 0.12m
+   * across on a 2.2m tree, a pencil rather than a conifer. A real whorl limb is
+   * *long*, pitches down from the trunk, and carries needles along its whole
+   * length rather than in a ball at the end.
+   *
+   * So `C` is that limb, and it is a terminal rule — its successor contains no
+   * `C`, so it expands once and stops. That keeps this the cheap preset it has
+   * always been: the trunk recursion `A` fires linearly, and each firing adds a
+   * fixed handful of limbs rather than a branching tree of them.
+   *
+   * Four limbs per whorl instead of three, rolled by an odd fraction of a turn
+   * so successive whorls do not stack into vertical rows.
+   */
   spire: {
-    axiom: 'FA',
+    axiom: 'FFA',
     rules: {
-      A: 'F[&FJ]/////[&FJ]/////[&FJ]/////FA',
+      A: 'F[&&C]/////[&&C]/////[&&C]/////[&&C]///////FA',
+      C: 'FJ[-FJ]FJ[+FJ]FJ',
     },
     iterations: 9,
   },
 
   /**
-   * A single flower: a short stem topped with a head. The bloom markers (J) all
-   * sit near the top on short splayed stalks, so the foliage renderer's leaf
-   * cluster turns each into a burst of petals and the whole reads as one head.
-   * No recursion — a flower is not a fractal — so this is a fixed string and
-   * height comes from growthScale, not from iterating. Health thins the petals
-   * the same way it thins leaves, so a struggling flower stops blooming rather
-   * than turning into a dead twig.
+   * A **clump** of flowers, not one flower.
+   *
+   * A plant here is a whole team, and a bed is a border those teams are planted
+   * in — so the thing that has to read is a *group of the same flower*, which is
+   * what a border actually looks like. One stem with one head instead gave each
+   * team a single enormous bloom on a stalk, with petals nearly forty
+   * centimetres across.
+   *
+   * `B` is one stem with a small head, and the axiom stands six of them around a
+   * common base. The offset is `&f^`: pitch over, step *without drawing*, then
+   * pitch back upright. That moves each stem's foot away from the centre and
+   * leaves it growing straight up, which is what a planted clump does — tilting
+   * the whole stem instead splayed the tips so far that the clumps merged into
+   * each other again, which is the problem this was meant to fix. The petal
+   * colour is seeded per node, so every stem in a clump shares one colour and
+   * the grouping by team happens for free.
+   *
+   * Barely recursive — a flower is not a fractal — so two iterations is all it
+   * takes: one to place the stems, one to expand them. Health thins the petals
+   * the same way it thins leaves, so a struggling clump stops blooming rather
+   * than turning into dead twigs.
    */
   flower: {
-    axiom: 'FFF[^FJ][+FJ][-FJ][\\FJ][/FJ]FJ',
-    rules: {},
-    iterations: 1,
+    axiom: '[B]/[&f^B]//[&f^B]//[&f^B]//[&f^B]//[&f^B]',
+    rules: { B: 'FFF[^J][+J][-J]J' },
+    iterations: 2,
   },
 
   /** A taller, looser, sparser bloom for a scattered meadow. */

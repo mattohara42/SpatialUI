@@ -1,5 +1,5 @@
 import { expand } from './grammar';
-import { PRESETS, foliageFor, type PresetName } from './presets';
+import { PRESETS, foliageFor, trunkRatioFor, type PresetName } from './presets';
 import { rngFromSeed, type Rng } from './random';
 import { interpret, type RawGeometry } from './turtle';
 import { generatePalm, generateTopiary, generateVine } from './bespoke';
@@ -45,8 +45,19 @@ export const VITALITY_RESPONSE = {
   gravity: [0.3, 0.02] as const,
   /** Random angle variation. Unhealthy growth is erratic. */
   jitter: [0.45, 0.14] as const,
-  /** Radius decay per segment. Sick limbs go spindly. */
-  taper: [0.84, 0.93] as const,
+  /**
+   * Radius decay per segment. Sick limbs go spindly.
+   *
+   * These were 0.84 and 0.93, which over a dozen segments left a twig at a third
+   * of trunk thickness — and since a segment is a cylinder, every branch then
+   * ended in a blunt cap wide enough to read as a *cut*. A canopy of those looks
+   * pollarded rather than grown, which is the single most common complaint about
+   * how these trees look. Real branching sheds far more than that per step.
+   *
+   * The gap between the two ends is what carries the health signal, so it is
+   * kept: a sick limb still goes spindly faster than a healthy one.
+   */
+  taper: [0.74, 0.85] as const,
   /** Leaf size in unit space, before height normalization. */
   leafScale: [0.18, 0.32] as const,
   /** Iteration multiplier at maturity 0 and 1. */
@@ -58,12 +69,12 @@ const UNIT_STEP = 1;
 /** Unit-space trunk radius. Only the taper chain depends on this value. */
 const UNIT_RADIUS = 0.09;
 /**
- * Trunk radius as a fraction of final height. Radii are scaled independently of
- * positions so a tree does not go spindly just because a grammar with more
- * iterations produced a taller unit-space plant. Real trunks sit near 0.02 to
- * 0.05 of height.
+ * Radii are scaled independently of positions so a plant does not go spindly
+ * just because a grammar with more iterations produced a taller unit-space form.
+ * How thick the trunk should be is per archetype and lives with the other form
+ * data — see `TRUNK_RATIO` in presets.ts for why one global number could not be
+ * right for both an oak and a daisy.
  */
-const TRUNK_RATIO = 0.035;
 const LENGTH_FALLOFF = 0.9;
 
 export function generatePlant(input: GeneratePlantInput): PlantGeometry {
@@ -114,7 +125,9 @@ export function generatePlant(input: GeneratePlantInput): PlantGeometry {
   // intermediate objects are built.
   const height = geometry.bounds.max[1] - geometry.bounds.min[1];
   const scale = height > 1e-6 ? input.growthScale / height : 1;
-  const radiusScale = (input.growthScale * TRUNK_RATIO) / UNIT_RADIUS;
+  // A raw grammar has no archetype, so it takes the timber default.
+  const radiusScale =
+    (input.growthScale * trunkRatioFor(input.grammar ? undefined : preset)) / UNIT_RADIUS;
 
   multiply(geometry.segmentStart, scale);
   multiply(geometry.segmentEnd, scale);

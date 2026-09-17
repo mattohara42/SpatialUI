@@ -122,8 +122,14 @@ export function generateVine(rng: Rng, params: TurtleParams): RawGeometry {
   for (const dir of [1, -1]) {
     let c = cordonTop;
     let cr = r * 0.9;
-    const arms = 4;
-    const armLen = 1.7;
+    // A trained cordon reaches about as far either side as the next vine stands
+    // away, so a row touches along the wire. The first cut ran four arms of 1.7
+    // in each direction — nearly nine metres of vine on a metre-and-a-half
+    // spacing, so every plant grew straight through its four neighbours. Three
+    // shorter arms keep the articulated, trained look and land the whole spread
+    // inside one spacing.
+    const arms = 3;
+    const armLen = 0.58;
     for (let j = 0; j < arms; j++) {
       const next: Vec3 = [
         c[0] + dir * armLen,
@@ -132,6 +138,11 @@ export function generateVine(rng: Rng, params: TurtleParams): RawGeometry {
       ];
       b.segment(c, next, cr, cr * 0.92, 1);
       cr *= 0.92;
+      // Two shoots per arm rather than one at its end. A trained vine is clothed
+      // the whole way along the wire; hanging a single shoot off each arm tip
+      // left the cordon bare between them, which is most of why the bed read as
+      // a row of dead sticks rather than a vineyard in leaf.
+      fruitingShoot(b, midpoint(c, next), rng, params);
       c = next;
       fruitingShoot(b, c, rng, params);
     }
@@ -141,23 +152,30 @@ export function generateVine(rng: Rng, params: TurtleParams): RawGeometry {
 }
 
 /** A short shoot that hangs off the cordon, carrying a few leaves. */
+/** Halfway between two points, for hanging a shoot along an arm. */
+function midpoint(a: Vec3, b: Vec3): Vec3 {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+}
+
 function fruitingShoot(b: Builder, from: Vec3, rng: Rng, params: TurtleParams): void {
   let p = from;
-  const steps = 2;
+  const steps = 3;
   let r = params.baseRadius * 0.3;
   const outward = signed(rng);
   for (let i = 0; i < steps; i++) {
     const next: Vec3 = [
       p[0] + outward * 0.24,
-      p[1] - 0.72 - Math.abs(signed(rng)) * 0.2, // droops downward
+      p[1] - 0.5 - Math.abs(signed(rng)) * 0.18, // droops downward
       p[2] + signed(rng) * 0.36,
     ];
     b.segment(p, next, r, r * 0.8, 2);
     r *= 0.8;
     p = next;
-    // Two grape-leaves per node, fanned; these are also where grapes will hang.
-    // Thinned by vitality like any foliage, so a sick vine loses its canopy.
-    for (let k = 0; k < 2; k++) {
+    // A fan of grape-leaves per node; these are also where grapes will hang.
+    // Thinned by vitality like any foliage, so a sick vine loses its canopy —
+    // but a healthy one has to start dense enough that thinning reads as loss
+    // rather than as the normal state, which two per node did not.
+    for (let k = 0; k < 4; k++) {
       if (rng() >= params.leafSurvival) continue;
       const dir = norm([signed(rng), -0.3, signed(rng)]);
       const off: Vec3 = [
@@ -307,6 +325,29 @@ export function generateTopiary(rng: Rng, params: TurtleParams): RawGeometry {
     pos = next;
   }
 
+  // The armature the clipped surface grows on. Without it the form was a single
+  // shell of leaves over a two-segment trunk, so every gap in the shell showed
+  // through to nothing and the whole read as leaves floating in the shape of a
+  // ball rather than as a shrub someone had clipped. These are structural and
+  // mostly hidden; what they do is give the gaps something to be in front of.
+  const ribs = 7;
+  for (let i = 0; i < ribs; i++) {
+    const dir = norm([
+      Math.cos((i / ribs) * Math.PI * 2),
+      (i % 3) * 0.45 - 0.45,
+      Math.sin((i / ribs) * Math.PI * 2),
+    ]);
+    // Out from the centre to just short of the surface, so no rib pokes through
+    // a form that is meant to read as clipped.
+    const reach = radius * 0.78;
+    const tip: Vec3 = [
+      center[0] + dir[0] * reach,
+      center[1] + dir[1] * reach,
+      center[2] + dir[2] * reach,
+    ];
+    b.segment(center, tip, params.baseRadius * 0.34, params.baseRadius * 0.16, 1);
+  }
+
   // The clipped surface, as a dense shell of leaves facing outward. Vitality
   // thins them, so a neglected topiary goes see-through and patchy.
   const target = 190;
@@ -316,6 +357,17 @@ export function generateTopiary(rng: Rng, params: TurtleParams): RawGeometry {
     const pointPos: Vec3 = [center[0] + local[0], center[1] + local[1], center[2] + local[2]];
     const outward = norm(local);
     b.leaf(pointPos, outward, leafSize(params, rng) * 0.9, 1);
+  }
+
+  // A second, inner course of foliage set just under the surface. One layer
+  // alone is see-through wherever two leaves fail to meet; a shell with depth
+  // behind it reads solid, which is the whole point of a clipped form.
+  const inner = 120;
+  for (let i = 0; i < inner; i++) {
+    if (rng() >= params.leafSurvival) continue;
+    const local = surfacePoint(shape, i, inner, radius * 0.82, rng);
+    const pointPos: Vec3 = [center[0] + local[0], center[1] + local[1], center[2] + local[2]];
+    b.leaf(pointPos, norm(local), leafSize(params, rng) * 0.8, 2);
   }
 
   // Neglect sends stray shoots through the surface: the shaggier the sicker.
