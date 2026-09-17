@@ -302,3 +302,17 @@ export function worstBlight(node: EcosystemNode): BlightSeverity | null {
 export function signalHealth(node: EcosystemNode): number {
   return node.polarity === 'suppress' ? 1 - node.vitality : node.vitality;
 }
+
+/**
+ * Trend as the renderer should read it, with polarity applied: positive is good
+ * news, whatever the thing is. A backlog growing is a plant climbing and a
+ * signal falling, and the sign has to flip here or the plume (see scene/signal)
+ * would say a spreading outbreak is going well.
+ *
+ * The counterpart to `signalHealth`, and kept beside it deliberately: the level
+ * and the delta have to agree about which way is up, and two inversions in two
+ * files eventually disagree.
+ */
+export function signalTrend(node: EcosystemNode): number {
+  return node.polarity === 'suppress' ? -node.trend : node.trend;
+}

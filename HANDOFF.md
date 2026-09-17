@@ -12,7 +12,7 @@ are still open.
 
 ## State
 
-Green. 957 tests across 59 files (plus two live tests — one Prometheus, one NFL —
+Green. 988 tests across 62 files (plus two live tests — one Prometheus, one NFL —
 that skip unless a server is reachable), `tsc --noEmit` clean, `vite build` clean,
 and CI runs all three on every push and every pull request.
 
@@ -46,6 +46,53 @@ ESPN). Standing one of them up against a real socket in a networked deploy is th
 single highest-value thing left.
 
 ### What shipped in the most recent session
+
+- **The trend channel, finally spent: the plume.** `trend` was the one row in
+  DESIGN.md's channel table with nothing behind it. Every translator computed the
+  axis, history carried it, the detail panel printed it, and the scene had never
+  drawn it — so a club on a three-game run and one on a three-game slide stood
+  there identical until you walked up and tapped the tag. Now a plant that is
+  climbing throws warm amber specks *up* through its canopy and one that is
+  sliding sheds washed-out slate ones *down* to the soil
+  (`scene/signal.ts`, `scene/Signal.tsx`).
+
+  Four decisions in it are worth not re-deriving.
+
+  **It is not fresh growth.** The table's original wording was "fresh growth or
+  shedding", which means putting the delta into the plant's geometry — and that
+  spends the wilt channel twice, because shedding to bare twigs already means
+  *this is in trouble*. The delta lives in the air around the plant and the level
+  lives in the plant, which is what lets a 4-9 club on a three-game run read as
+  low and rising at the same time.
+
+  **A stale plant never plumes.** An old number has no direction. That rule is
+  also what keeps the cue clear of the dust: both are falling specks, and without
+  it a plant could wear both and mean two things at once. With it, a falling
+  speck on a coloured swaying plant is *going down* and on a grey still one is
+  *nobody has heard from this*.
+
+  **Amber against slate, not green against red.** Direction carries the reading
+  and colour only restates it; the pairing chosen is the one that survives every
+  common colour blindness, which is the same rule the rest of the palette keeps.
+
+  **The deadband was measured, and it found something.** Run against the real
+  pipelines at a fixed clock, the three sources disagree badly about what a unit
+  of trend is — the league spreads across the range, the book never reaches half
+  of it, and more than half the world's countries saturate at the top. 0.15 is
+  the threshold that leaves every garden with movers and non-movers. The
+  disagreement is a *translation* problem and is now written down as one in
+  DESIGN.md: **trend has never had the calibration pass vitality got**, and the
+  world garden is where that shows, because almost everything in it plumes.
+
+  One mechanical thing that is easy to get wrong and is worth knowing about: the
+  plume's specks scale with the assembly's world scale every frame, because a
+  `pointsMaterial` sizes in world units and does not notice that the garden has
+  been shrunk to the table. Without it the world garden's miniature disappeared
+  entirely behind its own plumes. The same argument applies to `Dust` and `Motes`,
+  which were left alone — they are sparse enough to get away with it today, and
+  it is a real inconsistency rather than a decision.
+
+### What shipped in the session before that
 
 - **A graphics fidelity pass: rungs 1 to 3 of `docs/graphics.md` are now built.**
   Judged in the league garden, in a real browser, which is the part previous
@@ -99,7 +146,7 @@ single highest-value thing left.
   have. It is a question about how vitality maps onto a season's shape, not about
   rendering, which is why it is noted here rather than acted on.
 
-### What shipped in the session before that
+### And the session before that
 
 - **The NFL garden goes live — a real season from ESPN.** The first real source is
   now the first one whose live path reaches an actual feed. `liveNflSource`
@@ -129,7 +176,7 @@ single highest-value thing left.
   loop — the proxy makes the garden live while a tab is open, and for a weekly feed a
   seven-day staleness window means that is nearly enough.
 
-### And the session before that
+### Three sessions back
 
 - **Prometheus is wired into `SOURCES`, behind a mock fetch.** The archetype the
   whole idea was built for is now a live garden in the app — eight gardens, not
@@ -206,7 +253,7 @@ single highest-value thing left.
   sample — worth knowing, because it was nearly the justification for a much
   larger change.
 
-### Three sessions back
+### Four sessions back
 
 - **The first graphics fidelity pass.** The plain look was always a choice, not a
   ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
@@ -574,6 +621,18 @@ where going live improves the honesty of the app rather than only its accuracy.
 Two things to settle before it ships: the outlets' terms on storing their text,
 and whether the keyword classifier is good enough on real copy — it was tuned
 against generated headlines, which is a much easier problem than a real wire.
+
+**Calibrate `trend` the way `vitality` is calibrated.** Small, cheap, and now
+visible: the plume made the axis load-bearing and immediately showed that the
+three real sources do not agree about what a unit of it means. Measured at a
+fixed clock, the league spreads across the whole range, the book bunches under
+half of it, and more than half the world's countries sit pinned at the top — so
+the world garden plumes almost everywhere while the book barely speaks. Vitality
+got this pass (twice: the league's "average is not half dead", the world's
+growth-rate rescale); trend never did. The rule to apply is the one already
+written down: an axis endpoint is the worst case that can really occur, not the
+arithmetic edge. Each translator's `trendOf` is one line, and `scene/signal.ts`
+carries the numbers to check against.
 
 **Traversal** was answered by the bonsai table above — the tabletop view is how
 you take a whole garden in without walking it, so the two were one piece of work.

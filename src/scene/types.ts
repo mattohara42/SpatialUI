@@ -49,6 +49,13 @@ export interface PlacedPlant {
    */
   vitality: number;
   /**
+   * Which way this plant is going, -1 to 1, with polarity already applied:
+   * positive is good news whatever the thing is (see `signalTrend`). Read
+   * through the cursor like vitality, so scrubbing back to a week the club was
+   * losing turns its plume over. Drives the plume in `Signal.tsx`.
+   */
+  signal: number;
+  /**
    * The completions this plant should show at the cursor — already filtered to
    * what is young enough to hang, newest-first and capped (see
    * `ecosystem/completion.ts`). Undefined for the plants of every garden that

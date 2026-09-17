@@ -12,6 +12,7 @@ import { Trellis } from './Trellis';
 import { Grafts } from './Grafts';
 import { Motes } from './Motes';
 import { Dust } from './Dust';
+import { Signal } from './Signal';
 import { Sky } from './Sky';
 import { Horizon } from './Horizon';
 import { Greenhouse } from './Greenhouse';
@@ -34,7 +35,7 @@ import { layoutGarden } from '../ecosystem/layout';
 import { vitalsAt } from '../ecosystem/history';
 import { shownCompletions } from '../ecosystem/completion';
 import { scheduleFor, staleness } from '../ecosystem/staleness';
-import { signalHealth, type EcosystemNode } from '../ecosystem/types';
+import { signalHealth, signalTrend, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
 import {
   leafKindFor,
@@ -312,6 +313,10 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           geometry,
           tint: tintFor(signalHealth({ ...node, ...vitals }), stale, leafKind),
           vitality: vitals.vitality,
+          // Polarity applied here rather than in the renderer, the same way
+          // `signalHealth` is above: the plume must never say a spreading
+          // outbreak is going well.
+          signal: signalTrend({ ...node, ...vitals }),
           leafKind,
           // A flower's stems carry green leaves as well as petals; every other
           // archetype wears one kind and leaves this undefined.
@@ -457,6 +462,10 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           {/* Dust falls only on plants that have gone silent, so this draws
               nothing at all in a garden that is reporting. */}
           <Dust plants={plants} night={daylight.stars} />
+          {/* And the plume: which way a plant is going, for the plants that are
+              going anywhere. Nothing is drawn below the deadband or on a silent
+              plant, so a quiet garden stays quiet (see signal.ts). */}
+          <Signal plants={plants} night={daylight.stars} />
         </group>
         {/* The house, and the things left lying about in it. Inside the assembly
             group so they shrink with the planting, but outside the translated
