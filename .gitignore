@@ -3,3 +3,12 @@ dist/
 node_modules/.vite/
 .DS_Store
 *.log
+
+# Local Netlify folder
+.netlify
+
+# Local environment. `netlify dev` reads this, and NFL_TOKEN belongs in it, so it
+# must never be committed.
+.env
+.env.*
+!.env.example

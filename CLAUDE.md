@@ -11,6 +11,8 @@ it exists so that what needs attention surfaces at session start.
 - **`ARCHITECTURE.md`** — the contracts and the recorded assumptions.
 - **`DESIGN.md`** — the reading language (what wilting, weeds and grafts mean).
 - **`docs/garden-builder.md`** — adding a garden at runtime.
+- **`docs/running-live.md`** — standing it up against a real feed, and what
+  each garden is actually made of.
 
 ## ⚠️ Housekeeping — branch cleanup pending (2026-08-31)
 

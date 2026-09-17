@@ -93,13 +93,44 @@ interface EcosystemStore extends EcosystemState {
  * layering has been making since before any of them existed, and which the
  * market source is the first independent test of.
  *
+ * `VITE_MOCK_GARDENS=false` drops the mock five — infrastructure, vault,
+ * threats, pipelines, portfolio — and keeps everything that comes through an
+ * adapter and a translator. They are hand-written shapes moved by a drift tick,
+ * which is exactly what you want while tuning the renderer and exactly what you
+ * do not want standing beside a real feed, where a garden that invents its own
+ * data is indistinguishable at a glance from one reporting the world.
+ *
+ * It defaults to *on*, so dev, tests and any existing deploy are unchanged; a
+ * deploy that wants only the pipeline gardens opts out. What it cannot do is
+ * make the remaining gardens *real* — Markets and World are seeded generators
+ * and Prometheus answers from a mock fetch until `VITE_PROM_PROXY_URL` is set.
+ * It draws the line at hand-written versus pipeline, which is the line the code
+ * actually has; see `docs/running-live.md` for what each garden is made of.
+ *
  * The league opens the app because it is the one garden made of something that
  * happened, and because thirty-two clubs across eight beds is the first scene
  * with enough in it to judge the reading at a glance.
  */
+/**
+ * Whether the hand-written gardens are included. Opt-out rather than opt-in, so
+ * nothing changes anywhere the flag is unset.
+ */
+const MOCK_GARDENS = import.meta.env.VITE_MOCK_GARDENS !== 'false';
+
+/** The composition's starting point when the mock gardens are switched off. */
+function emptyEcosystem(): EcosystemState {
+  return {
+    nodes: {},
+    edges: {},
+    history: {},
+    archive: {},
+    activeGardenId: null,
+  } as EcosystemState;
+}
+
 function composeEcosystem(now = Date.now()): EcosystemState {
   const state: EcosystemState = {
-    ...generateMockEcosystem(),
+    ...(MOCK_GARDENS ? generateMockEcosystem() : emptyEcosystem()),
     activeGardenId: NFL_GARDEN_ID,
   };
 
