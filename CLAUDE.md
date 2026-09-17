@@ -16,13 +16,17 @@ it exists so that what needs attention surfaces at session start.
 
 ## ⚠️ Housekeeping — branch cleanup pending (2026-08-31)
 
-A cross-repo branch audit found **no unmerged work here** and no open PRs.
+A cross-repo branch audit found **no work worth merging here** and no open PRs.
 This repo was the cleanest of the twelve: 15 of its 16 branches are fully
-contained in `main` already.
+contained in `main` already. The sixteenth does carry a commit of its own, which
+is why the phrasing is "worth merging" rather than "unmerged" — see below.
 
-Sixteen stale refs to delete. All are squash-merged leftovers — squash
-rewrites the SHA, so the old ref reads as "ahead" of `main` forever even when
-the trees are identical:
+Sixteen stale refs to delete. Fifteen are ordinary merged branches: their pull
+requests were merged with **merge commits**, so each tip is literally an
+ancestor of `main` and `git rev-list --count origin/main..<branch>` is zero.
+Nothing keeps them here but the repository setting below. Check any of them with
+`git merge-base --is-ancestor <branch> origin/main` before deleting, rather than
+trusting this list:
 
 ```
 git push origin --delete claude/artifact-session-eebefe             # was ffb3e81
@@ -43,12 +47,25 @@ git push origin --delete claude/unattended-work-queue-gw618t        # was 2ece60
 git push origin --delete claude/whats-next-c1xph0                   # was 1fb1231
 ```
 
-`claude/keep-going-1tev9a` is the only one that isn't byte-identical: a
-2026-08-08 docs reconcile of `README`/`ARCHITECTURE`/`DESIGN`, now **80 commits
-behind**. Those three files have been rewritten repeatedly since, so merging it
-would regress them — it's superseded, not pending.
+`claude/keep-going-1tev9a` is the sixteenth, and the only one that is **not** an
+ancestor of `main`. It carries one commit of its own that never landed: `85082bd`,
+a 2026-08-08 docs reconcile of `README`/`ARCHITECTURE`/`DESIGN`. Those three files
+have been rewritten repeatedly since — it is superseded, not pending, and merging
+it now would regress them. (It runs further behind `main` with every merge, so no
+count is quoted here; ask git.)
 
-Every deletion is reversible: `git push origin <sha>:refs/heads/<branch>`.
+Being the odd one out makes it the one deletion that is **not freely reversible**.
+For the other fifteen the commit lives in `main` regardless, so the ref can be
+recreated from history at any time. `85082bd` exists nowhere else, and once the
+ref is gone it is unreferenced and eventually collectable. If there is any doubt,
+keep a copy first:
+
+```
+git fetch origin claude/keep-going-1tev9a
+git tag archive/keep-going-1tev9a 85082bd && git push origin archive/keep-going-1tev9a
+```
+
+Recreating any of the others is just `git push origin <sha>:refs/heads/<branch>`.
 
 Enabling **Settings → General → "Automatically delete head branches"** stops
 these accumulating.
