@@ -1,6 +1,6 @@
 import type { Completion, EcosystemNode } from '../ecosystem/types';
 import type { PlantGeometry, Vec3 } from '../lsystem/types';
-import type { LeafKind } from '../lsystem/presets';
+import type { LeafKind , UnderstoryStyle } from '../lsystem/presets';
 
 /** Colours resolved from health and staleness, decided once per plant. */
 export interface Tint {
@@ -16,6 +16,12 @@ export interface PlacedPlant {
   tint: Tint;
   /** Which leaf shape this plant wears, from its archetype. */
   leafKind: LeafKind;
+  /**
+   * A second foliage kind on the same plant, split out by leaf depth — a
+   * flower's stems carry green leaves as well as petals. Undefined for every
+   * archetype that wears one kind of leaf, which is almost all of them.
+   */
+  understory?: UnderstoryStyle;
   /**
    * The colour petals wear, for bloom-kind plants. Decorative and seeded, never
    * a health signal; greyed only when the plant is stale. Ignored by non-bloom

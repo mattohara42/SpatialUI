@@ -11,7 +11,7 @@ import { Foliage } from './scene/Foliage';
 import { Produce } from './scene/Produce';
 import { daylightAt } from './scene/daylight';
 import { generatePlant } from './lsystem/generate';
-import { leafKindFor, type PresetName } from './lsystem/presets';
+import { leafKindFor, understoryFor, type PresetName } from './lsystem/presets';
 import type { EcosystemNode } from './ecosystem/types';
 import type { PlacedPlant } from './scene/types';
 
@@ -70,6 +70,7 @@ function Scene() {
         }),
         tint: { bark: '#6b563d', foliage: '#7ea34e' },
         leafKind: leafKindFor(entry.preset),
+        understory: understoryFor(entry.preset),
         bloomTint: '#e8657f',
         produceTint: entry.produce,
         grape: entry.preset === 'vine',

@@ -36,7 +36,12 @@ import { shownCompletions } from '../ecosystem/completion';
 import { scheduleFor, staleness } from '../ecosystem/staleness';
 import { signalHealth, type EcosystemNode } from '../ecosystem/types';
 import { generatePlantMemo } from '../hooks/useLSystem';
-import { leafKindFor, type LeafKind, type PresetName } from '../lsystem/presets';
+import {
+  leafKindFor,
+  understoryFor,
+  type LeafKind,
+  type PresetName,
+} from '../lsystem/presets';
 import { plantingOf } from '../ecosystem/planting';
 import { bearsProduce, formFor, produceTintFor } from './planting';
 import type { Vec3 } from '../lsystem/types';
@@ -297,6 +302,9 @@ export function Garden({ viewMode = 'stand' }: { viewMode?: ViewMode }) {
           tint: tintFor(signalHealth({ ...node, ...vitals }), stale, leafKind),
           vitality: vitals.vitality,
           leafKind,
+          // A flower's stems carry green leaves as well as petals; every other
+          // archetype wears one kind and leaves this undefined.
+          understory: understoryFor(preset),
           bloomTint: bloomTintFor(node.id, stale),
           produceTint:
             node.polarity !== 'suppress' && bearsProduce(planting)
