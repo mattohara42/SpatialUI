@@ -75,7 +75,10 @@ honestly rather than inventing a number.
 
 The live source rides the same Netlify shells Prometheus does; the NFL proxy is
 `netlify/functions/nfl-proxy.ts`, routed at `/api/proxy/nfl`. See
-`docs/deploy-netlify.md` for the full checklist. The short version:
+`docs/running-live.md` for the runbook — including running it locally against
+real ESPN, which needs `netlify dev` rather than `npm run dev`, because Vite
+alone serves no functions — and `docs/deploy-netlify.md` for the deploy
+checklist. The short version:
 
 | var | side | value |
 | --- | --- | --- |
