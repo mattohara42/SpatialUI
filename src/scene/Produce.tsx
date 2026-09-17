@@ -37,7 +37,12 @@ interface ProduceStyle {
 const PRODUCE_GRAIN = 0.12;
 
 const VEGETABLE_STYLE: ProduceStyle = { every: 5, scale: 2.2 };
-const GRAPE_STYLE: ProduceStyle = { every: 2, scale: 1.05 };
+// A berry is small and there are many; the stride and the scale together are
+// what make a bunch read as fruit rather than as a purple mass. Both are set
+// against the *leaf* size, so they had to come down when the vine was clothed
+// properly: at one berry per two leaves and full leaf scale, a vine with a real
+// canopy disappeared inside fifty-odd grapes the size of its own leaves.
+const GRAPE_STYLE: ProduceStyle = { every: 3, scale: 0.45 };
 
 function styleFor(plant: PlacedPlant): ProduceStyle {
   return plant.grape ? GRAPE_STYLE : VEGETABLE_STYLE;
