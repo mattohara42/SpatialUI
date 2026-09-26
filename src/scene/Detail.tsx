@@ -125,8 +125,8 @@ export function Detail({ plants }: { plants: PlacedPlant[] }) {
 
         {plant.stale > 1 && (
           <div style={note}>
-            no readings for {sinceWords(node.updatedAt, at)} — everything below is
-            the last thing it said
+            no readings for {sinceWords(node.updatedAt, at)}. Everything below is
+            the last thing it reported.
           </div>
         )}
 

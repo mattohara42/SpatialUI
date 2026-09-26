@@ -1,746 +1,678 @@
 # Handoff
 
-Where the project stands, what was decided and why, and what is worth doing
-next. Written for whoever picks this up cold.
+Where the project stands, what was decided and why, and what's worth doing next.
+Written for whoever picks this up cold.
 
-Read `README.md` for what it is, `ARCHITECTURE.md` for the contracts and the
-recorded assumptions, `DESIGN.md` for the reading language. This file is the
-part those three cannot carry: the state of play, and the judgement calls that
-are still open.
+`README.md` says what it is, `ARCHITECTURE.md` has the contracts and the recorded
+assumptions, and `DESIGN.md` has the reading language. This file covers what those
+can't: the current state, and the judgement calls that are still open.
 
 ---
 
 ## State
 
-Green. 988 tests across 62 files (plus two live tests — one Prometheus, one NFL —
-that skip unless a server is reachable), `tsc --noEmit` clean, `vite build` clean,
-and CI runs all three on every push and every pull request.
+Green. 988 tests across 62 files, plus two live tests (one Prometheus, one NFL)
+that are skipped unless a server is reachable. `tsc --noEmit` and `vite build` are
+clean, and CI runs all three on every push and pull request.
 
-Eight gardens ship, and now a user can add their own at runtime through the
-garden builder (`docs/garden-builder.md`) — a pasted JSON snapshot, mapped and
-persisted, standing beside the built-ins. The eight built-in ones: four are real,
-in the sense that they come through the adapter → translation pipeline from
-feed-shaped records:
+Nine gardens ship, and users can add their own at runtime with the garden builder
+(`docs/garden-builder.md`): paste a JSON snapshot, map it, and it's saved next to
+the built-in ones. Four of the built-in gardens are real, in the sense that they
+come through the adapter → translation pipeline from feed-shaped records:
 
 | garden | beds | plants | source |
 | --- | --- | --- | --- |
-| **NFL** | 8 divisions | 32 clubs | `adapters/nfl` — seeded season, **live via ESPN** behind the proxy |
-| **Markets** | 8 sectors | 32 holdings | `adapters/market` — seeded tape |
+| **NFL** | 8 divisions | 32 clubs | `adapters/nfl`: seeded season, **live via ESPN** behind the proxy |
+| **Markets** | 8 sectors | 32 holdings | `adapters/market`: seeded tape |
 | **World** | 22 UN subregions | 193 states | `adapters/world` + `adapters/news` |
-| **Prometheus** | 3 jobs | 7 targets | `adapters/prometheus` — **mock fetch** |
-| Infrastructure, Vault, Threats, Portfolio | 4 mock gardens | | `mock/` — drift tick |
+| **Prometheus** | 3 jobs | 7 targets | `adapters/prometheus`: **mock fetch** |
+| Infrastructure, Vault, Threats, Pipelines, Portfolio | 5 mock gardens | | `mock/`: drift tick |
 
-All four real sources run without outbound network. Three are generated; the
-fourth, Prometheus, *fetches* — through a mock (`adapters/prometheus/mock.ts`)
-that answers `/api/v1/query` in the exact wire shape a server returns, because
-this container has no egress. The block is verified per host (`api.worldbank.org`,
-`feeds.bbci.co.uk`, `aljazeera.com`, and Prometheus's own demo all answer 403 at
-the proxy CONNECT), and the agent proxy itself is healthy, so it is policy and not
-a broken setup. Each source implements a one-method interface (`NflSource`,
-`MarketSource`, `WorldSource`, `NewsSource`) or the `LiveSource.read`/`refresh`
-fetch seam (Prometheus), so a live feed drops in with nothing downstream changing
-— for Prometheus, by swapping the mock `fetchImpl` for the platform `fetch` and a
-real endpoint. Two of the four now have that live path *built*, not just designed:
-Prometheus (behind a mock fetch) and the NFL (behind the backend proxy, fetching
-ESPN). Standing one of them up against a real socket in a networked deploy is the
-single highest-value thing left.
+All four real sources run with no outbound network. Three are generated. The
+fourth, Prometheus, really *fetches*, but through a mock
+(`adapters/prometheus/mock.ts`) that answers `/api/v1/query` in the exact wire
+format a server uses, because this container has no outbound access. We checked
+each host (`api.worldbank.org`, `feeds.bbci.co.uk`, `aljazeera.com` and
+Prometheus's own demo all get a 403 at the proxy CONNECT) and the agent proxy
+itself is healthy, so it's policy, not a broken setup.
 
-### What shipped in the most recent session
+Each source implements either a one-method interface (`NflSource`, `MarketSource`,
+`WorldSource`, `NewsSource`) or the `LiveSource.read`/`refresh` fetch seam
+(Prometheus), so a live feed drops in without anything downstream changing. Two of
+the four have their live path actually *built*: Prometheus (behind a mock fetch)
+and the NFL (behind the backend proxy, fetching from ESPN). **Running one of them
+against a real server in a networked deploy is the most valuable thing left to
+do.** See `docs/running-live.md`.
 
-- **The trend channel, finally spent: the plume.** `trend` was the one row in
-  DESIGN.md's channel table with nothing behind it. Every translator computed the
-  axis, history carried it, the detail panel printed it, and the scene had never
-  drawn it — so a club on a three-game run and one on a three-game slide stood
-  there identical until you walked up and tapped the tag. Now a plant that is
-  climbing throws warm amber specks *up* through its canopy and one that is
-  sliding sheds washed-out slate ones *down* to the soil
-  (`scene/signal.ts`, `scene/Signal.tsx`).
+### Most recent session
 
-  Four decisions in it are worth not re-deriving.
+- **The trend channel finally gets used: the plume.** `trend` was the one row in
+  DESIGN.md's channel table with nothing drawing it. Every translator computed the
+  axis, history stored it and the detail panel printed it, but the scene never
+  showed it. A club on a three-game winning run and one on a three-game slide
+  looked identical until you tapped the tag. Now a plant that's climbing sends warm
+  amber specks *up* through its canopy, and one that's sliding sheds faded slate
+  specks *down* to the soil (`scene/signal.ts`, `scene/Signal.tsx`).
 
-  **It is not fresh growth.** The table's original wording was "fresh growth or
-  shedding", which means putting the delta into the plant's geometry — and that
-  spends the wilt channel twice, because shedding to bare twigs already means
-  *this is in trouble*. The delta lives in the air around the plant and the level
-  lives in the plant, which is what lets a 4-9 club on a three-game run read as
-  low and rising at the same time.
+  Four decisions in it that you shouldn't have to work out again:
 
-  **A stale plant never plumes.** An old number has no direction. That rule is
-  also what keeps the cue clear of the dust: both are falling specks, and without
-  it a plant could wear both and mean two things at once. With it, a falling
-  speck on a coloured swaying plant is *going down* and on a grey still one is
+  **It isn't fresh growth.** The table originally said "fresh growth or shedding",
+  which would put the change into the plant's geometry. That uses the wilt channel
+  twice, because shedding to bare twigs already means *this is in trouble*. The
+  change lives in the air around the plant and the level lives in the plant, which
+  is how a 4-9 club on a three-game run can read as low and rising at the same
+  time.
+
+  **A stale plant never plumes.** An old number has no direction. The same rule
+  keeps the plume separate from the dust. Both are falling specks, and without the
+  rule a plant could show both and mean two things. With it, a falling speck on a
+  coloured, swaying plant means *going down*, and on a grey, still one it means
   *nobody has heard from this*.
 
-  **Amber against slate, not green against red.** Direction carries the reading
-  and colour only restates it; the pairing chosen is the one that survives every
-  common colour blindness, which is the same rule the rest of the palette keeps.
+  **Amber and slate, not green and red.** Direction carries the meaning and colour
+  just repeats it. This pairing survives every common kind of colour blindness,
+  which is the rule the rest of the palette follows too.
 
-  **The deadband was measured, and it found something.** Run against the real
-  pipelines at a fixed clock, the three sources disagree badly about what a unit
-  of trend is — the league spreads across the range, the book never reaches half
-  of it, and more than half the world's countries saturate at the top. 0.15 is
-  the threshold that leaves every garden with movers and non-movers. The
-  disagreement is a *translation* problem and is now written down as one in
-  DESIGN.md: **trend has never had the calibration pass vitality got**, and the
-  world garden is where that shows, because almost everything in it plumes.
+  **The threshold was measured, and measuring it found a problem.** Run against the
+  real pipelines at a fixed clock, the three sources disagree badly about what a
+  unit of trend means. The league spreads across the whole range, the market book
+  never reaches half of it, and more than half the world's countries sit pinned at
+  the top. 0.15 is the threshold that leaves every garden with some plants moving
+  and some not. The disagreement is a *translation* problem and is now recorded as
+  one in DESIGN.md: **trend never got the calibration pass vitality got**, and the
+  World garden shows it, because almost everything there plumes.
 
-  One mechanical thing that is easy to get wrong and is worth knowing about: the
-  plume's specks scale with the assembly's world scale every frame, because a
-  `pointsMaterial` sizes in world units and does not notice that the garden has
-  been shrunk to the table. Without it the world garden's miniature disappeared
-  entirely behind its own plumes. The same argument applies to `Dust` and `Motes`,
-  which were left alone — they are sparse enough to get away with it today, and
-  it is a real inconsistency rather than a decision.
+  One mechanical detail that's easy to get wrong: the plume's specks are rescaled
+  by the garden's world scale every frame. A `pointsMaterial` sizes in world units
+  and doesn't notice when the garden shrinks onto the table, and without this the
+  World garden's miniature vanished behind its own plumes. The same applies to
+  `Dust` and `Motes`, which were left alone. They're sparse enough to get away with
+  it for now, but it's an inconsistency, not a decision.
 
-### What shipped in the session before that
+### The session before
 
-- **A graphics fidelity pass: rungs 1 to 3 of `docs/graphics.md` are now built.**
-  Judged in the league garden, in a real browser, which is the part previous
-  sessions could not do — Playwright turns out to be available globally in this
-  container, so the scene was screenshotted before and after rather than argued
-  about on paper. Five pieces:
-  **branch taper** (`scene/taper.ts`), an instanced vertex shader that
-  interpolates each limb's cross-section between its two radii, tilts the side
-  normals onto the resulting cone, and scales the bark UVs to the limb's physical
-  size — closing both compromises `Branches.tsx` had named and been waiting on
-  one shader for.
-  **Leaf blades** (`scene/leaf.ts`), replacing the squashed octahedron with an
-  outline that has a shoulder and a point, a fold along the midrib and a curl at
-  the tip, for eleven vertices against six.
-  **Ground scatter** (`scene/scatter.ts`), grass outside the glass and stones and
-  litter on the path.
-  **Ambient occlusion** (`scene/ao.ts`), hand-written against the depth buffer.
-  **A restrained bloom**, and **one post chain** (`scene/Post.tsx`) that owns
-  every full-screen pass, the tilt-shift folded into it.
-  All of it rides a **quality tier** (`scene/quality.ts`): desktop-first, with
-  the passes that cost pixels dropping out and the chain unmounting the moment a
-  WebXR session starts.
+- **A graphics fidelity pass: rungs 1 to 3 of `docs/graphics.md` are built.** It
+  was judged in the league garden in a real browser, which earlier sessions
+  couldn't do. Playwright turned out to be installed globally in this container,
+  so we took screenshots before and after instead of arguing on paper. Five pieces:
+  - **Branch taper** (`scene/taper.ts`): an instanced vertex shader that
+    interpolates each branch's cross-section between its two radii, tilts the
+    side normals to match, and scales the bark texture to the branch's real size.
+    It fixed both compromises `Branches.tsx` had been waiting on.
+  - **Leaf blades** (`scene/leaf.ts`): the squashed octahedron is replaced by an
+    outline with a shoulder and a point, a fold along the midrib and a curl at the
+    tip, in eleven vertices instead of six.
+  - **Ground scatter** (`scene/scatter.ts`): grass outside the glass, and stones
+    and leaf litter on the path.
+  - **Ambient occlusion** (`scene/ao.ts`), written by hand against the depth
+    buffer.
+  - **A subtle bloom**, and **one post-processing chain** (`scene/Post.tsx`) that
+    owns every full-screen pass, with the tilt-shift folded in.
 
-  Three things are worth not re-deriving, and they are written up at the foot of
-  `docs/graphics.md`. **A custom vertex shader makes the scene's depth
-  non-reproducible**, so any effect that re-renders through
-  `scene.overrideMaterial` — three's `SSAOPass` and `GTAOPass` among them — draws
-  branches as untapered cylinders; that is why the AO is written rather than
-  imported, and it constrains what can be dropped in later. **three's passes
-  disagree about where their output goes**: `UnrealBloomPass` sets
-  `needsSwap = false` and blends into the *read* buffer, so a hand-driven chain
-  has to ask each stage where its result landed. And **an under-thresholded bloom
-  is a colour grade** — the beauty buffer is linear, so a threshold below one
-  catches the sky and lifts the black point across the whole frame, taking
-  contrast out of the wilting-versus-thriving read.
+  All of it sits on a **quality tier** (`scene/quality.ts`). It's desktop-first:
+  the expensive passes drop out and the chain unmounts as soon as a WebXR session
+  starts.
 
-  What is **not** measured: frame time on a headset, or on any GPU. This
-  container renders through SwiftShader at roughly 900ms a frame, which measures
-  CPU fill rate and does not transfer. The step-down is built and its logic is
-  tested; the budget it defends is still unmeasured, and that is the first thing
-  to do with a headset in hand.
+  Three lessons are written up at the end of `docs/graphics.md`. **A custom vertex
+  shader breaks anything that re-renders the scene's depth**: any effect that
+  re-renders through `scene.overrideMaterial` (including three's `SSAOPass` and
+  `GTAOPass`) draws branches as untapered cylinders. That's why the AO is
+  hand-written, and it limits what can be dropped in later. **three's passes don't
+  agree about where their output goes**: `UnrealBloomPass` sets
+  `needsSwap = false` and blends into the *read* buffer, so a hand-built chain has
+  to check where each stage put its result. And **bloom with too low a threshold is
+  a colour grade**: the main buffer is linear, so a threshold below one catches the
+  sky and lifts the black point across the whole frame, taking contrast out of the
+  wilting versus thriving reading.
 
-- **A design smell worth a separate look: a bare tree is the bleakest sick state,
-  and the league spends a lot of the season in it.** `DESIGN.md` already records
-  this for the infrastructure garden — "a bare tree is the bleakest possible
-  sick-state and the one closest to the grey of staleness" — and the fix it
-  reached for was plantings. The league shows the same thing for a different
-  reason: early in a season most clubs are near .500 and several are below it, so
-  half the beds read as dead sticks while the garden is working exactly as
-  designed. Nothing in this pass changes that, and nothing in this pass should
-  have. It is a question about how vitality maps onto a season's shape, not about
-  rendering, which is why it is noted here rather than acted on.
+  **Not measured:** frame time on a headset or on any real GPU. This container
+  renders through SwiftShader at about 900ms a frame, which measures CPU fill rate
+  and doesn't carry over to hardware. The step-down is built and its logic is
+  tested, but the budget it protects hasn't been measured. That's the first thing
+  to do with a headset.
 
-### And the session before that
+- **A design problem worth its own look: a bare tree is the bleakest sick state,
+  and the league spends a lot of the season in it.** `DESIGN.md` already notes this
+  for the infrastructure garden ("a bare tree is the bleakest possible sick-state
+  and the one closest to the grey of staleness"), and the fix there was plantings.
+  The league has the same problem for a different reason. Early in a season most
+  clubs are near .500 and several are below it, so half the beds look like dead
+  sticks while the garden is working exactly as designed. Nothing in the graphics
+  pass changed that, and nothing should have. It's a question about how vitality
+  maps onto the shape of a season, not about rendering, so it's noted here instead
+  of being acted on.
 
-- **The NFL garden goes live — a real season from ESPN.** The first real source is
-  now the first one whose live path reaches an actual feed. `liveNflSource`
-  (`adapters/nfl/live.ts`) fetches through `adapters/nfl/espn.ts` — ESPN's public,
-  keyless API — and fills the same `NflSeasonSnapshot` the seeded generator did:
-  scores from the scoreboard, full box-score lines from each game summary, age and
-  experience from the roster, designations from the injury report. Nothing below
-  the adapter changed — `derive.ts` still turns box scores into standings,
-  `translation/nfl.ts` is still the only place football meets a plant — which is the
-  claim the synthetic source was only ever standing in for, now cashed. It rides the
-  exact Prometheus seam: `read` translates the held snapshot synchronously, `refresh`
-  is the async fetch, and it **accumulates** (a final box score never changes, so a
-  mid-season refresh fetches the new week's finals, not the season). The proxy is
-  Prometheus's sibling with a **path allowlist** instead of a query one
-  (`backend/nflProxy.ts`, `netlify/functions/nfl-proxy.ts`, routed `/api/proxy/nfl`):
-  the client names a `sourceId` and one of four permitted ESPN resource paths, never
-  a host. One switch turns it on — `VITE_NFL_PROXY_URL`, exactly like
-  `VITE_PROM_PROXY_URL` — and unset it stays the seeded season with no egress. The
-  one honest approximation is the starter split: ESPN's roster is a player list, not
-  a depth chart, so maturity's per-player age and experience are fully real but which
-  eleven "start" is derived by experience — it moves the starter-average terms a
-  little, never the league table, and a depth-chart endpoint would close it. Pinned
-  offline against captured ESPN shapes (`espn.fixtures.ts`, `espn.test.ts`,
-  `live.test.ts`, `backend/nflProxy.test.ts`); the one hop the tests cannot run here
-  is the socket, and `nfl.live.test.ts` is its `skipIf`-no-`NFL_LIVE_URL` tripwire.
-  Written up in `docs/nfl-live.md`. What is not here yet is the unattended collector
-  loop — the proxy makes the garden live while a tab is open, and for a weekly feed a
-  seven-day staleness window means that is nearly enough.
+### Two sessions back
+
+- **The NFL garden goes live with a real season from ESPN.** The first real source
+  is now the first whose live path reaches an actual feed. `liveNflSource`
+  (`adapters/nfl/live.ts`) fetches through `adapters/nfl/espn.ts` (ESPN's public,
+  keyless API) and fills the same `NflSeasonSnapshot` the seeded generator does:
+  scores from the scoreboard, full box scores from each game summary, age and
+  experience from the roster, and designations from the injury report. Nothing
+  below the adapter changed. `derive.ts` still turns box scores into standings, and
+  `translation/nfl.ts` is still the only place football meets a plant. That's what
+  the synthetic source was standing in for all along.
+
+  It uses the Prometheus seam: `read` translates the held snapshot synchronously,
+  `refresh` is the async fetch, and it **accumulates** (a final box score never
+  changes, so a mid-season refresh fetches only the new week's finals). The proxy
+  is a sibling of the Prometheus one with a **path allowlist** instead of a query
+  allowlist (`backend/nflProxy.ts`, `netlify/functions/nfl-proxy.ts`, routed at
+  `/api/proxy/nfl`). The client sends a `sourceId` and one of four allowed ESPN
+  paths, never a host. One variable turns it on, `VITE_NFL_PROXY_URL`, just like
+  `VITE_PROM_PROXY_URL`. Without it, the garden stays on the seeded season with no
+  outbound traffic.
+
+  The one approximation is who counts as a starter. ESPN's roster is a player
+  list, not a depth chart, so maturity's per-player age and experience are fully
+  real but the eleven "starters" are picked by experience. That shifts the starter
+  averages a little and never the league table, and a depth-chart endpoint would
+  fix it. Everything is tested offline against captured ESPN responses
+  (`espn.fixtures.ts`, `espn.test.ts`, `live.test.ts`, `backend/nflProxy.test.ts`).
+  The one step the tests can't run here is the real network call, and
+  `nfl.live.test.ts` is waiting for it (skipped unless `NFL_LIVE_URL` is set).
+  Written up in `docs/nfl-live.md`. The unattended collector loop doesn't cover it
+  yet. The proxy keeps the garden live while a tab is open, and for a weekly feed
+  with a seven-day staleness window that's nearly enough.
 
 ### Three sessions back
 
-- **Prometheus is wired into `SOURCES`, behind a mock fetch.** The archetype the
-  whole idea was built for is now a live garden in the app — eight gardens, not
-  seven — without an inch of network. `promSource` goes into `SOURCES` with its
-  `fetchImpl` pointed at `mockPromFetch` (`adapters/prometheus/mock.ts`), a
-  `FetchLike` that answers `/api/v1/query` with a synthetic seven-target fleet in
-  the exact wire shape a real server returns: value as a string, timestamp in
-  seconds, labels under `metric`. So `fetchPromSnapshot` parses it,
-  `translatePromSnapshot` maps it, and nothing in the path can tell it did not
-  come off a socket — going live is a swap of that one `fetchImpl` argument. Three
-  seams made it fit the synchronous app: the source is **primed synchronously**
-  (`adopt(syntheticPromSnapshot())`) so the garden is populated on the first
-  `read`, no empty-then-fill flicker; `LiveSource` gained an optional **`refresh`**
-  that the beat kicks fire-and-forget (the mock stand-in for the backend collector
-  loop — a fetch that fails just doesn't advance, and staleness greys the garden);
-  and `promStaleSchedule` now makes a target **due one scrape interval after its
-  last sample** rather than on every beat, which is both realistic and what keeps
-  the common poll cheap. The fleet moves (latencies walk, so trend is real) and one
-  replica is held **down** — `up{} == 0`, last sample frozen in the past — so the
-  garden shows the thing only Prometheus states about itself: a target greying into
-  staleness with a critical blight while its neighbours stay fresh. Not verified in
-  a real browser: Playwright is not a dependency here and adding it for one
-  screenshot was not worth it, so the proof is the suite (compose lands the garden
-  with history and a schedule; the fleet translates well-formed; the down replica
-  greys; a refresh advances what `read` returns).
-- **The garden builder's offline groundwork — the half that does not need a
-  network.** Two of the three things `docs/sources.md` named as blocking a
-  general user-defined source are cleared. **`Domain` is open**: it was a closed
-  enum of seven, and the recorded fear was that it "feeds materials" so a new
-  domain would have no look — but the code disagreed, nothing keys materials off
-  `domain` (a plant's look is `plantingType` + archetype, chosen in translation),
-  and the only reader is the HUD, which renders it as text. So it is now
-  `KnownDomain | (string & {})` with `'general'` as the named fallback, and a user
-  source names its own with nothing downstream to teach (`ecosystem/types.ts`,
-  `isKnownDomain`). **The declarative interpreter is built**: `translation/
-  declarative.ts` turns a mapping over plain fetched JSON — records path, dotted
-  field paths, the axis scale, mandatory polarity, optional activity field,
-  group-by for beds, provenance — into the same flat nodes the hand-written
-  translators produce. It is the general case of what `prometheus.ts` proved for
-  one wire shape; the three hand-written translators are its spec, and what it
-  does not yet express (edges, the world's as-of split) is named in the file. It
-  *does* now speak **completion**: an optional `completions` block maps a record's
-  finished work (an array path plus `atPath`/`outcomePath`/`labelPath` and a
-  `doneWhen` set) onto the node's `completions`, so a config-driven CI feed or
-  to-do list hangs fruit and deadwood without a developer — safe as config because
-  a completion is an event the source *states*, not a comparison to invent. The
-  two shared primitives it needed — `scale`/`AxisScale` and the container roll-up —
-  were lifted out of `prometheus.ts` into `ecosystem/scale.ts` and
-  `ecosystem/rollup.ts`, since they were never Prometheus-specific; Prometheus
-  re-exports `scale`/`AxisScale` so nothing downstream moved. What is still missing
-  is the half a browser cannot do: the fetch (arbitrary third-party hosts need a
-  backend proxy) and a config UI. 30 tests, including a league-shaped and a
-  market-shaped mapping as reference cases and a pipelines-shaped one for
-  completion.
-- **The geometry cache evicts by last use.** It held 600 entries and threw out
-  the oldest *inserted*, which is the same thing until something churns: a season
-  scrub walks every plant through maturity buckets nobody wants again, and each
-  one pushed out whatever went in first — a plant in front of you, which rebuilt
-  next frame and was evicted again. Same bound, different 600. The policy is
-  `lsystem/lru.ts` and it is tested twice, once in isolation and once against the
-  real cache, because the bug was in the wiring rather than in a data structure.
+- **Prometheus is in `SOURCES`, behind a mock fetch.** The source the whole idea
+  was built for is a working garden in the app, with no network. `promSource`
+  goes into `SOURCES` with its `fetchImpl` pointed at `mockPromFetch`
+  (`adapters/prometheus/mock.ts`), a `FetchLike` that answers `/api/v1/query` from
+  a synthetic seven-target fleet in the exact wire format a real server uses:
+  values as strings, timestamps in seconds, labels under `metric`. So
+  `fetchPromSnapshot` parses it, `translatePromSnapshot` maps it, and nothing in
+  the path can tell it didn't come from a real server. Going live means swapping
+  that one `fetchImpl` argument.
+
+  Three changes made it fit the synchronous app. The source is **primed
+  synchronously** (`adopt(syntheticPromSnapshot())`), so the garden is populated on
+  the first `read` with no empty-then-full flicker. `LiveSource` gained an optional
+  **`refresh`** that the beat fires without awaiting. It's the mock standing in for
+  the backend collector loop: a fetch that fails just doesn't advance, and the
+  garden greys from staleness. And `promStaleSchedule` makes a target **due one
+  scrape interval after its last sample** instead of on every beat, which is both
+  realistic and what keeps polling cheap.
+
+  The fleet moves (latencies drift, so trend is real) and one replica is held
+  **down** (`up{} == 0`, with its last sample frozen in the past). The garden shows
+  the thing only Prometheus reports about itself: one target greying out with a
+  critical blight while its neighbours stay fresh. It wasn't checked in a real
+  browser at the time, because Playwright wasn't a dependency and adding it for one
+  screenshot wasn't worth it. The test suite is the proof: compose lands the garden
+  with history and a schedule, the fleet translates cleanly, the down replica greys,
+  and a refresh changes what `read` returns.
+
+- **The garden builder's offline groundwork.** Two of the three things
+  `docs/sources.md` listed as blocking user-defined sources were cleared.
+
+  **`Domain` is open.** It was a closed enum of seven, and the worry was that it
+  drove materials, so a new domain would have no look. The code said otherwise.
+  Nothing picks materials by `domain` (a plant's look comes from `plantingType`
+  and its archetype, chosen in translation), and the only thing that reads it is
+  the HUD, which shows it as text. It's now `KnownDomain | (string & {})`, with
+  `'general'` as the named fallback, and a user source can name its own with
+  nothing downstream to update (`ecosystem/types.ts`, `isKnownDomain`).
+
+  **The declarative interpreter is built.** `translation/declarative.ts` turns a
+  mapping over plain JSON (records path, dotted field paths, the axis scale,
+  required polarity, an optional activity field, group-by for beds, provenance)
+  into the same flat nodes the hand-written translators produce. It generalizes
+  what `prometheus.ts` did for one wire format. The three hand-written translators
+  define the expected behaviour, and what it can't express yet (edges, and the
+  World garden's published-versus-described dates) is noted in the file. It *does*
+  support **completion**: an optional `completions` block (an array path plus
+  `atPath`, `outcomePath`, `labelPath` and a `doneWhen` set) maps a record's
+  finished work onto the node's `completions`. A config-driven CI feed or to-do
+  list gets fruit and deadwood without a developer, which is safe as config because
+  a completion is an event the source *states*, not a comparison someone has to
+  invent. Two shared pieces it needed, `scale`/`AxisScale` and the container
+  roll-up, were moved out of `prometheus.ts` into `ecosystem/scale.ts` and
+  `ecosystem/rollup.ts`, since they were never Prometheus-specific. Prometheus
+  re-exports `scale` and `AxisScale` so nothing downstream moved. 30 tests,
+  including league-shaped and market-shaped mappings as reference cases and a
+  pipeline-shaped one for completion.
+
+- **The geometry cache evicts the least recently used entry.** It held 600 entries
+  and evicted the oldest *inserted*, which is the same thing until something
+  churns. A season scrub walks every plant through maturity buckets nobody needs
+  again, and each one pushed out whatever went in first, often the plant right in
+  front of you, which then rebuilt next frame and got evicted again. Same size
+  limit, different 600. The policy is `lsystem/lru.ts`, and it's tested twice, once
+  on its own and once against the real cache, because the bug was in the wiring,
+  not the data structure.
+
 - **The collector survives a second tab.** Found by writing the scenario down:
-  one key, two tabs, each with its own copy, and the last to write discarded
-  everything the other had seen since it loaded. Silently. Writes now merge what
-  is stored before replacing it, with a `savedAt`-and-length check so the
-  single-tab case never pays for the decode.
-- **What a write costs, measured rather than assumed.** At the budget it is about
-  21ms of synchronous main thread. Two changes came out of that: values are
-  rounded when observed rather than when encoded, which drops the encode from
-  14.8ms to 9.7ms and makes the in-memory record byte-identical to the stored
-  one; and the write interval is now the measured cost of the last write times a
-  duty cycle, floored at thirty seconds, so the cadence tunes itself to the
-  hardware. The first figure taken for all this was 118ms and it was a cold
-  sample — worth knowing, because it was nearly the justification for a much
-  larger change.
+  one storage key, two tabs, each with its own copy, and the last to write silently
+  discarded everything the other had seen since it loaded. Writes now merge with
+  what's stored before replacing it, with a `savedAt` and length check so a single
+  tab never pays for the decode.
+
+- **What a write costs, measured.** At the budget it's about 21ms of synchronous
+  main-thread time. Two changes came out of that. Values are now rounded when
+  they're observed instead of when they're encoded, which drops encoding from
+  14.8ms to 9.7ms and makes the in-memory record byte-identical to the stored one.
+  And the write interval is now the measured cost of the last write times a duty
+  cycle, with a floor of thirty seconds, so the cadence adapts to the hardware. The
+  first measurement taken was 118ms, and it was a cold sample. That's worth knowing,
+  because it nearly justified a much bigger change.
 
 ### Four sessions back
 
-- **The first graphics fidelity pass.** The plain look was always a choice, not a
-  ceiling, and this is the first climb up the ladder in `docs/graphics.md`, all of
-  it channel-safe (nothing added competes with the health read). Leaves now
-  transmit light, so a backlit canopy glows and fades at dusk
-  (`scene/translucency.ts`); the bonsai table wears a tilt-shift depth of field
-  that makes the miniature read as a model (`scene/TiltShift.tsx`, three's own
-  compositor, no new dependency, table-mode only); and bark, turf, soil and all
-  timber carry **normal and roughness maps** derived from the same achromatic
-  height field as their albedo (`normalTexture`/`roughnessTexture` in
-  `textures.ts`), so the sun catches relief and highlights break up instead of
-  sliding over a painted plane. The material pass is complete; leaves and metal
-  props were left unmapped on purpose (they spend more than they return). The
-  settled decision recorded alongside: **XR stays a target**, so the constrained
-  frame budget governs and heavy always-on post stays off the room view.
+- **The first graphics pass.** The first step up the ladder in `docs/graphics.md`,
+  all of it channel-safe (nothing added competes with the health reading). Leaves
+  let light through, so a backlit canopy glows and fades at dusk
+  (`scene/translucency.ts`). The bonsai table got a tilt-shift depth of field that
+  makes the miniature look like a model (now `scene/tiltshift.ts` in the
+  `scene/Post.tsx` chain, using three's own compositor with no new dependency,
+  table mode only). Bark, turf, soil and all timber got **normal and roughness
+  maps** built from the same achromatic height field as their colour
+  (`normalTexture` and `roughnessTexture` in `textures.ts`), so the sun catches
+  their relief. Leaves and metal props were left unmapped on purpose, because the
+  cost outweighs the gain. The decision recorded alongside: **XR stays a target**,
+  so the tighter frame budget governs and heavy always-on post-processing stays out
+  of the room view.
 
-- **The bonsai table — the second grain of space**, which was the chosen next
-  piece of work. History has two grains of time; the garden now has two grains of
-  space, the body on the path and the whole garden as a miniature looked down at
-  from outside (`t`, or the overview button). It answers traversal: the world
-  garden's 35 × 46 metres are takeable at a glance instead of by scrolling a path.
+- **The bonsai table, a second grain of space.** History has two grains of time,
+  and now the garden has two grains of space: standing on the path, and the whole
+  garden as a miniature seen from above and outside (`t`, or the overview button).
+  It solves traversal. The World garden's 35 × 46 metres can be taken in at a
+  glance instead of walked.
 
-  Three decisions worth knowing before you touch it. **It shrinks, it does not fly
-  the camera back** — the scene is lit through exponential fog (`fogExp2`, 0.02),
-  so framing a big garden at true scale would put the camera eighty metres out
-  where the fog has eaten it; bonsai scale keeps the model near and in clear air.
-  The math is `scene/bonsai.ts`, pure and tested, hung on the `size` field
-  `layout.ts` reserved for it from the start. **The overview has no text, for
-  free** — the near zoom clamp is held just beyond the label fade radius
+  Three decisions to know before touching it. **It shrinks the garden instead of
+  pulling the camera back.** The scene uses exponential fog (`fogExp2`, 0.02), so
+  framing a big garden at full scale would put the camera eighty metres away where
+  the fog has swallowed it. Bonsai scale keeps the model close and in clear air.
+  The maths is in `scene/bonsai.ts`, pure and tested, built on the `size` field
+  `layout.ts` reserved for it from the start. **The overview has no text, and that
+  came for free.** The zoom limit is held just past the label fade radius
   (`TABLE_MIN_DISTANCE = LABEL_FAR + 0.6`), so the existing distance rule keeps
-  every tag absent with nothing special-cased on; the components are simply not
-  rendered on the table. **The switch is a flight, not a cut** (`scene/fly.ts`):
-  both controls capture the camera where the other left it and ease to their pose,
-  so the room and the table read as the same garden. On the table the camera
-  *orbits*, which `look.ts` argued against for the room and which is right here,
-  where the whole garden is the object being examined. v1 is one garden on the
-  table; several is cross-garden comparison in disguise and stays out.
+  every tag hidden, and the tag components aren't rendered on the table at all.
+  **The switch is a flight, not a cut** (`scene/fly.ts`). Each control picks up the
+  camera where the other left it and eases to its own pose, so the room and the
+  table read as the same garden. On the table the camera *orbits*, which `look.ts`
+  argues against in the room but which fits here, where the whole garden is the
+  object you're examining. It shows one garden at a time. Several on one table would
+  be cross-garden comparison in disguise, so that's left out.
 
-- **The world as a third source**, which was the item at the top of this list,
-  and it was taken deliberately unlike the other two rather than as a third
-  instance of them. 193 UN members, twenty-two uneven beds (2 to 18), indicators
-  that get revised, and events derived from news rather than generated.
+- **The World as a third source.** It was built deliberately unlike the first two,
+  not as a third copy of them: 193 UN members, twenty-two uneven beds (2 to 18),
+  indicators that get revised, and events derived from news instead of generated.
 
   Four things it settled, all written up in `DESIGN.md` and `ARCHITECTURE.md`:
-  **as-of split in two** (what was published versus what it describes, so a
-  scrub shows what was *known*); **a layer under translation** (`extract.ts`,
-  the first code here that judges rather than calculates, and the first that has
-  to keep its evidence); **conflict is a blight, never a vitality term**; and
-  **size is maturity**, which is where "a big country should be a big plant"
-  belongs without spending a channel.
+  **"as of" is split in two** (what was published versus the period it describes,
+  so a scrub shows what was *known*); **a layer under translation** (`extract.ts`,
+  the first code here that makes judgements instead of calculations, and the first
+  that has to keep its evidence); **conflict is a blight, never a vitality term**;
+  and **size is maturity**, which is where "a big country should be a big plant"
+  belongs without using up a channel.
 
-  Two things to be careful with if you touch it. The provenance rules are
-  load-bearing rather than decorative — `UnrestEvent.article` is a required
-  field so an event cannot exist without the sentence behind it, and the
-  simulated marker on blights derives from `provenance.live` so a live adapter
-  drops it by being live. And which countries are shown in conflict is chosen by
-  a hash on purpose; hand-picking would mean this repo taking a position on
-  which real places are at war, in invented data.
+  Two things to be careful with. The provenance rules matter.
+  `UnrestEvent.article` is a required field so an event can't exist without the
+  sentence behind it, and the "simulated" marker on blights is derived from
+  `provenance.live`, so a live adapter drops it automatically. And which countries
+  are shown in conflict is chosen by a hash on purpose, because hand-picking would
+  mean this repo taking a position on which real places are at war, in invented
+  data.
 
-  **The hash is a settled decision, not a placeholder.** It was raised for
-  review and kept deliberately: a plausible-looking conflict map reads as
-  reporting, and the whole design wants the data obviously synthetic and only
-  its *shape* realistic. Do not "improve" it into something that looks real
-  without reopening that decision with the owner first.
+  **The hash is a settled decision, not a placeholder.** It was raised for review
+  and kept on purpose. A realistic-looking conflict map reads like reporting, and
+  the design wants the data obviously synthetic with only its *shape* realistic.
+  Don't "improve" it into something that looks real without reopening the decision
+  with the owner first.
 
-- **Tag textures build on approach, not on entry.** They were drawn for every
-  plant when a garden opened — about 95MB of texture for the world's 193, for
-  labels of which a dozen at most are ever inside the 9m fade radius. `Tags.tsx`
-  now builds a card when its plant first comes within range, metered to three a
-  frame, and the smoothstep fade covers the frame or two before a texture lands.
-  Recorded because the prediction behind it was wrong in a useful way: drawing
-  the canvases was never the cost (all 193 in 135ms), holding and uploading them
-  was — so the fix was to build fewer, not faster.
+- **Tag textures are built when you approach, not when you enter.** They used to
+  be drawn for every plant when a garden opened: about 95MB of textures for the
+  World's 193 plants, when at most a dozen are ever inside the 9m fade radius.
+  `Tags.tsx` now builds a card when its plant first comes into range, at most three
+  per frame, and the fade covers the frame or two before a texture arrives. It's
+  recorded because the original guess was wrong in a useful way. Drawing the
+  canvases was never the cost (all 193 took 135ms). Holding and uploading them was.
+  So the fix was to build fewer, not to build faster.
 
-- **The market's activity axis was dead, and is not mine.** Found by printing
-  all four axes for all three gardens rather than only the one under work: the
-  market's `activity` sat at exactly 1.00 for 31 of 32 holdings and had since
-  that garden existed. The tape emitted a session's hourly bars *and* its daily
-  bar at the same `closeAt`, so `volumeRatioAt` measured a day against a window
-  of hours (~5.7 where an ordinary day is 1, against a curve that saturates at
-  3). Fixed in the generator, since no real feed prints two bars for one symbol
-  at one instant. The lesson is in "How to work on this" below: a saturated axis
-  is invisible, because it looks exactly like a signal that is always on.
+- **The market's activity axis was dead.** Found by printing all four axes for
+  all three gardens, not just the one being worked on. The market's `activity` sat
+  at exactly 1.00 for 31 of 32 holdings, and had since the garden existed. The tape
+  emitted a session's hourly bars *and* its daily bar at the same `closeAt`, so
+  `volumeRatioAt` compared a day against a window of hours (about 5.7 where a
+  normal day is 1, on a curve that saturates at 3). Fixed in the generator, since
+  no real feed prints two bars for one symbol at the same instant. The lesson is in
+  "How to work on this" below: a saturated axis is invisible, because it looks
+  exactly like a signal that's always on.
 
 ### Earlier
 
-- **The collector**, which was the item at the top of this list. History was
-  backfilled at module load and thrown away on reload, so the archive tier could
-  hold twenty weeks and held twenty weeks of fiction regenerated on the spot.
-  `state/persist.ts` is the record and the rules, `state/collector.ts` is the
-  loop, and the store restores at compose and notes at commit and tick. Verified
-  in the browser both ways: a day 85 back that the league cannot reach came from
-  the record; a day it does cover was untouched by a record claiming otherwise.
-  The limit is stated rather than engineered away — it collects while a tab is
-  open and not while one is not — and the format is the one a server-side
-  collector would want. See ARCHITECTURE.md, "Collection".
-- **A false risk retired.** "The geometry cache still needs an explicit bound"
-  had been in the risk list a long time and was not true: it had been capped at
-  600 entries since before the scrub shipped. What was left of it — the eviction
-  policy — shipped as the geometry cache's LRU eviction, in the most recent
-  session above.
-
-### Earlier still
-
-- **Session-aware staleness**, which was the item at the top of that list and the
-  largest open piece of design. `staleness` now takes a `StaleSchedule` — a
-  source-supplied due time plus a grace that only runs once something is owed —
-  instead of a flat duration. Measured on the same tape, a vendor dying inside a
-  session is flagged in 3.2 hours rather than 95.7. A bare number is still a legal
-  policy and is the degenerate schedule, which is what the league stays on, on
-  purpose. Details below and in ARCHITECTURE.md.
-- **The poll**, which that change made necessary rather than merely nice. Both
-  sources snapshotted once and never again; sharpened staleness correctly called
-  the market garden dead about three hours in, because it was. `state/sources.ts`
-  now re-reads a source when its own `dueAfter` says a reading is owed — the same
-  question, used twice. Making the tape safe to ask twice was most of the work,
-  and found a latent determinism bug: the price walk's rng was consumed inside the
-  bar-emission branch, so what got printed changed the prices.
-- **The timeline strip**, which is the one thing the sun cannot say. Dragging the
-  sun back, there was no way to know whether the record ran out in an hour or in
-  four months, and at the edge the cursor simply stopped with no explanation.
-  `ecosystem/timeline.ts` plus `Timeline.tsx` draw the extent, the point where
-  hours become days, and where you are standing in it. Deliberately a provenance
-  display and not the scrub bar `SunScrub` argues against: the sun keeps the
-  gesture.
-- **Standing instead of orbiting.** The last open interaction problem: an orbit
-  aims at its target, so the upper sky was never in frame and the sun — which is
-  the time control — could not be pointed at for most of the day. `StandControl`
-  fixes the eye and moves the aim instead. Drag to look, scroll to walk, pitch to
-  the zenith. Verified end to end at midsummer noon, sun 78° up: look up, grab it
-  through the roof, time scrubs.
-- **Two false claims corrected**, both found by checking the code rather than by
-  a test. Open work item 2 said the inspection panel did not exist; `Detail.tsx`
-  has been doing the whole job — vitals, both sparklines, blights, the flattened
-  `raw` payload — for some time. And three sites still justified the panel being
-  world-anchored "because `src/xr/` exists", which is the very claim the #9 audit
-  found false and removed from one place but not the rest. The reasoning was
-  sound and the premise invented; the reasoning now stands on assumption 6.
-- **#9** — an audit of the docs against the code. Five claims were false,
-  including a `src/xr/` that never existed and a sample count that was out by
-  4,000. Then the CI that would have caught them, because the repository had
-  none and every "the tests pass" in its history was a person reporting
-  honestly.
-- **#8** — the greenhouse, and the viewer standing *inside* it rather than
-  sixteen metres out in the field looking at a building.
-- **#10** — the market as a second real source, chosen because it disagrees
-  with the first.
+- **The collector.** History used to be backfilled when the module loaded and
+  thrown away on reload, so the archive tier could hold twenty weeks and held
+  twenty weeks of fiction regenerated on the spot. `state/persist.ts` holds the
+  record and its rules, `state/collector.ts` is the loop, and the store restores
+  on compose and records on commit and tick. Checked in the browser both ways: a
+  day 85 back that the league can't reach came from the record, and a day it does
+  cover was left alone even when the record disagreed. The limit is stated, not
+  engineered around: it collects while a tab is open and not otherwise, and the
+  format is the one a server-side collector would want. See ARCHITECTURE.md,
+  "Collection".
+- **A false risk removed.** "The geometry cache still needs an explicit bound" had
+  been on the risk list for a long time and wasn't true. It had been capped at 600
+  entries since before scrubbing shipped. The remaining piece, the eviction policy,
+  became the LRU change above.
+- **Schedule-aware staleness**, the biggest open design problem at the time.
+  `staleness` now takes a `StaleSchedule` (a due time supplied by the source, plus
+  a grace period that only starts once something is owed) instead of a flat
+  duration. On the same tape, a vendor dying mid-session is flagged in 3.2 hours
+  instead of 95.7. A bare number is still a valid policy, as the simplest kind of
+  schedule, and the league deliberately stays on one. Details below and in
+  ARCHITECTURE.md.
+- **Polling**, which the staleness change made necessary. Both sources used to
+  take one snapshot and never another, and sharper staleness correctly declared
+  the market garden dead after about three hours, because it was. `state/sources.ts`
+  now re-reads a source when its own `dueAfter` says a reading is owed, using the
+  same question twice. Most of the work was making the tape safe to ask twice, and
+  that turned up a hidden determinism bug: the price walk's random generator was
+  consumed inside the bar-emission branch, so which bars got printed changed the
+  prices.
+- **The timeline strip**, for the one thing the sun can't tell you. When you
+  dragged the sun back, there was no way to know whether the record ran out in an
+  hour or in four months, and at the edge the cursor just stopped with no
+  explanation. `ecosystem/timeline.ts` and `Timeline.tsx` show the extent, the
+  point where hours become days, and where you are. It's deliberately a provenance
+  display, not the scrub bar `SunScrub` argues against. The sun keeps the gesture.
+- **Standing instead of orbiting.** An orbit camera aims at its target, so the
+  upper sky was never in frame and the sun (the time control) couldn't be pointed
+  at for most of the day. `StandControl` fixes the eye in place and moves the aim.
+  Drag to look, scroll to walk, look straight up. Checked end to end at midsummer
+  noon with the sun 78° up: look up, grab it through the roof, and time scrubs.
+- **Two false claims corrected**, both found by reading the code, not by a test.
+  One open-work item said the inspection panel didn't exist, when `Detail.tsx` had
+  been doing the whole job (vitals, both sparklines, blights, the flattened `raw`
+  payload) for a while. And three places still justified the panel being anchored
+  in the world "because `src/xr/` exists", which the #9 audit had found false and
+  removed from one place but not the others. The reasoning was sound but the
+  premise was made up. It now rests on assumption 6.
+- **#9**, an audit of the docs against the code. Five claims were false, including
+  a `src/xr/` directory that never existed and a sample count that was off by
+  4,000. It also added CI, because the repository had none and every "the tests
+  pass" in its history was someone reporting in good faith.
+- **#8**, the greenhouse, with the viewer standing *inside* it instead of sixteen
+  metres out in the field looking at a building.
+- **#10**, the market as a second real source, chosen because it disagrees with
+  the first.
 
 ---
 
 ## The decisions most likely to be misread
 
-Undoing any of these by accident is easy, so each says what breaks.
+Any of these is easy to undo by accident, so each one says what breaks.
 
-**Vitality is unsigned by side, and polarity does the interpreting.**
-`translation/market.ts` reports how far an instrument has moved since entry —
-*not* whether that is good for you. `signalHealth` inverts it for shorts. Sign
-it by side in the translator and polarity inverts it back, so a short reads
-healthy exactly while it loses money. The garden looks right and means the
-opposite. There is a test named for this.
+**Vitality doesn't carry a sign for long or short, and polarity does the
+interpreting.** `translation/market.ts` reports how far an instrument has moved
+since entry, *not* whether that's good for you. `signalHealth` inverts it for
+shorts. If you sign it by side in the translator, polarity inverts it back, and a
+short looks healthy exactly while it's losing money. The garden looks right and
+means the opposite. There's a test named for this.
 
-**The staleness schedule is computed, not chosen, and its two halves are not
+**The staleness schedule is computed, not chosen, and its two halves aren't
 interchangeable.** `dueAfter` comes from the exchange calendar (`session.ts`,
-`nextBarClose`) and may be days out at no cost; `graceMs` is two bars and is
-tight on purpose. Collapse them back into one duration — or point `dueAfter` at
-"last update plus a bit" — and you are back to a ratio that cannot tell a shut
-exchange from a dead vendor, which is the whole thing this replaced.
+`nextBarClose`) and can be days away at no cost. `graceMs` is two bars and is
+tight on purpose. Collapse them back into one duration, or point `dueAfter` at
+"last update plus a bit", and you're back to a ratio that can't tell a closed
+exchange from a dead vendor, which is exactly what this replaced.
 
-**The league is on a flat duration deliberately, not by omission.** A schedule
-would clear a bye, and the two clubs a week on byes are the only thing that makes
-the staleness state reachable in that garden. Its feed also carries no fixture
-list to point `dueAfter` at. Giving it a schedule "for consistency" would silently
-delete a documented behaviour and a demonstrable state.
+**The league uses a flat duration on purpose.** A schedule would clear a bye, and
+the two clubs on a bye each week are the only thing that makes the stale state
+reachable in that garden. Its feed also has no fixture list to point `dueAfter`
+at. Giving it a schedule "for consistency" would silently remove a documented
+behaviour and a state you can currently see.
 
-**A generated source that gets polled must extend, never slide.**
-`syntheticMarketSource` fixes its origin day and its halt time on the first
-`snapshot()` and reuses them. Measure either back from `now` again — which is
-what `tradingDaysBack(now, SESSIONS)` did — and asking twice re-prices the whole
-record behind you, so the history already recorded disagrees with the source it
-came from. Related and just as easy to undo: bar volume is keyed on the bar's
-close time rather than drawn from the walk's rng, because drawing it inside the
-emission branch made the price path depend on which bars happened to be printed.
-There are tests for both.
+**A generated source that gets polled must extend its data, never slide it.**
+`syntheticMarketSource` fixes its origin day and halt time on the first
+`snapshot()` and reuses them. If either is measured back from `now` again (which is
+what `tradingDaysBack(now, SESSIONS)` used to do), asking twice re-prices the whole
+record behind you, and the history already recorded disagrees with the source it
+came from. A related one that's just as easy to undo: bar volume is keyed on the
+bar's close time instead of drawn from the walk's random generator, because drawing
+it inside the emission branch made the price path depend on which bars were
+printed. There are tests for both.
 
-**The restore fills silence and never overwrites a source.** `recordIfAbsent`
-writes only into slots a freshly built buffer left empty. Swap it for `record`
-"so the newest reading wins" and the app starts preferring its own old
-observation over the source's current account of the same day, which is the one
-thing a source is authoritative about. The test is named for it, and it was
-checked in a real browser both ways round.
+**The restore fills silence and never overwrites a source.** `recordIfAbsent` only
+writes into slots a freshly built buffer left empty. Swap it for `record` "so the
+newest reading wins" and the app starts preferring its own old observation over
+the source's current account of the same day, which is the one thing a source is
+the authority on. The test is named for it, and it was checked in a real browser
+both ways.
 
-**What counts as having reported is the caller's call, not the collector's.**
-`observe` writes everything it is handed, and the store hands it exactly what
-`commit` committed and exactly what the mock tick drifted. Move that decision
-down into the collector as a freshness heuristic and the silent plant starts
-being recorded hourly as reporting the same number — the app inventing a feed
-that has died, which is the failure the staleness work exists to prevent. Note
-that the market gets this for free from the schedule: `poll` only commits when a
-bar is genuinely due, so a weekend leaves no trace rather than a flat line.
+**Deciding what counts as having reported is the caller's job, not the
+collector's.** `observe` writes everything it's given, and the store gives it
+exactly what `commit` committed and what the mock tick drifted. Move that decision
+into the collector as a freshness heuristic and the silent plant starts being
+recorded every hour as reporting the same number. That's the app inventing a feed
+that has died, which is the failure the staleness work exists to prevent. The
+market gets this for free from the schedule: `poll` only commits when a bar is
+genuinely due, so a weekend leaves no trace instead of a flat line.
 
-**The record stores observations, not the buffers.** Persisting
-`state.history` would be storing each source's own account back to itself, at
-about a megabyte, and buy nothing — a backfill fills every slot it covers. The
-value is only in the slots it does not.
+**The record stores observations, not the buffers.** Persisting `state.history`
+would store each source's own account back to itself, at about a megabyte, and
+gain nothing, since a backfill fills every slot it covers. The value is only in the
+slots it doesn't.
 
-**Shedding spends the hourly tier before the daily one, entirely.** A live feed
-can usually still be asked about last week; past its window, the daily tier is
-the only place those days exist. Even out the eviction "for fairness" and the
-budget starts eating the irreplaceable half first.
+**Shedding spends the hourly tier entirely before the daily one.** A live feed can
+usually still tell you about last week, but past its window the daily tier is the
+only place those days exist. Even out the eviction "for fairness" and the budget
+starts eating the part you can't replace first.
 
 **Every write merges before it replaces.** One key, several tabs, each with its
-own copy — drop the merge and the last tab to write silently discards what the
-others saw. The `savedAt`-and-length check that skips the merge is an
-optimisation for the single-tab case and nothing more; if the format ever moves
-`savedAt` out of the header, `peekSavedAt` stops finding it and every write
-quietly starts paying for a full decode.
+own copy. Drop the merge and the last tab to write silently discards what the
+others saw. The `savedAt` and length check that skips the merge is only an
+optimisation for a single tab. If the format ever moves `savedAt` out of the
+header, `peekSavedAt` stops finding it and every write quietly starts paying for a
+full decode.
 
-**The write interval is derived, not chosen.** It is the measured cost of the
-last write times `WRITE_DUTY`. Pin it back to a constant and it is right on the
-hardware it was measured on and wrong on everything slower — which was the
-original bug, just with a number that happened to be fine here.
+**The write interval is derived, not chosen.** It's the measured cost of the last
+write times `WRITE_DUTY`. Pin it back to a constant and it's right on the machine
+it was measured on and wrong on anything slower, which was the original bug with a
+number that happened to be fine here.
 
-**The size estimate is deliberately generous.** `recordBytes` is sized for
-values that use all four decimals, so real data — full of values that round
-short — comes in under it. Tune the constants to real data and the estimate goes
-*under* the truth the moment a garden stops rounding short, which is how a budget
-quietly stops being one.
+**The size estimate is deliberately generous.** `recordBytes` assumes values use
+all four decimal places, so real data, which is full of values that round shorter,
+comes in under it. Tune the constants to real data and the estimate goes *under*
+the truth as soon as a garden stops rounding short, which is how a budget quietly
+stops being one.
 
-**Beds are raised by lowering the floor.** Plants sit at `y = 0` and grafts,
-dust, and sway all measure from there. Raising the soil would force every one of
-those to learn a bed height. `FLOOR_Y` is negative for this reason.
+**Beds are raised by lowering the floor.** Plants sit at `y = 0`, and grafts, dust
+and sway all measure from there. Raising the soil would force every one of those to
+know about bed height. That's why `FLOOR_Y` is negative.
 
-**Glass carries no pointer handlers.** R3F only raycasts objects that have them,
-which is why the sun and moon are grabbable through the roof. Add a hover
-handler to a pane and you break the time scrub.
+**Glass has no pointer handlers.** R3F only raycasts objects that have them,
+which is why the sun and moon can be grabbed through the roof. Add a hover handler
+to a pane and you break the time scrub.
 
-**The framing effect is keyed on the viewpoint's values, not the object.**
-`view` is rebuilt from the node map, so a new object with identical numbers
-arrives on every telemetry tick. The orbit tolerated that by accident — its
-`update()` recomputed the camera from its own spherical state, so re-setting the
-position did nothing — but `StandControl` holds the position *as* its state, and
-keying on the object resets your view every two seconds. Looking up becomes
-impossible to hold. The old `Framing` comment warned about exactly this and the
-old code did it anyway.
+**The framing effect depends on the viewpoint's values, not the object.** `view`
+is rebuilt from the node map, so a new object with identical numbers arrives on
+every telemetry tick. The old orbit camera tolerated that by accident, because its
+`update()` recomputed the camera from its own spherical state, so setting the
+position again did nothing. `StandControl` holds the position *as* its state, so
+keying on the object resets your view every two seconds and you can't keep looking
+up. The old `Framing` comment warned about exactly this and the old code did it
+anyway.
 
-**An axis endpoint is the worst case that can really occur, not the arithmetic
-floor.** Half a league is below .500 by construction; mapping that straight onto
+**An axis endpoint is the worst case that can really happen, not the arithmetic
+minimum.** Half a league is below .500 by definition. Mapping that straight onto
 vitality put half the garden into wilt, and wilt means *in trouble*, not
 *mid-table*.
 
-**Unrecorded history is left unwritten.** Both backfills skip slots before their
-data starts rather than filling them with a plausible number. A flat line of
-plausible numbers is indistinguishable from data.
+**Unrecorded history stays unwritten.** Both backfills skip the slots before their
+data starts instead of filling them with a plausible number. A flat line of
+plausible numbers can't be told apart from real data.
 
 ---
 
 ## Open work
 
-The list this file has carried since it was written is now empty, and what
-replaces it is one item that code in this repository cannot finish.
+### Run a live path against a real server
 
-### Move the collector somewhere a tab is not required
+Everything for this is built: the Prometheus and NFL proxies, the collector loop,
+and the Netlify wrappers (`docs/backend.md`, `docs/deploy-netlify.md`,
+`docs/running-live.md`). What's missing is a deploy with network access. Set
+`VITE_NFL_PROXY_URL` (or `VITE_PROM_PROXY_URL` plus the `PROM_*` variables) on a
+networked deploy, and the skipped live tests will confirm the whole path.
 
-Everything a page can do about this is done: the record survives a reload,
-survives several tabs at once, and costs about 21ms of main thread at its
-largest. What no page can do is collect while no page is open, and that is the
-half the original architecture note was actually about. A tab that is shut
-records nothing, so a client-side record has holes exactly across the nights and
-weekends you would most want to inspect.
+### Keep collecting while no tab is open
 
-The next real step is a process — the same loop, the same `ObservedRecord` on
-the wire, reading through `LiveSource` and writing somewhere that is not
-`localStorage`. That is a deployment question rather than a coding one, and it
-is the point at which "the archive holds a season" stops depending on somebody
-leaving a tab open. Two things are already shaped for it: `ObservedRecord` is a
-wire format and not a browser structure, and `LiveSource` is the read side a
-collector would want. The one thing that would change inside this repo is
-storage — and note that the `localStorage`-over-IndexedDB decision is only
-correct while the write has to survive `pagehide`. In a worker there is no
-teardown to race, and the choice reverses.
+Everything a page can do about this is done. The record survives a reload and
+several tabs at once, and costs about 21ms of main-thread time at its biggest.
+What no page can do is collect while no page is open, and that was the point of
+the original architecture note. A closed tab records nothing, so a browser-side
+record has holes across exactly the nights and weekends you'd most want to look at.
 
-A smaller intermediate step, if a server is not on the table: a service worker
-with periodic background sync. It is Chromium-only, needs an installed PWA, and
-is granted at the browser's discretion, so it would be an addition to the
-current path rather than a replacement for it — and it would want IndexedDB,
-since a service worker cannot reach `localStorage` at all. Worth doing only if
-the alternative is nothing.
+The server side of this now exists: `backend/collectorLoop.ts` runs the same loop
+and writes the same `ObservedRecord`, and `netlify/functions/collect-scheduled.ts`
+runs it every minute and stores the record in Netlify Blobs. Two things remain.
+It has never run against a live source, and it only covers Prometheus. Extending
+it to the NFL (and to user-built gardens once they can fetch) is the next step.
+
+Note that the `localStorage`-over-IndexedDB decision is only right while the write
+has to survive `pagehide`. In a worker there's no teardown to race, and the choice
+flips.
+
+If a server isn't an option, there's a smaller step: a service worker with
+periodic background sync. It's Chromium-only, needs an installed PWA, and is
+granted at the browser's discretion, so it would add to the current path, not
+replace it. It would also need IndexedDB, since a service worker can't reach
+`localStorage` at all. Only worth doing if the alternative is nothing.
 
 ---
 
 ## Enhancements worth considering
 
-Roughly in order of value for effort, with the reason rather than just the idea.
+Roughly in order of value for effort, with the reasoning.
 
-### Built: the bonsai table
+**Live adapters behind the remaining interfaces.** Every seam was built for this:
+implement `MarketSource`, `WorldSource` or `NewsSource` against a real feed and
+nothing below changes. Prometheus and the NFL are already built up to the network
+call, so these are the ones still waiting for a live adapter.
 
-This was the chosen next piece of work, and it shipped — see "what shipped in the
-most recent session" above for the summary, `scene/bonsai.ts` and `scene/fly.ts`
-for the code, and the three constraints below for what any future work on it must
-keep. It is left here rather than deleted because the constraints outlive the
-building of it.
-
-- **It is a change of *distance*, not of reading.** The tabletop plant is the
-  same plant, smaller. Health still reads through droop, colour, and density —
-  the tabletop must not earn a second visual language (a pin, a heat tint, a
-  badge) that says the same thing the plant already says. That would spend the
-  channel budget twice. v1 holds this: nothing is added on the table that the
-  plant does not already say.
-- **Tags stay gone, and for free.** At tabletop distance you are far from every
-  plant, so the fade radius (`labels.ts`) keeps every label absent — which is
-  correct: a whole-world overview has no text in it, exactly as the room view
-  does not. The near zoom clamp is held just past `LABEL_FAR` so this stays true
-  at every distance a zoom can reach, and the label components are not rendered on
-  the table at all — the rule is honoured, never special-cased back on.
-- **One garden at a time, still.** Showing several gardens on one table is the
-  obvious next thought and it is the *cross-garden comparison* constraint below
-  in disguise — green means two different things across two gardens, which is the
-  one rule the whole environment model exists to hold. v1 is one garden on the
-  table. Several is a separate design with a real problem to solve first.
-
-**Where it could go next.** The transition is a flight between two fixed poses;
-it is not yet reachable in XR (no controller or gaze gesture bound to it), and
-the table does not yet tilt to meet a real surface in passthrough. Both are the
-natural continuation once the XR path opens. And the season/time scrub still
-lives on the sun, which on the table is often out of frame — the keyboard and the
-timeline still scrub, but a sun you cannot see is a gesture you cannot reach, so
-a scrub that works from the table view is worth a thought.
-
-### The rest, roughly by value for effort
-
-**A live adapter behind any of the four interfaces.** The highest-value single
-change, and the cheapest, because every seam was built for it: implement
-`NflSource`, `MarketSource`, `WorldSource`, or `NewsSource` against a real feed
-and nothing below changes. **Two are now built to the socket's edge.** Prometheus
-fetches through `promSource`'s `fetchImpl` seam with a mock in that slot, and the
-**NFL now fetches ESPN for real** through `liveNflSource` behind the backend proxy
-(`adapters/nfl/espn.ts`, `docs/nfl-live.md`) — both convert every "seeded fiction"
-caveat in the docs into a real claim, and both are one networked deploy away from a
-live garden. What still needs the network this environment lacks is *running* that
-path, not building it: set `VITE_NFL_PROXY_URL` (or `VITE_PROM_PROXY_URL`) on a
-deploy with egress and the `skipIf` live tests certify it end to end. Market and
-News are the two interfaces still awaiting their live adapter.
-
-**User-defined data sources** — letting an end user point the garden at their own
-feed (FIFA, Prometheus, political fundraising) rather than a developer writing a
-translator. Written up in `docs/sources.md`: the seam that already exists
-(`LiveSource`, the poll/staleness unification, the server-shaped observation
-record), and the two halves the sentence hides — developer extensibility, which
-is nearly there, and non-developer runtime configuration, which is the real work.
-The crux is turning the translator from *code* into a *declarative mapping*,
-because it decides things the raw data does not carry: the four axes as
-comparisons in [0, 1], and above all polarity, the one rule the whole
-environment model exists to hold. **That mapping now exists in first-cut form**
-(`translation/declarative.ts`), and the two blockers this bullet used to name —
-`Domain` being a closed enum, and the completion-vocabulary gap — are both
-cleared (opened, and fruit/deadwood shipped). What is left is above and below the
-interpreter, not in it: a real fetch past the browser's CORS wall needs a backend
-proxy, and a non-developer needs a config UI over the `DeclarativeMapping` shape.
-Both wait on the same network and the same backend the collector move waits on.
-
-`NewsSource` is the one to do first if you get network, and not because it is
-the easiest. It is the only source whose generated half is *text about real
-places*, so it carries caveats the other two do not need, and it is the only one
-where going live improves the honesty of the app rather than only its accuracy.
-Two things to settle before it ships: the outlets' terms on storing their text,
-and whether the keyword classifier is good enough on real copy — it was tuned
-against generated headlines, which is a much easier problem than a real wire.
+`NewsSource` is the one to do first if you get network access, and not because
+it's easiest. It's the only source whose generated half is *text about real
+places*, so it carries caveats the others don't, and it's the only one where going
+live makes the app more honest and not just more accurate. Two things to settle
+before it ships: the outlets' terms on storing their text, and whether the keyword
+classifier holds up on real copy. It was tuned on generated headlines, which is a
+much easier problem than a real wire.
 
 **Calibrate `trend` the way `vitality` is calibrated.** Small, cheap, and now
-visible: the plume made the axis load-bearing and immediately showed that the
-three real sources do not agree about what a unit of it means. Measured at a
-fixed clock, the league spreads across the whole range, the book bunches under
-half of it, and more than half the world's countries sit pinned at the top — so
-the world garden plumes almost everywhere while the book barely speaks. Vitality
-got this pass (twice: the league's "average is not half dead", the world's
-growth-rate rescale); trend never did. The rule to apply is the one already
-written down: an axis endpoint is the worst case that can really occur, not the
-arithmetic edge. Each translator's `trendOf` is one line, and `scene/signal.ts`
-carries the numbers to check against.
+visible. The plume made the axis matter and immediately showed that the three real
+sources don't agree on what a unit of trend means. At a fixed clock, the league
+spreads across the whole range, the market book bunches under half of it, and more
+than half the world's countries are pinned at the top, so the World garden plumes
+almost everywhere while the market barely does. Vitality got this pass twice (the
+league's "average isn't half dead" and the World's growth-rate rescale). Trend
+never did. The rule to apply is already written down: an axis endpoint is the worst
+case that can really happen, not the arithmetic edge. Each translator's `trendOf`
+is one line, and `scene/signal.ts` has the numbers to check against.
 
-**Traversal** was answered by the bonsai table above — the tabletop view is how
-you take a whole garden in without walking it, so the two were one piece of work.
+**Finish the garden builder.** The offline half ships (`docs/garden-builder.md`).
+Next is adding the completion fields to the form, then a mock-fetch poll seam, and
+finally a real fetch through the backend proxy once arbitrary hosts can be
+registered.
 
-Note what is *not* on this list any more: tag textures. They were built for
-every plant on entering a garden — about 95MB for 193 — and are now built when a
-plant first comes within the fade radius, a few per frame. If you are hunting
-for the next cheap win, do not re-find that one; and be careful about assuming
-its neighbours are CPU-bound, because that one was not (all 193 canvases draw in
-135ms). Measure before believing a stall is where it looks.
+**The bonsai table, next steps.** The switch between views is a flight between
+two fixed poses. It can't be triggered in XR yet (no controller or gaze gesture is
+bound to it), and the table doesn't tilt to meet a real surface in passthrough.
+Both follow naturally once the XR path opens. Also, the time scrub still lives on
+the sun, which is often out of frame on the table. The keyboard and the timeline
+still work, but a sun you can't see is a gesture you can't reach, so a scrub that
+works from the table view is worth some thought. Three constraints any work here
+has to keep:
 
-**A fourth source, for the shapes still untested.** The three present ones are
-all numeric and all publisher-fed. What is still unexercised:
+- **It changes distance, not the reading.** The plant on the table is the same
+  plant, smaller. The table mustn't add a second visual language (a pin, a heat
+  tint, a badge) that repeats what the plant already says, because that spends the
+  channel budget twice.
+- **Tags stay hidden.** At table distance you're far from every plant, so the fade
+  radius (`labels.ts`) keeps every label hidden. That's correct: an overview has no
+  text, just like the room view. The zoom limit is held just past `LABEL_FAR` so
+  this holds at every zoom level, and the tag components aren't rendered on the
+  table at all.
+- **One garden at a time.** Several gardens on one table is the obvious next idea,
+  and it's the cross-garden comparison problem below in disguise.
 
-- *Personal knowledge / notes* — a graph with real link topology and where
-  "maturity" means something entirely different. Tests whether the model
-  survives a domain with no numbers in it. The world garden's land borders are
-  the closest thing to real topology so far, but they are static.
-- *CI pipelines* — where things genuinely complete, which the vocabulary has no
-  word for. Recorded as an open risk: tasks end, plants do not.
-- *Prometheus* — the archetype the whole idea was built for, and **now built and
-  wired in behind a mock fetch** (see the most-recent-session note and
-  `docs/prometheus.md`). What remains is only the socket: a live server, and the
-  unattended refresh loop a shut tab cannot be. Worth doing the moment there is
-  network.
+**A fourth kind of source, for shapes not yet tested.** The current sources are
+all numeric and all fed by a publisher. Still untested: *personal knowledge or
+notes*, a graph with real link structure where "maturity" means something entirely
+different. It would test whether the model survives a domain with no numbers in it.
+The World garden's land borders are the closest thing to real topology so far, but
+they're static. (CI pipelines, the other gap that used to be listed here, is now
+covered by the mock Pipelines garden and the completion vocabulary, see
+`docs/completion.md`.)
 
-**Completion vocabulary — built, config verb included.** Plants do not finish;
-tasks, goals, builds, and harvests do, and the vocabulary now has a word for it.
-`Completion` sits on the node beside `Blight` with the opposite sign — a discrete
-terminal outcome carried as-of a timestamp, not a fifth health level — read as
-fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
-`scene/Completions.tsx`, designed in `docs/completion.md`). And the declarative
-source now declares it: a `completions` block maps a record's finished work onto
-the node, so a user pointing the garden at a CI feed or a to-do list gets fruit
-without a developer writing a translator. What is left is only a source shaped
-*entirely* around finishing — a dedicated pipelines garden — for which the
-mock/live plumbing, not the vocabulary, is the remaining work.
+**Cross-garden comparison.** Only one garden is shown at a time, which stops green
+meaning two things at once, and that's right. But "how's the AFC West doing
+against the NFC North?" and "how are my energy holdings doing against my tech?" are
+the questions people actually ask, and neither can be answered right now. This
+needs design before code, because the constraint it runs into is deliberate.
 
-**Cross-garden comparison.** One garden is live at a time, which is what stops
-green meaning two things at once, and that is right. But "how is the AFC West
-doing against the NFC North" and "how are my energy holdings against my tech"
-are the questions people actually ask, and neither is currently answerable. This
-needs design before code — the constraint it bumps into is deliberate.
+**The rest of the graphics ladder.** Rungs 4 (authored assets) and 5 (the expensive
+desktop tier) in `docs/graphics.md`. Rung 4 comes with a deformation cost for
+anything whose shape carries meaning, and rung 5 assumes XR is dropped, which it
+isn't.
 
-**A second grain of *space*** was "the bonsai table" above — now built, so it has
-left this list.
-
-**A graphics fidelity pass.** The plain look is a choice, not a ceiling: the same
-renderer can look far better with no change of engine, and the biggest jump —
-leaf translucency, PBR maps, a tilt-shift depth of field on the bonsai table — is
-a materials-and-post pass that touches none of the health reads. Written up in
-`docs/graphics.md`, including where Blender fits (authoring assets, not a
-runtime), why Unreal is a different product rather than a next step, and the one
-fork that caps everything: whether XR stays a target. The channel budget is the
-constraint it all turns on — decoration is only affordable while it means nothing.
-
-**Sound.** `Blight` and `Vitals` both carry fields whose comments mention
-spatial audio, and there is none. Peripheral awareness is exactly the case where
-sound earns its place — you notice a change without looking — and it is the one
-channel the reading budget has not spent.
+**Sound.** `Blight` and `Vitals` both have fields whose comments mention spatial
+audio, and there isn't any. Peripheral awareness is exactly where sound earns its
+place, since you notice a change without looking, and it's the one channel the
+reading budget hasn't used.
 
 **Weather.** The horizon is lit by the same rig as the garden and fogged by the
-same fog, so it already tracks the day and season scrub for free. Rain on the
-glass is a small amount of work for a large amount of place, and it carries no
-signal, which is what makes it affordable. See "what is decoration" in
-`DESIGN.md` for the rules it would have to obey.
+same fog, so it already follows the day and season scrub. Rain on the glass is a
+small amount of work for a lot of atmosphere, and it carries no signal, which is
+what makes it affordable. See "what is decoration" in `DESIGN.md` for the rules it
+would have to follow.
+
+**Already done, so don't go looking:** the completion vocabulary
+(`docs/completion.md`), traversal (the bonsai table), and building tag textures
+lazily. On that last one, be careful assuming its neighbours are CPU-bound, because
+it wasn't (all 193 canvases draw in 135ms). Measure before believing a stall is
+where it looks.
 
 ---
 
 ## How to work on this
 
-- `npm install && npm run dev` runs it. Vite HMR on this project often serves
-  stale code; hard-reload, and if that fails `rm -rf node_modules/.vite`.
-- `npm test`, `npm run typecheck`, `npm run build` — all three run in CI, so
-  there is no value in guessing whether they pass.
+- `npm install && npm run dev` runs it. Vite's hot reload often serves stale code
+  on this project. Hard-reload, and if that doesn't help, `rm -rf node_modules/.vite`.
+- `npm test`, `npm run typecheck` and `npm run build` all run in CI.
 - **Measure before judging a source.** Every calibration fault found so far was
-  invisible in a screenshot and obvious in a distribution — the market's two, the
+  invisible in a screenshot and obvious in a distribution: the market's two, the
   world's trend axis, and the one below. Compare a new source's spread against an
   existing garden's before deciding it looks wrong, and print the distribution of
-  *every* axis rather than the one you are working on: the market's dead activity
-  channel was found by measuring the world's, three columns over.
-
-- **Print all four axes, not the one you changed.** The market's `activity` sat
-  at exactly 1.00 for thirty-one of thirty-two holdings for as long as that
-  garden has existed, meaning the animation-rate channel carried no information
-  at all. Nothing looked wrong: every plant simply moved, and a plant that moves
-  looks healthy. The cause was upstream of the axis — the tape emitted a
-  session's hourly bars *and* its daily bar at the same `closeAt`, so
-  `volumeRatioAt` compared a day against a window of hours and read 5.7 where an
-  ordinary day reads 1. A saturated axis is the hardest failure to see, because
-  it looks exactly like a signal that is always on.
+  *every* axis, not just the one you're working on. The market's dead activity
+  channel was found by measuring the World's, three columns over.
+- **Print all four axes, not only the one you changed.** The market's `activity`
+  sat at exactly 1.00 for thirty-one of thirty-two holdings for as long as the
+  garden existed, so the animation-rate channel carried no information at all.
+  Nothing looked wrong. Every plant just moved, and a plant that moves looks
+  healthy. The cause was upstream of the axis (the tape printing hourly and daily
+  bars at the same `closeAt`, described above). A saturated axis is the hardest
+  failure to see, because it looks exactly like a signal that's always on.
 - **Look at the actual app.** Chromium and Playwright are available
-  (`executablePath: '/opt/pw-browsers/chromium'`, do not run `playwright
-  install`). A screenshot caught the camera being outside the greenhouse; no
+  (`executablePath: '/opt/pw-browsers/chromium'`, and don't run `playwright
+  install`). A screenshot caught the camera being outside the greenhouse when no
   test would have.
-- **Docs drift, and it is not automatically caught.** CI verifies the code, not
-  the prose about it. The five false claims in #9 were all of the second kind.
-  The counts most likely to go stale are the ones tied to constants —
-  `DEFAULT_ARCHIVE_CAPACITY`, `WEEKS_PLAYED`, `SESSIONS`. `src/docs.drift.test.ts`
-  now holds a first slice of them to the code's standard: it reads the docs,
-  computes each expected number from the code — an exported constant, or a count
-  taken by running the real adapter → translation pipeline — and asserts the doc
-  quotes it, so a constant that moves fails the doc that still carries the old
-  number. It covers the three named constants (via `throughWeek`, and the market's
-  session count derived from distinct daily bars), the two history-tier sizes, and
-  the three gardens' bed/plant counts. Deliberately *not* asserted: the
-  machine-specific numbers in the performance tables (ms, MB, fps), which are
-  honest one-machine measurements and are meant to vary. What is left is to widen
-  the net as more constant-tied numbers earn a mention — the NFL backfill count
-  (85) is derivable but was left out because it needs the backfill run rather than
-  a constant read.
+- **Docs drift, and CI only partly catches it.** CI checks the code, not the prose
+  about it. The five false claims in #9 were all prose. The numbers most likely to
+  go stale are the ones tied to constants: `DEFAULT_ARCHIVE_CAPACITY`,
+  `WEEKS_PLAYED` and `SESSIONS`. `src/docs.drift.test.ts` covers a first set of
+  them. It reads the docs, computes each expected number from the code (an
+  exported constant, or a count from running the real adapter → translation
+  pipeline), and asserts the doc quotes it, so a constant that changes fails the
+  doc that still has the old number. It covers those three constants (via
+  `throughWeek`, and the market's session count taken from distinct daily bars),
+  the two history tier sizes, and the three gardens' bed and plant counts. It
+  deliberately doesn't check the machine-specific numbers in the performance tables
+  (ms, MB, fps), which are honest measurements of one machine and expected to vary.
+  The NFL backfill count (85) could be derived too, but it was left out because it
+  needs the backfill to run instead of a constant read. Widen the test as more
+  constant-tied numbers get mentioned. **If you edit the docs, run it**, because it
+  depends on phrasings like "8 divisions" and "140 slots".

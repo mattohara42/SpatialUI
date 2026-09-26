@@ -1,270 +1,248 @@
-# The garden builder — an end-user UI
+# The garden builder
 
-**Built, the offline half.** This began as a proposal for the one piece of the
-"user-defined source" sequence that this repository could finish without a
-network — **the UI a non-developer uses to point the garden at their own data** —
-and that half now ships. It is step 5 of the sequence in `docs/sources.md`, and
-the file's argument held: the config UI was reachable now, not (as that file
-assumed) only after the backend of step 6. What remains deferred is only the
-*fetch*, which genuinely needs the backend.
+**Status: the offline half is built.** This started as a proposal for the one
+part of the "user-defined source" plan this repository could finish without a
+network: **a UI that lets a non-developer point the garden at their own data.**
+That part now ships. It's step 5 of the sequence in `docs/sources.md`. The
+proposal's main claim held up: the config UI could be built right away, and
+didn't have to wait for the backend in step 6 as `docs/sources.md` had assumed.
+The only thing still deferred is the *fetch*, which really does need a backend.
 
-Read `docs/sources.md` for the two-problems-in-one-sentence framing and the
-declarative interpreter this builds on, `translation/declarative.ts` for the
-`DeclarativeMapping` shape the form produces, and `DESIGN.md` for the reading
-language the UI must not let a user break. This file is the part those do not
-carry: which half of the UI is buildable offline, what shape it takes, and the
-one thing it exists to prevent.
+For background, `docs/sources.md` describes the declarative interpreter this
+builds on, `translation/declarative.ts` defines the `DeclarativeMapping` shape
+the form produces, and `DESIGN.md` describes the reading language the UI mustn't
+let a user break. This file covers which half of the UI works offline, what it
+looks like, and the one mistake it exists to prevent.
 
 ---
 
 ## What shipped
 
-The builder is a modal, opened from a quiet `+ garden` at the end of the garden
-row and — for editing — a `configure` button that appears **only while standing
-in a garden the user built**. That placement is the whole posture: a garden is
-configured once, occasionally tweaked, and otherwise never seen, because the
-mapping persists and the garden is just another button. The config is not daily
-chrome.
+The builder is a modal. You open it from a small `+ garden` button at the end of
+the garden row. To edit, there's a `configure` button that **only appears while
+you're in a garden you built**. That placement reflects how it gets used: you
+set a garden up once, tweak it now and then, and otherwise never see the config
+again, because the mapping persists and the garden becomes just another button.
 
-- **`src/GardenBuilder.tsx`** — the form and the live preview, side by side. The
-  form is opinionated on purpose (see below); the preview runs the *real*
-  interpreter (`previewMapping`), so what it shows is exactly what will ship, and
-  the interpreter's own path-named errors are the validation.
-- **`src/state/userSources.ts`** — the pure core: `userSourceFromConfig` builds a
-  generated-shaped `LiveSource` over the pasted snapshot (no `refresh`,
-  `pollable: false`, a plain-duration stale policy), `previewMapping` translates
-  and summarizes, and `loadUserConfigs`/`saveUserConfigs` persist the mapping —
-  never fabricated data — under `spatialui.gardens.v1`, apart from the observation
-  record. 14 tests.
-- **`src/state/ecosystemStore.ts`** — `composeEcosystem` folds persisted user
-  gardens in beside the built-in sources, defensively (a stored mapping that no
-  longer translates is skipped, not fatal); `addUserGarden`/`removeUserGarden`
-  fold and purge at runtime, an edit purging the old garden's nodes before the new
-  ones land.
+- **`src/GardenBuilder.tsx`** holds the form and the live preview, side by side.
+  The form is deliberately opinionated (see below). The preview runs the *real*
+  interpreter through `previewMapping`, so what it shows is exactly what you'll
+  get, and the interpreter's own errors, which name the offending path, act as
+  the validation.
+- **`src/state/userSources.ts`** is the pure core. `userSourceFromConfig` builds
+  a generator-style `LiveSource` over the pasted snapshot (no `refresh`,
+  `pollable: false`, and a plain-duration stale policy). `previewMapping`
+  translates and summarizes. `loadUserConfigs` and `saveUserConfigs` persist the
+  mapping under `spatialui.gardens.v1`, separate from the observation record, and
+  never store made-up data. 14 tests.
+- **`src/state/ecosystemStore.ts`** adds persisted user gardens next to the
+  built-in sources in `composeEcosystem`. It does this defensively: a stored
+  mapping that no longer translates is skipped instead of crashing the app.
+  `addUserGarden` and `removeUserGarden` do the same at runtime. An edit clears
+  the old garden's nodes before the new ones go in.
 
-Deferred, and only this: the **live fetch** (arbitrary hosts need the backend
-proxy of `docs/sources.md` step 6) and, following it, real polling. A user garden
-today is one hand-pasted snapshot that greys into staleness honestly, because
-nothing is updating it. The `completions` block the interpreter supports is not
-in the form yet — the next increment.
-
----
-
-## The reframe: the config UI is not blocked on the network
-
-`docs/sources.md` and `HANDOFF.md` both bundle the config UI (step 5) with the
-backend fetch (step 6) as two things "waiting on the same network." That is half
-right, and the wrong half is the opening this document is about.
-
-Two separable things wear one word, *connection*:
-
-- **The fetch** — pulling a payload from an arbitrary third-party URL — genuinely
-  needs a backend. A browser cannot fetch arbitrary hosts (CORS), secrets do not
-  belong in a client, and pointing the app at a user-named host from the browser
-  is a request-forgery surface. This is real and it stays deferred.
-
-- **The mapping — authoring a `DeclarativeMapping` and seeing the garden it
-  makes** — needs no network at all. `translation/declarative.ts` is built,
-  runs in the browser, and is covered by 30 tests. Hand it a payload the user
-  **pasted or uploaded** instead of one a backend fetched, and the entire "turn
-  raw JSON into a garden" loop runs offline, today.
-
-So the end-user UI is one of the few high-value items left that this environment
-can actually complete. A live adapter, a real Prometheus socket, and the
-unattended collector all need egress this container does not have. The builder
-does not, because the interpreter it sits on already exists and the app is
-synchronous by contract — a pasted snapshot is exactly the shape a generator
-source already hands `read(now)`.
-
-The seam this leans on is the same one Prometheus proved: `promSource` fetches
-through a `fetchImpl` argument with a mock in that slot (`adapters/prometheus/
-mock.ts`), and going live is swapping the mock for the platform `fetch`. The
-builder is the general case of the mock: the user's pasted payload stands in for
-the fetch, and the same swap — when a backend exists — turns an authored mapping
-into a live one with nothing in the mapping changing.
+What's deferred is the **live fetch** (arbitrary hosts need the backend proxy
+from step 6 of `docs/sources.md`) and the real polling that follows from it.
+Today a user garden is one pasted snapshot, and it greys into staleness because
+nothing is updating it, which is accurate. The interpreter supports a
+`completions` block, but the form doesn't offer it yet. That's the next piece.
 
 ---
 
-## What it is
+## Why the config UI didn't have to wait for the network
 
-A panel in the app, next to the garden buttons in `App.tsx`, that walks a user
-from a blob of JSON to a garden they can walk into. Four steps, in order,
-because each one needs the last:
+`docs/sources.md` and `HANDOFF.md` both grouped the config UI (step 5) with the
+backend fetch (step 6) as two things waiting on network access. That was only
+half right.
 
-1. **Bring data.** Paste a sample payload, or upload a `.json` file. This is the
-   thing a backend would eventually fetch on a cadence; here the user supplies
-   one snapshot of it by hand. Nothing is fetched.
+The word *connection* covers two separate things:
 
-2. **Map it.** A form over `DeclarativeMapping`: where the array of records
-   lives, which field is the label, which is the level, how the level scales
-   onto vitality, and — the two the numbers cannot state — the scale's direction
-   and the polarity. Optional: an activity field, a bed group-by, an emblem
-   field, a completions block.
+- **The fetch**, pulling a payload from an arbitrary third-party URL, does need a
+  backend. A browser can't fetch arbitrary hosts because of CORS, secrets don't
+  belong in a client, and letting the browser hit a host the user names opens a
+  request-forgery hole. This stays deferred.
+- **The mapping**, writing a `DeclarativeMapping` and seeing the garden it makes,
+  needs no network at all. `translation/declarative.ts` already exists, runs in
+  the browser, and has 30 tests. Give it a payload the user **pasted or
+  uploaded** instead of one a backend fetched, and the whole "raw JSON to garden"
+  loop runs offline.
 
-3. **See it.** A live preview runs `translateDeclarative` on the pasted payload
-   as the form changes, and shows either the resulting garden — the same nodes
-   the hand-written translators produce, rendered by the same scene — or the
-   interpreter's own error, verbatim, with the offending path named.
+That made the builder one of the few valuable pieces this environment could
+actually finish. A live adapter, a real Prometheus connection and the unattended
+collector all need outbound network access this container doesn't have. The
+builder doesn't, because the interpreter already existed and the app is
+synchronous by contract. A pasted snapshot is exactly what a generator source
+already hands to `read(now)`.
 
-4. **Keep it.** Add the mapping as a source for this session, so it becomes a
-   garden button and behaves like every other garden: it greys on staleness, it
-   collects, it scrubs. (Persistence and polling are later rungs — see "Scope".)
-
----
-
-## The form is opinionated, and that is the whole point
-
-The temptation is a generic JSON-path editor: pick any field, map it to any
-axis, done. That would be the feature's failure, not its first cut. `DESIGN.md`
-and the World garden are one long argument that the translator is **the only
-place the mapping is decided**, and it decides two things the raw data does not
-carry. The form's job is to make the user decide them *deliberately*, and to
-make the safe path the easy one.
-
-- **The scale is a comparison, not a quantity.** `vitality` is [0, 1], where 0
-  is dying and 1 is thriving. A fundraising total of $2M is neither until the
-  user says what the floor and ceiling are. The form must ask for a min and a
-  max and refuse to guess them from the data's own range — because "scale to the
-  spread of what is here" is exactly the naive ranking the World garden forbade,
-  the one where a country wilts visibly *because* it is at war. `AxisScale`
-  already carries direction in its shape (`min > max` means "lower is better"),
-  so the form asks one plain question — "is a higher number healthier?" — and
-  writes the scale accordingly. There is no default. A blank scale is an
-  incomplete mapping, not a mapping with a sensible fallback.
-
-- **Polarity is mandatory and uninferable.** Is growth good news? A short
-  position, a weed, a rising failed-login count, the opposition's fundraising —
-  all `suppress`, and a suppress plant grows as a weed so thriving reads as
-  alarm. This is the one rule the entire environment model exists to hold, and
-  no amount of looking at the numbers reveals it. The form makes it a required
-  choice with the consequence spelled out in plain words next to each option, not
-  a toggle with a default. `translation/declarative.ts` already types it as
-  required with no default; the UI must not paper over that.
-
-Everything else on the form is identity, not signal, and can carry a sensible
-default: planting look (`orchard`), domain (`general`, the open fallback bucket —
-see `docs/sources.md`, "Domain — opened"), emblem (initials of the label, via
-`emblemFrom`). Trend is not on the form at all, because it is derived, never
-supplied — the config names the level and the system computes the delta between
-polls.
+This relies on the same seam Prometheus uses. `promSource` fetches through a
+`fetchImpl` argument that currently holds a mock (`adapters/prometheus/mock.ts`),
+and going live means swapping in the platform `fetch`. The builder is the general
+version of that mock: the user's pasted payload stands in for the fetch. Once a
+backend exists, the same swap turns a saved mapping into a live one without
+changing the mapping.
 
 ---
 
-## The preview is the honesty check, and it comes for free
+## How it works
 
-`translateDeclarative` already fails loudly: a level path that is not a finite
-number throws with the path named, a records path that is not an array throws,
-a completions path that is not an array throws. The preview surfaces those
-verbatim — the error message *is* the validation. There is no second validation
-layer to write and keep in sync with the interpreter, which is the point of
-routing the preview through the real translator rather than a UI-side copy of its
-rules.
+The builder walks a user from a blob of JSON to a garden they can walk into, in
+four steps. Each depends on the one before.
 
-When the mapping is complete and the payload parses, the preview renders a real
-garden using the same scene the app already draws — which means the honesty test
-the whole feature must pass is visible *before* the user commits: does a stranger
-read the health right without being told the domain? A mapping that produces a
-confident-looking wrong plant has failed, and the preview is where the user (and
-a reviewer) can see it fail. This is why the preview is not optional polish; it
-is the feature's safety mechanism.
-
-One care: the preview must run the interpreter, not approximate it. If the
-preview and the committed source ever disagree, the preview is worthless as a
-check. Route both through `translateDeclarative` with the same mapping and the
-same payload, and the thing the user approved is exactly the thing that ships
-into `SOURCES`.
+1. **Bring data.** Paste a sample payload or upload a `.json` file. Eventually a
+   backend would fetch this on a schedule. For now the user supplies one snapshot
+   by hand and nothing is fetched.
+2. **Map it.** Fill in a form over `DeclarativeMapping`: where the array of
+   records lives, which field is the label, which is the level, and how the level
+   scales onto vitality. It also asks the two things the numbers can't tell you,
+   the scale's direction and the polarity. Optional fields cover activity, a bed
+   group-by and an emblem.
+3. **See it.** A live preview runs `translateDeclarative` on the payload as you
+   edit. It shows either the resulting garden (the same nodes the hand-written
+   translators produce, drawn by the same scene) or the interpreter's error
+   exactly as written, with the bad path named.
+4. **Keep it.** Add it as a garden. It becomes a garden button and behaves like
+   every other garden: it greys when stale, it collects, it scrubs.
 
 ---
 
-## How an authored mapping enters the app
+## The form is opinionated on purpose
 
-A built mapping becomes a generator-style `LiveSource` over the pasted snapshot
-(`userSourceFromConfig`):
+The obvious design is a generic JSON-path editor: pick any field, map it to any
+axis, done. That would defeat the point. `DESIGN.md` and the World garden both
+argue at length that the translator is **the one place the mapping gets decided**,
+and it has to decide two things the raw data doesn't carry. The form makes the
+user decide them on purpose and makes the safe choice the easy one.
+
+- **The scale is a comparison, not a quantity.** `vitality` runs from 0 (dying)
+  to 1 (thriving). A fundraising total of $2M is neither until the user says what
+  the floor and ceiling are. So the form asks for a min and a max and won't guess
+  them from the data's own range. Scaling to the spread of whatever's there is the
+  naive ranking the World garden ruled out, the one that makes a country wilt
+  visibly just because it's at war. `AxisScale` already encodes direction (`min >
+  max` means lower is better), so the form asks one plain question, "is a higher
+  number healthier?", and writes the scale to match. There's no default. A blank
+  scale is an incomplete mapping, not a mapping with a fallback.
+- **Polarity is required and can't be inferred.** Is growth good news? A short
+  position, a weed, a rising count of failed logins, the opposition's fundraising
+  are all `suppress`, and a suppress plant grows as a weed so that thriving looks
+  alarming. This is the rule the whole environment model exists to protect, and
+  no amount of staring at the numbers reveals it. The form makes it a required
+  choice, with the consequence of each option written out in plain words, instead
+  of a toggle with a default. `translation/declarative.ts` already types it as
+  required, and the UI mustn't hide that.
+
+Everything else on the form is identity, not signal, and gets a sensible default:
+planting look (`orchard`), domain (`general`, the open catch-all described in
+`docs/sources.md` under "Domain: opened"), and emblem (the label's initials, via
+`emblemFrom`). Trend isn't on the form at all. It's always derived: the config
+names the level and the system computes the change between polls.
+
+---
+
+## The preview is the honesty check
+
+`translateDeclarative` already fails loudly. A level path that isn't a finite
+number throws with the path named, and so does a records path or completions path
+that isn't an array. The preview shows those errors as they are, so the error
+message is the validation. There's no second validation layer to write and keep
+in sync, which is why the preview goes through the real translator instead of a
+UI-side copy of its rules.
+
+When the mapping is complete and the payload parses, the preview draws a real
+garden with the same scene the app uses. That puts the feature's key test in
+front of the user before they commit: can a stranger read the health correctly
+without being told the domain? A mapping that produces a confident but wrong
+plant has failed, and the preview is where the user (or a reviewer) sees it fail.
+So the preview isn't polish. It's the feature's safety mechanism.
+
+That only works if the preview runs the interpreter and doesn't approximate it.
+If the preview and the saved source ever disagreed, the preview would be useless
+as a check. Both go through `translateDeclarative` with the same mapping and the
+same payload, so what the user approved is exactly what gets added.
+
+---
+
+## How a saved mapping enters the app
+
+`userSourceFromConfig` turns a saved mapping into a generator-style `LiveSource`
+over the pasted snapshot:
 
 - `read(now)` calls `translateDeclarative(payload, mapping, { asOf: now })`. No
-  `previous` is threaded, so trend is 0 — which is the honest answer for one
-  static snapshot: nothing has moved since there is no earlier reading to have
-  moved from. Trend becomes real only once a fetch supplies a second one.
-- No `refresh`. A pasted snapshot has no next reading to fetch — that is the
-  fetch half, deferred. So the source reads the one payload it was given; the
-  garden greys into staleness honestly, because for a hand-pasted snapshot that
-  *is* the truth: nothing is updating it.
-- `pollable: false`, for the same reason. A generated source that is re-asked
-  must extend, never slide (see `HANDOFF.md`, the decisions-most-likely-to-be-
-  misread); a static snapshot has nothing to extend, so it is not polled.
-- A `StaleSchedule` as a plain duration — the degenerate schedule, exactly what
-  the league uses — since a pasted snapshot carries no calendar to point
-  `dueAfter` at. The form offers a small set (1h / 6h / 1d), defaulting to six.
+  `previous` reading is passed in, so trend is 0. That's correct for one static
+  snapshot, since there's no earlier reading to have moved from. Trend becomes
+  meaningful once a fetch supplies a second one.
+- There's no `refresh`, because a pasted snapshot has no next reading to fetch.
+  The source reads the one payload it has and the garden greys into staleness.
+  For a pasted snapshot that's simply true: nothing is updating it.
+- It's marked `pollable: false` for the same reason. A generated source that gets
+  asked again has to extend its data and never slide it (see the decisions most
+  likely to be misread in `HANDOFF.md`). A static snapshot has nothing to extend,
+  so it isn't polled.
+- Its `StaleSchedule` is a plain duration, the simplest kind and the same one the
+  league uses, because a pasted snapshot has no calendar to point `dueAfter` at.
+  The form offers 1h, 6h or 1d, defaulting to 6h.
 
-Rather than mutate the `SOURCES` constant, the store folds user gardens in from
-`localStorage`: `composeEcosystem` reads `loadUserConfigs()` and lays each one's
-nodes over the built-ins at startup, and `addUserGarden`/`removeUserGarden` do
-the same fold (and, for a garden already present, a purge first) at runtime.
-Nothing downstream of the store learns a source arrived from a form rather than
-at module load; the scene renders whatever gardens the node map contains.
-
----
-
-## What is deferred, and to what
-
-- **The live fetch.** Arbitrary third-party hosts need the backend proxy of
-  `docs/sources.md` step 6. Until then the builder is paste/upload-only. This is
-  the *only* part of the builder that the network blocks, and naming it precisely
-  is half the value of this document.
-- **Real polling.** Follows the fetch: a source with a `refresh` that pulls the
-  next payload. The seam is Prometheus's `fetchImpl`; the builder's source is the
-  generator shape until there is something to fetch.
-- **The completion verb.** The interpreter maps a `completions` block, but the
-  form does not offer it yet. A source shaped around finishing (a CI feed, a
-  to-do list) can be authored the moment the form grows those fields.
-- **Edges and the published-vs-described split.** The interpreter does not
-  express these yet (named in `translation/declarative.ts`), so the form cannot
-  either. A first-cut source skips edges and translates one snapshot as-of one
-  moment, exactly as the interpreter does.
-
----
-
-## Scope, as a ladder
-
-Each rung is a shippable stop, and every rung is fully offline. The first two
-shipped together; the third waits on nothing but its own worth.
-
-1. ~~**Author + preview + session use.**~~ **Done.** Paste → form → live preview →
-   add as a garden. The whole authoring loop and the honesty check.
-2. ~~**Persist the mapping.**~~ **Done.** The `DeclarativeMapping` and its sample
-   payload persist to `localStorage` under `spatialui.gardens.v1`, apart from the
-   observation record, so an authored garden survives a reload and the builder
-   need not be reopened — configure once. The mapping and the one pasted snapshot
-   are stored; no fabricated data, the same rule the collector holds.
-3. **The mock-fetch poll seam.** Wire a saved mapping through a mock `fetchImpl`
-   the way Prometheus does, so it "polls" and advances and greys on a real
-   schedule — the closest a source gets to live without a backend, and the last
-   rung before the fetch of step 6 simply swaps the mock out.
+The store doesn't modify the `SOURCES` constant. `composeEcosystem` reads
+`loadUserConfigs()` from `localStorage` at startup and lays each user garden's
+nodes over the built-in ones. `addUserGarden` and `removeUserGarden` do the same
+at runtime, clearing an existing garden's nodes first when it's being replaced.
+Nothing downstream of the store knows a source came from a form instead of being
+defined in code. The scene draws whatever gardens the node map contains.
 
 ---
 
 ## Decisions taken
 
-- **The builder is a modal.** Opened from a quiet `+ garden` at the end of the
-  garden row, and edited from a `configure` button that shows only while standing
-  in a user garden. It is setup, not daily chrome, so it stays out of the way and
-  the preview gets the room a corner panel could not give it.
-- **The sample payload is stored with the mapping.** A garden has to render on
-  reload without a fetch it cannot yet make, so the one pasted snapshot persists
-  beside the mapping. This does store the user's own pasted data in their own
-  browser — acceptable because it is theirs and local; the third-party-terms trap
-  `docs/sources.md` flags is about *ingesting a vendor's* content, which the
-  paste path does not do. Revisit if the fetch path ever stores fetched text.
+- **The builder is a modal.** It's opened from a small `+ garden` at the end of
+  the garden row and edited from a `configure` button that only shows while
+  you're in a user garden. It's setup, not something you look at every day, so it
+  stays out of the way, and the preview gets more room than a corner panel could
+  give it.
+- **The sample payload is stored with the mapping.** A garden has to render after
+  a reload without a fetch it can't make yet, so the pasted snapshot is saved next
+  to the mapping. That means the user's own data is stored in their own browser,
+  which is fine because it's theirs and it's local. The third-party terms problem
+  flagged in `docs/sources.md` is about ingesting a vendor's content, and pasting
+  doesn't do that. Revisit this if the fetch path ever stores fetched text.
 - **The saturated-axis check lives in the preview.** The summary reports each
-  axis's spread and names any *data-driven* axis (vitality always, activity when
-  mapped) that is flat across the garden — the hardest failure to see, met before
-  the user commits rather than months later in a distribution. Maturity, a
-  constant by design, is never flagged: warning on it would be noise that hides
-  the real one.
+  axis's spread and names any data-driven axis (vitality always, activity when
+  mapped) that's flat across the whole garden. That failure is the hardest to
+  spot, and this catches it before the user commits instead of months later.
+  Maturity is constant by design, so it's never flagged. Warning on it would just
+  be noise that hides the real warnings.
 
-The test the whole feature has to pass is the one every source so far has passed,
-and the builder must pass it *for a stranger's data the developer never saw*: a
-person glancing at the garden reads health correctly without being told the
-domain, and the app never asserts something it cannot show the evidence for. A
-builder that lets a user produce a confident-looking wrong plant has failed that
-test — and the preview is where it is meant to be caught.
+---
+
+## What's next
+
+The first two steps shipped together, and everything on this list stays
+offline except the fetch.
+
+1. ~~**Author, preview, and add to the session.**~~ **Done.** Paste, fill the
+   form, check the live preview, add it as a garden.
+2. ~~**Persist the mapping.**~~ **Done.** The `DeclarativeMapping` and its sample
+   payload are saved to `localStorage` under `spatialui.gardens.v1`, separate from
+   the observation record, so a garden survives a reload without reopening the
+   builder. Only the mapping and the one pasted snapshot are stored, never made-up
+   data, which is the same rule the collector follows.
+3. **Add the completion fields to the form.** The interpreter already maps a
+   `completions` block. Once the form offers it, someone can build a garden around
+   finished work (a CI feed, a to-do list) without a developer.
+4. **A mock-fetch poll seam.** Run a saved mapping through a mock `fetchImpl` the
+   way Prometheus does, so it "polls", advances and greys on a real schedule. This
+   is as close to live as a source gets without a backend, and after it the step 6
+   fetch just swaps the mock out.
+5. **The live fetch and real polling**, once the backend proxy for arbitrary
+   hosts exists. This is the only part of the builder the network blocks.
+
+Edges, and the split between when something was published and when it describes,
+aren't supported by the interpreter yet (see `translation/declarative.ts`), so the
+form can't offer them either. For now a user source skips edges and translates
+one snapshot as of one moment.
+
+The builder has to pass the same test every source so far has passed, except this
+time with a stranger's data that no developer has seen. Someone glancing at the
+garden should read health correctly without being told the domain, and the app
+should never claim something it can't show evidence for. If the builder lets a
+user produce a confident but wrong plant, it has failed, and the preview is where
+that's supposed to get caught.

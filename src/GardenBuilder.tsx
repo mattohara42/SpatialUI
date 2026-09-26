@@ -183,9 +183,9 @@ export function GardenBuilder({
           <button style={ghost} onClick={onClose}>close</button>
         </div>
         <p style={hint}>
-          Point the garden at your own data. Paste one snapshot of a JSON feed, say
-          which fields mean what, and the two things numbers can’t: what counts as
-          thriving, and whether growth is good news.
+          Point the garden at your own data. Paste one snapshot of a JSON feed and say
+          which fields mean what. You also need to say two things the numbers can’t:
+          what counts as thriving, and whether growth is good news.
         </p>
 
         <div style={grid}>
@@ -197,7 +197,7 @@ export function GardenBuilder({
             </Field>
 
             <Field label="Sample payload (JSON)"
-              note="What a backend would fetch. Here you bring one snapshot by hand.">
+              note="Normally a backend would fetch this. For now, paste one snapshot.">
               <textarea
                 style={{ ...input, height: 150, resize: 'vertical', fontFamily: 'ui-monospace, monospace' }}
                 value={payloadText}
@@ -208,7 +208,7 @@ export function GardenBuilder({
             </Field>
 
             <Field label="Records path"
-              note="Where the array of records sits, dotted. Leave blank if the payload is the array.">
+              note="Dotted path to the array of records. Leave blank if the payload is the array.">
               <input style={input} value={recordsPath} onChange={(e) => setRecordsPath(e.target.value)}
                 placeholder="teams" />
             </Field>
@@ -225,7 +225,7 @@ export function GardenBuilder({
             </div>
 
             <Field label="What the level means"
-              note="Deliberate, never guessed: state the value that reads as dying and the one that reads as thriving. Put dying above thriving when lower is better (a latency, an error rate).">
+              note="This is never guessed. Enter the value that means dying and the value that means thriving. If lower is better (latency, error rate), put the dying value above the thriving one.">
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input style={{ ...input, width: 90 }} value={dying} onChange={(e) => setDying(e.target.value)}
                   placeholder="dying (0)" />
@@ -236,14 +236,14 @@ export function GardenBuilder({
             </Field>
 
             <Field label="Polarity"
-              note="The one rule the whole model holds. It cannot be read from the numbers.">
+              note="Is growth good news? The numbers can’t tell, so you have to.">
               <label style={radio}>
                 <input type="radio" checked={polarity === 'nurture'} onChange={() => setPolarity('nurture')} />
-                <span><b>Nurture</b> — more is good. A healthy plant is thriving.</span>
+                <span><b>Nurture</b>: more is good. A healthy plant thrives.</span>
               </label>
               <label style={radio}>
                 <input type="radio" checked={polarity === 'suppress'} onChange={() => setPolarity('suppress')} />
-                <span><b>Suppress</b> — more is alarm (a weed, a short, failed logins). Growth reads as trouble.</span>
+                <span><b>Suppress</b>: more is bad (a weed, a short position, failed logins). Growth shows up as trouble.</span>
               </label>
             </Field>
 
@@ -254,7 +254,7 @@ export function GardenBuilder({
 
             <label style={radio}>
               <input type="checkbox" checked={activityEnabled} onChange={(e) => setActivityEnabled(e.target.checked)} />
-              <span>Map a second field to <b>activity</b> (animation liveliness)</span>
+              <span>Map a second field to <b>activity</b> (how lively the plant moves)</span>
             </label>
             {activityEnabled && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -285,7 +285,7 @@ export function GardenBuilder({
             </div>
 
             <Field label="Where the data came from"
-              note="Provenance, shown in the inspection panel. A source on real data should say.">
+              note="Shown in the inspection panel. If this is real data, say where it came from.">
               <input style={input} value={provenance} onChange={(e) => setProvenance(e.target.value)}
                 placeholder="e.g. exported from my spreadsheet, 2026-08-11" />
             </Field>
@@ -348,8 +348,8 @@ function PreviewBody({ summary }: { summary: import('./state/userSources').Garde
       {summary.saturated.length > 0 && (
         <div style={warnBox}>
           Flat axis: <b>{summary.saturated.join(', ')}</b> is the same for every plant, so it
-          carries no signal. A saturated axis looks exactly like one that is always on —
-          widen its scale, or map a field that actually varies.
+          tells you nothing. A flat axis looks exactly like one that’s always on. Widen
+          its scale, or map a field that actually varies.
         </div>
       )}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>

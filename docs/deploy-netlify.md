@@ -1,136 +1,143 @@
 # Deploying to Netlify
 
-The runtime-agnostic backend (`src/backend/`) plus the Netlify shells in
-`netlify/functions/` are everything a live Prometheus garden needs. This is the
-operator's checklist: one dependency, a handful of env vars, and connect the repo.
+The runtime-agnostic backend in `src/backend/`, together with the Netlify
+wrappers in `netlify/functions/`, is everything a live Prometheus garden needs.
+This is the operator's checklist: install one dependency, set a few environment
+variables, and connect the repo.
 
-Read `docs/backend.md` for why the pieces are shaped this way; this file is just
-how to stand them up on Netlify.
+`docs/backend.md` explains why the pieces are shaped the way they are. This file
+only covers standing them up on Netlify.
 
 ---
 
 ## What deploys
 
-Three things, all already in the repo:
+Four things, all already in the repo:
 
-- **The static site** — `npm run build` → `dist/`, served by Netlify's CDN.
-- **The proxy** (`netlify/functions/prometheus-proxy.ts`) — the fetch a browser
-  can't make. Routes itself at `/api/proxy/prometheus`; the client POSTs
-  `{ sourceId, promql }`, it resolves the id against the env-built registry and
-  returns the Prometheus envelope. All logic is the tested `handleProxyRequest`.
-- **The collector** (`netlify/functions/collect-scheduled.ts`) — a Scheduled
-  Function that runs the tested `createCollectorLoop.tick()` every minute,
-  persisting the `ObservedRecord` to **Netlify Blobs** so a season survives across
-  invocations and a shut tab.
-- **The NFL proxy** (`netlify/functions/nfl-proxy.ts`) — the sibling of the
-  Prometheus one, for ESPN's public feed. Routes itself at `/api/proxy/nfl`; the
-  client POSTs `{ sourceId, path }`, it checks the path against the four permitted
-  ESPN resources and returns ESPN's JSON. All logic is the tested
-  `handleNflProxyRequest`. See `docs/nfl-live.md` for what it fetches.
+- **The static site.** `npm run build` writes `dist/`, which Netlify's CDN serves.
+- **The Prometheus proxy** (`netlify/functions/prometheus-proxy.ts`). This makes
+  the fetch a browser can't. It routes itself at `/api/proxy/prometheus`. The
+  client POSTs `{ sourceId, promql }`, the proxy looks the id up in the registry
+  built from env vars, and it returns the Prometheus response envelope. All of
+  the logic lives in the tested `handleProxyRequest`.
+- **The collector** (`netlify/functions/collect-scheduled.ts`). A Scheduled
+  Function that runs the tested `createCollectorLoop.tick()` every minute and
+  saves the `ObservedRecord` to **Netlify Blobs**, so a season survives between
+  invocations and keeps going while no tab is open.
+- **The NFL proxy** (`netlify/functions/nfl-proxy.ts`). The Prometheus proxy's
+  sibling, for ESPN's public feed. It routes itself at `/api/proxy/nfl`. The
+  client POSTs `{ sourceId, path }`, the proxy checks the path against the four
+  ESPN resources it allows, and it returns ESPN's JSON. The logic lives in the
+  tested `handleNflProxyRequest`. `docs/nfl-live.md` covers what it fetches.
 
 ---
 
 ## One dependency
 
-The functions add exactly one package the app itself does not use — the Blobs
-client for persistence:
+The functions need one package the app doesn't use, the Blobs client for
+persistence:
 
 ```bash
 npm install @netlify/blobs
 ```
 
-The proxy needs nothing extra: it uses the Web-standard `Request`/`Response` and
-an in-file `config.path`, so it carries no `@netlify/functions` import. (The app's
-own `npm run build`, `npm run test`, and `npm run typecheck` never touch
-`netlify/`, so this dependency does not affect them.)
+The proxy needs nothing extra. It uses the web-standard `Request` and `Response`
+and an in-file `config.path`, so it doesn't import `@netlify/functions`. The
+app's own `npm run build`, `npm run test` and `npm run typecheck` never touch
+`netlify/`, so this dependency doesn't affect them.
 
 ---
 
 ## Environment variables
 
-Set these on the site (`netlify env:set NAME value`, or the Netlify UI). The
-**client** var is read at build time; the **server** vars are read by the
-functions at request time and never reach the browser.
+Set these on the site with `netlify env:set NAME value` or in the Netlify UI.
+The **client** variables are read at build time. The **server** variables are
+read by the functions at request time and never reach the browser.
 
-### Client (build-time)
+### Client (build time)
 
 | var | value |
 | --- | --- |
-| `VITE_PROM_PROXY_URL` | `/api/proxy/prometheus` — points the Prometheus source at the proxy. Unset keeps the in-process mock. |
-| `VITE_NFL_PROXY_URL` | `/api/proxy/nfl` — points the NFL source at the proxy for a real ESPN season. Unset keeps the seeded season. |
+| `VITE_PROM_PROXY_URL` | `/api/proxy/prometheus` points the Prometheus source at the proxy. Leave it unset to keep the in-process mock. |
+| `VITE_NFL_PROXY_URL` | `/api/proxy/nfl` points the NFL source at the proxy for a real ESPN season. Leave it unset to keep the seeded season. |
 
-### Server (function runtime) — the registry, the allowlist's operator face
+### Server (function runtime)
+
+These build the registry, which is also the allowlist of what the proxy will
+fetch.
 
 | var | required | meaning |
 | --- | --- | --- |
 | `PROM_ENDPOINT` | ✅ | Prometheus base URL, e.g. `https://prometheus.example.com`. |
 | `PROM_QUERY` | ✅ | The PromQL instant query that becomes the plants, e.g. `probe_duration_seconds` or `up`. |
 | `PROM_VITALITY_MIN` | ✅ | Metric value that reads as *dying* (0 on the axis). |
-| `PROM_VITALITY_MAX` | ✅ | Metric value that reads as *thriving* (1). For latency (lower is better) put `min` above `max`; for `up` use `0` and `1`. |
-| `PROM_TOKEN` |  | Bearer token, if the server wants one. Server-side only. |
+| `PROM_VITALITY_MAX` | ✅ | Metric value that reads as *thriving* (1). For latency, where lower is better, put `min` above `max`. For `up` use `0` and `1`. |
+| `PROM_TOKEN` |  | Bearer token, if the server wants one. Server side only. |
 | `PROM_ID_LABEL` |  | Label that names a plant. Default `instance`. |
 | `PROM_BED_LABEL` |  | Label that groups plants into beds. Default `job`. |
 | `PROM_POLARITY` |  | `nurture` (growth is good) or `suppress` (growth is alarm). Default `nurture`. |
 | `PROM_DOMAIN` |  | Free-form domain tag for the HUD. Default `devops`. |
 | `PROM_PLANTING` |  | Bed look. Default `conifer-stand`. |
-| `PROM_SCRAPE_MS` |  | Scrape interval for the staleness/poll cadence. Default `60000`. |
-| `PROM_INCLUDE_UP` |  | `false` to skip the `up{}` liveness vector. Default on. |
+| `PROM_SCRAPE_MS` |  | Scrape interval, used for staleness and poll timing. Default `60000`. |
+| `PROM_INCLUDE_UP` |  | `false` skips the `up{}` liveness query. On by default. |
 
-`vitality` is required and has no default on purpose: it is the one thing the
-numbers cannot say — *what value is healthy* — and defaulting it would let the
-garden show a confident wrong plant, the exact failure `docs/sources.md` forbids.
+The vitality range is required and has no default on purpose. It's the one thing
+the numbers can't tell you: what value counts as healthy. A default would let
+the garden show a confident but wrong plant, which is exactly the failure
+`docs/sources.md` rules out.
 
-The NFL proxy needs nothing required — ESPN's feed is free and keyless, so setting
-`VITE_NFL_PROXY_URL` is the whole of it:
+The NFL proxy has no required variables. ESPN's feed is free and needs no key, so
+setting `VITE_NFL_PROXY_URL` is all it takes:
 
 | var | required | meaning |
 | --- | --- | --- |
-| `NFL_ENDPOINT` |  | ESPN football base. Defaults to `https://site.api.espn.com/apis/site/v2/sports/football`; override only to front ESPN with your own gateway. |
-| `NFL_TOKEN` |  | Bearer token, only if that gateway wants one. ESPN's public feed does not. |
+| `NFL_ENDPOINT` |  | ESPN football base URL. Defaults to `https://site.api.espn.com/apis/site/v2/sports/football`. Only override it if you put your own gateway in front of ESPN. |
+| `NFL_TOKEN` |  | Bearer token, only if that gateway wants one. ESPN's public feed doesn't. |
 
-Because ESPN needs no operator-set vitality — a football result *is* its own
-health, `win` is `thriving` — the NFL source carries no `vitality` var and no
-confident-wrong-plant risk from a missing one: the mapping is `translation/nfl.ts`,
-not env config. See `docs/nfl-live.md`.
+The NFL source doesn't need an operator-set vitality range because a football
+result already says how things are going: a win is thriving. Its mapping lives in
+`translation/nfl.ts`, not in env config, so there's no way to get a wrong plant
+from a missing variable. See `docs/nfl-live.md`.
 
 ---
 
 ## Deploy
 
-1. `npm install @netlify/blobs` and commit the lockfile change.
-2. Connect the repo to Netlify (`netlify init`, or the UI). `netlify.toml` already
-   sets the build command, publish dir, and functions dir.
-3. Set the env vars above. **Redeploy after setting `VITE_PROM_PROXY_URL`** — it
-   is baked into the client at build time, so a value set after a build does not
-   take effect until the next one.
-4. Enable Netlify Blobs on the site if it is not on by default (it backs the
-   collector's persistence).
+1. Run `npm install @netlify/blobs` and commit the lockfile change.
+2. Connect the repo to Netlify (`netlify init`, or the UI). `netlify.toml`
+   already sets the build command, publish directory and functions directory.
+3. Set the env vars above. **Redeploy after setting the `VITE_` variables.** They
+   are baked into the client at build time, so a value set after a build does
+   nothing until the next one.
+4. Turn on Netlify Blobs for the site if it isn't on by default. The collector
+   stores its record there.
 
-That is the whole of it. With the vars unset the deploy still works — it just runs
-the mock, exactly as it does locally.
+That's it. With the variables unset the deploy still works and runs the mock,
+the same as it does locally.
 
 ---
 
-## How the seams line up
+## How the pieces connect
 
-- The client's `promProxyFetch(PROM_PROXY_URL, 'prometheus')` POSTs to the proxy;
-  the proxy's registry id is `prometheus` — the two must match, and both default
-  to it.
-- The proxy permits only `PROM_QUERY` and `up` for that source (the 403 in
-  `handleProxyRequest`), so a client cannot run arbitrary PromQL on your server.
+- The client's `promProxyFetch(PROM_PROXY_URL, 'prometheus')` POSTs to the proxy,
+  and the proxy's registry id is `prometheus`. The two have to match, and both
+  default to that value.
+- For that source the proxy only allows `PROM_QUERY` and `up` (anything else gets
+  the 403 in `handleProxyRequest`), so a client can't run arbitrary PromQL on
+  your server.
 - The collector writes the record under the same `STORAGE_KEY` the browser uses,
-  so the Blobs blob is byte-identical to a `localStorage` record — the shared
-  `ObservedRecord` format doing its job.
+  so the blob in Netlify Blobs is byte-identical to a `localStorage` record. Both
+  sides share the `ObservedRecord` format.
 
 ---
 
-## Two honest limits
+## Two limits
 
-- **Pull, for now.** A connected tab reads the record and re-fetches through the
-  proxy on its own beat; the server does not push. Push (server → `adopt` over a
-  socket) is a later upgrade and reuses the same core — it is the one open design
-  call in `docs/backend.md`.
-- **Per-minute collection.** Netlify's schedule floor is one minute. The record's
-  fine tier is hourly, so this is finer than anything read back — not a
-  limitation in practice, but worth knowing if a tighter cadence is ever wanted
-  (that is the long-running-service path, not this one).
+- **It pulls for now.** A connected tab reads the record and re-fetches through
+  the proxy on its own schedule. The server doesn't push. Push (the server calling
+  `adopt` over a socket) is a later upgrade that reuses the same core, and it's
+  the one open design decision in `docs/backend.md`.
+- **Collection runs once a minute.** That's Netlify's minimum schedule. The
+  record's finest tier is hourly, so a minute is already finer than anything the
+  app reads back. If you ever need a tighter cadence, that means running a
+  long-lived service instead of this setup.

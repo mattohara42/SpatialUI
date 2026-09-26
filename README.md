@@ -3,17 +3,17 @@
 ![The World garden from the path: countries planted in subregion beds under
 the glass, a vineyard bearing in the centre bed.](docs/images/social-preview.jpg)
 
-System health as a living garden. Services, notes, tickers, threats, a football
-league — anything with a pulse — rendered as plants that thrive, wilt, and sway
-so you can read the state of a system at a glance instead of scanning a
+System health shown as a living garden. Services, notes, stock tickers, security
+threats, a football league, anything with a pulse, drawn as plants that thrive,
+wilt and sway. You read the state of a system at a glance instead of scanning a
 dashboard.
 
-A healthy thing stands tall and leafy; a struggling one wilts toward the ground;
-something you want gone grows as a weed, so a thriving one is alarming on sight.
-Dependencies run underground as root grafts. The aim is *peripheral awareness*:
-the garden sits at the edge of your desk in passthrough AR and you notice
-something drooping while doing something else. Desktop browser is the first
-target; nothing is head-locked, so XR stays open.
+A healthy thing stands tall and leafy. A struggling one wilts toward the ground.
+Something you want gone grows as a weed, so when it thrives you notice straight
+away. Dependencies run underground as root grafts. The goal is *peripheral
+awareness*: the garden sits at the edge of your desk in passthrough AR and you
+notice something drooping while you're doing something else. The desktop browser
+is the first target, and nothing is locked to your head, so XR stays possible.
 
 ## Quick start
 
@@ -28,423 +28,425 @@ npm run typecheck    # tsc --noEmit
 npm run build        # typecheck + production build
 ```
 
-All three run in CI on every push to `main` and every pull request
-(`.github/workflows/ci.yml`), so "the tests pass" is a checked fact rather than
-a claim in a commit message.
+CI runs all three on every push to `main` and every pull request
+(`.github/workflows/ci.yml`).
 
-The scene opens on the **NFL** garden — thirty-two clubs in eight division beds,
-built through the real adapter → translation pipeline — alongside **Markets**,
-thirty-two holdings in eight sector beds through the same pipeline, **World**,
-193 UN member states across twenty-two subregion beds, **Prometheus**, seven
-targets across three job beds fetched through a mock server, and four mock gardens
-(Infrastructure, Vault, Threats, Portfolio) with a live drift tick. It runs with
-no backend: the generated sources are seeded and Prometheus fetches from a mock
-(see below), so nothing leaves the page.
+The app opens on the **NFL** garden and has nine gardens in all:
 
-> **Dev note:** Vite HMR on this project often serves stale code (component
-> state, memoized shader uniforms). If an edit doesn't show, hard-reload the
-> page; if it still doesn't, restart the dev server (`rm -rf node_modules/.vite`
-> and rerun `npm run dev`).
+- **NFL**: thirty-two clubs in eight division beds.
+- **Markets**: thirty-two holdings in eight sector beds.
+- **World**: 193 UN member states in twenty-two subregion beds.
+- **Prometheus**: seven targets in three job beds, fetched from a mock server.
+- **Infrastructure, Vault, Threats, Pipelines and Portfolio**: hand-written mock
+  gardens that drift over time.
+
+The first four run through the real adapter → translation pipeline. Nothing needs
+a backend: the generated sources are seeded and Prometheus fetches from a mock, so
+nothing leaves the page. To run against real data, see
+[docs/running-live.md](docs/running-live.md).
+
+> **Dev note:** Vite's hot reload often serves stale code on this project
+> (component state, memoized shader uniforms). If an edit doesn't show up,
+> hard-reload the page. If it still doesn't, restart the dev server
+> (`rm -rf node_modules/.vite` and run `npm run dev` again).
 
 ## How it works
 
-Data flows one way: **adapters** emit raw records → **translation** maps them to
-normalized `EcosystemNode`s and `EcosystemEdge`s → a flat **store** holds them →
-the **scene** subscribes. Nothing below the scene imports three.js; nothing above
-`translation/` knows what Prometheus is. Adding a data source means writing a
-translator, not widening the node type.
+Data flows one way. **Adapters** emit raw records, **translation** maps them to
+normalized `EcosystemNode`s and `EcosystemEdge`s, a flat **store** holds them, and
+the **scene** subscribes to the store. Nothing below the scene imports three.js,
+and nothing above `translation/` knows what Prometheus is. Adding a data source
+means writing a translator, not changing the node type.
 
-Health normalizes onto four axes — `vitality`, `activity`, `maturity`, `trend` —
-plus `polarity` (is growth good news?). Plant shape is procedural L-system
-geometry, seeded off the node id so a node always grows the same plant, generated
-in pure code with no React or three.js so it can move to a worker later.
+Health is normalized onto four axes (`vitality`, `activity`, `maturity`, `trend`)
+plus `polarity`, which says whether growth is good news. Plant shapes are
+procedural L-system geometry, seeded from the node id so a node always grows the
+same plant. The generator is pure code with no React or three.js, so it can move
+to a worker later.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the layer contracts, the time/history
-model, and recorded assumptions; [DESIGN.md](DESIGN.md) for the reading language
-(which signal gets which visual channel) and the open design questions.
-[HANDOFF.md](HANDOFF.md) is the shortest path in if you are picking this up
-cold: where it stands, which decisions are easy to undo by accident, what is
-unfinished, and what is worth building next.
+[ARCHITECTURE.md](ARCHITECTURE.md) covers the layer contracts, the time and
+history model, and the assumptions we've recorded. [DESIGN.md](DESIGN.md) covers
+the reading language (which signal gets which visual channel) and the open design
+questions. If you're picking this up cold, start with [HANDOFF.md](HANDOFF.md): it
+says where things stand, which decisions are easy to undo by accident, what's
+unfinished and what's worth building next.
 
 ## Layout
 
 ```
 src/
   adapters/    Input sources. `nfl/` is feed-shaped records (games with box
-               scores, depth charts, injury reports); `market/` is closed bars,
-               fills as lots, halts, and a trading calendar; `world/` is dated
-               indicator releases, the country table, and land borders; `news/`
-               is articles, plus the extractor that turns a headline into a
-               record; `prometheus/` is the query-API wire and a `fetch` seam,
-               with `mock.ts` a stand-in server so it runs offline. All come with
-               the derivations that answer as of any moment. None knows what a
-               plant is.
+               scores, depth charts, injury reports) plus the live ESPN client;
+               `market/` is closed bars, fills as lots, halts, and a trading
+               calendar; `world/` is dated indicator releases, the country
+               table, and land borders; `news/` is articles, plus the extractor
+               that turns a headline into a record; `prometheus/` is the
+               query-API wire format and a `fetch` seam, with `mock.ts` as a
+               stand-in server so it runs offline. Each includes the
+               derivations that answer "as of any moment". None of them knows
+               what a plant is.
   translation/ Raw records to nodes and edges. `nfl.ts` is where football meets
                the garden, `market.ts` where a portfolio does, `world.ts` where
                countries do, and `prometheus.ts` / `declarative.ts` where a
-               metric feed and a config-driven JSON source do — the only places
-               the mappings are decided.
+               metric feed and a config-driven JSON source do. These are the
+               only places mappings are decided.
   ecosystem/   Node/edge/state contracts, graph helpers, history, layout,
                staleness, scrub window rules, planting types, labels and
-               emblems, history-as-a-series, and the raw-payload flattener
-  lsystem/     Pure procedural geometry: grammar, turtle, presets, generate
-  hooks/       useLSystem — memoized geometry generation
-  state/       Zustand store (holds state, near enough nothing derived), the
-               composition point where the gardens are assembled, and the
-               collector that writes down what was observed so a reload does not
-               throw the past away
-  scene/       R3F components: Garden, Greenhouse, Props, Branches, Foliage,
-               Grafts, Beds, Tags, Detail, Motes, Dust, Signal, Sky, SunScrub,
-               Horizon, and the two cameras — StandControl on the path,
-               TableControl above the bonsai table — plus the pure sway,
-               daylight, dust, signal, greenhouse, label, bonsai (table framing),
-               and fly (transition) modules
-  mock/        Mock ecosystem + drift tick
+               emblems, completions, history as a series, and the raw-payload
+               flattener
+  lsystem/     Pure procedural geometry: grammar, turtle, presets, generate,
+               and the hand-built vine and topiary forms
+  hooks/       useLSystem, memoized geometry generation
+  state/       Zustand store (holds state, derives almost nothing), the
+               composition step where the gardens are assembled, user-built
+               gardens, and the collector that records what was observed so a
+               reload doesn't throw the past away
+  scene/       R3F components (Garden, Greenhouse, Props, Branches, Foliage,
+               Produce, Completions, Grafts, Beds, Tags, Detail, Motes, Dust,
+               Signal, Sky, SunScrub, Horizon, Scatter, Post) and the two
+               cameras (StandControl on the path, TableControl above the bonsai
+               table), plus pure modules for sway, daylight, dust, signal,
+               greenhouse, labels, bonsai table framing, camera flights,
+               textures, leaf and branch shapes, and post-processing
+  backend/     Runtime-agnostic proxy, registry and collector loop for live
+               sources (see docs/backend.md)
+  mock/        Mock ecosystem and drift tick
+netlify/functions/  Netlify wrappers for the proxies and the scheduled collector
 ```
 
-Rendering aggregates every branch across all plants into one `InstancedMesh`,
-and every leaf into one mesh per leaf shape (at most four), for a handful of
-draw calls regardless of plant count. Geometry is memoized on quantized vitals,
-so a telemetry tick that doesn't move a plant across a bucket is a cache hit,
-not a rebuild. The cache holds 600 shapes and evicts by last use, which is what
-keeps a plant you are looking at from being thrown out by a season scrub walking
-every other plant through buckets nobody will ask for again.
+Rendering batches every branch across all plants into one `InstancedMesh`, and
+every leaf into one mesh per leaf shape (six at most), so the draw call count
+stays small no matter how many plants there are. Geometry is memoized on quantized
+vitals, so a telemetry tick that doesn't push a plant into a new bucket is a cache
+hit, not a rebuild. The cache holds 600 shapes and evicts the least recently used.
+That keeps the plant you're looking at from being evicted when a season scrub
+walks every other plant through buckets nobody will ask for again.
 
-## What's built
+## What's in it
 
-- **The first graphics pass: light through leaves, a model on the table, relief
-  underfoot.** Leaves now transmit light — a backlit canopy glows toward the sun
-  and fades at dusk (`scene/translucency.ts`), a lighting response tinted by the
-  sun rather than a hue the plant carries, so it stays clear of the channel
-  budget. The bonsai table wears a **tilt-shift depth of field**
-  (`scene/TiltShift.tsx`), the shallow-focus band that makes a shrunk garden read
-  as a physical model — mounted only in table mode, on three's own compositor with
-  no new dependency. And bark, turf, soil and all timber carry **normal and
-  roughness maps** derived from the same achromatic height field as their albedo,
-  so the sun catches their relief and highlights break up instead of sliding over
-  a painted plane. That completes the material pass — the first rungs of the
-  fidelity ladder in [docs/graphics.md](docs/graphics.md), which also records the
-  settled decision that XR stays a target.
+### The sources
 
-- **The garden on a table — a second grain of space.** History has two grains of
-  *time* (hourly for a week, daily for twenty); the garden had one grain of
-  *space*, standing on the path, and this is the second. Press `t` (or the
-  **overview** button) and the whole garden shrinks to a miniature on the grass,
-  seen from above and outside, as an alternative to walking a scroll along the
-  aisle. It answers the world garden, which is 193 plants across some 35 × 46
-  metres — a strip whose far end you could never see from its near one — by
-  making the whole of it takeable at a glance.
+- **The NFL**, the first real data source. The league is the garden, the eight
+  divisions are the beds and the thirty-two clubs are the plants. Vitality comes
+  from the record, the point differential and how much of the roster is
+  available. Activity is scoring pace and snaps. Maturity is starter experience,
+  roster age and how long the franchise has existed. Trend is recent form against
+  season form. Injuries are blights, and division rivals are connected by root
+  grafts. A club on a bye really does stop reporting, so it stands there grey,
+  still and dusty, which is the stale state reached naturally.
 
-  It is a change of *distance*, not of reading: the tabletop plant is the same
-  plant, smaller, and health still reads through droop, colour and density with
-  no second visual language added. **It shrinks rather than flying the camera
-  back** because the scene is lit through exponential fog — framing a thirty-metre
-  garden would mean standing eighty metres off, where the fog has swallowed it —
-  so bonsai scale keeps the model an arm's length away in clear air, the way you
-  build a model instead of photographing the building from orbit. The seam was
-  already there: `layout.ts` has always returned a `size` "for Bonsai mode
-  scaling", and nothing had ever shrunk it, so this is a new camera and a new
-  frame, not a new layout (`scene/bonsai.ts`).
+  The adapter's records are shaped like a real feed: a schedule of games each
+  holding two box scores, a fifty-three-slot depth chart with ages and years of
+  service, and an injury report with start dates. Every standing, stat and
+  availability number is *derived from them as of a timestamp*. That's what makes
+  the season scrubbable. Drag the sun back past Sunday and the results unwind, a
+  fourth-quarter injury disappears, and the division looks the way the table did
+  on Saturday. Team alignment, franchises and founding years are real. By default
+  the results, rosters and injuries are seeded fiction, and the snapshot says so
+  in its provenance field. Roster entries are depth-chart slots (`QB1`, `LT`),
+  never named players. With `VITE_NFL_PROXY_URL` set it pulls a real season from
+  ESPN instead (see [docs/nfl-live.md](docs/nfl-live.md)).
 
-  The overview has **no text in it**, and for free: at table distance every plant
-  is beyond the label fade radius, so the existing rule draws no tags without a
-  line of special-casing — the same silence the room's far view keeps. The switch
-  is a **flight, not a cut** (`scene/fly.ts`): the camera eases out to the table
-  and back down to the path, so a second view of the same garden reads as the
-  same garden because you watched the eye travel there. On the table the camera
-  *orbits* — the gesture `look.ts` argued against for the room, and which is right
-  here, where the whole garden has become the one object you are examining. One
-  garden at a time, still: several on a table is cross-garden comparison in
-  disguise, where green would mean two things at once, and that is a separate
-  design.
+- **Markets**, a book of positions and the second real source. Eight sectors are
+  the beds and thirty-two holdings are the plants. The adapter's records are bars
+  and fills, not a price and a P&L, and every number is derived from them as of a
+  timestamp, so the whole book scrubs the way the league does. It was picked
+  because it breaks things the league got for free.
 
-- **The world, as the third source — and the first one where a number can be
-  revised.** 193 UN member states, twenty-two UN subregions as beds, and the
-  first garden built on figures that are *published* rather than measured. It
-  was chosen because it breaks three things the first two sources had quietly
-  agreed on.
-
-  **Beds are no longer all the same size.** Both existing gardens are eight even
-  beds of four; the subregions hold between two countries and eighteen. The
-  two-row wrap that serves eight beds turns twenty-two into a sixty-metre strip
-  with the far end invisible from the near one, so past a dozen beds the layout
-  squares the garden off instead. Every existing garden's layout is untouched,
-  because in those the row *is* the reading.
-
-  **Scrubbing shows what was known, not what was true.** Growth is published
-  about seventy-five days after the quarter it describes and revised a month
-  later, so the same quarter carries two different values and which one you see
-  depends on where the cursor is. A plant therefore reads the figure that had
-  been published at the cursor, and steps on release dates rather than drifting.
-  Doing it the other way would mean the garden rewrote its own past every time a
-  statistical office changed its mind — the flat-line failure the history
-  buffers already refuse to commit, arriving by a different route.
-
-  **A headline is not a record.** Unrest and conflict do not come from the
-  generator; they come from a news feed through a new extraction layer
-  (`adapters/news/`), which is the first place in the project where the app
-  forms a *judgment* about its input rather than a calculation. It refuses to
-  guess: a headline naming two countries, or none, or reading like sport,
-  produces nothing at all. Precision over recall, because a miss costs a quiet
-  plant and a wrong attribution asserts something about a real country in a
-  panel that looks exactly like the ones showing measured numbers.
-
-  Conflict is a **blight**, never a vitality term. A country at war visibly
-  wilting reads powerfully and is the one thing this source must not do, because
-  vitality is a comparison and the app would then be ranking countries by war.
-  Every derived blight carries the dispatch it came from — headline, outlet,
-  date — and says out loud that it was simulated.
-
-  Countries, ISO codes, subregions, UN accession years, land borders and
-  approximate populations are real. Every indicator value and every event is
-  generated, the outlets are named "Simulated Wire" rather than borrowing a real
-  masthead, the links are on `.invalid`, and **which countries are shown in
-  conflict is decided by a hash** — hand-picking would mean taking a position on
-  which real places are at war, in invented data, in a public repository.
-
-- **The past stops being thrown away.** History used to be backfilled when the
-  page loaded and discarded when it closed, so scrubbing back four months was a
-  scrub over four months of fiction regenerated on the spot. A collector now
-  writes down what was actually observed, and lays it back into the buffers on
-  the next visit. Of the archive's 140 daily slots the league can backfill 85
-  and the tape 60 — weekends, byes, and the days before each record begins are
-  simply gaps — and those gaps are what the collector fills, a sitting at a
-  time.
-
-  The rule it turns on is which account wins. A restored observation goes only
-  into a slot the source left empty: a backfill is the source's *current* story
-  about its own past and may carry corrections, while the record we kept is
-  worth something exactly where the source has gone quiet. And what gets written
-  down is what reported — the mock garden's dead plant is never recorded as
-  saying the same number every hour, which would be the app inventing the one
-  thing the whole design is built to avoid.
-
-  It survives a reload and it survives several tabs at once — one key shared by
-  every page means a write has to merge before it replaces, or the last tab to
-  close silently discards what the others saw. What it cannot do is collect
-  while no tab is open, which is as far as a browser with no server behind it
-  honestly goes. The stored shape is the one a server-side collector would want,
-  so moving the loop somewhere it can run unattended is a change of backend
-  rather than of format.
-
-- **A book of positions, as the second real source — and the one that argues
-  back.** Eight sectors are the beds, thirty-two holdings are the plants, and
-  the adapter's records are bars and fills rather than a price and a P&L: every
-  number is derived from them as of a timestamp, so the whole book scrubs the
-  way the league does. It was chosen because it *breaks* things the league had
-  satisfied for free.
-
-  **A short position is the first real weed.** `polarity` has existed since the
-  beginning and until now only mock threat data used it. Vitality here is how
-  far the instrument has moved since you took it on — deliberately not your
-  profit, and deliberately unsigned — so a short on a stock that has run away
-  from you grows into the biggest, lushest thing in the greenhouse, which is
+  **A short position is the first real weed.** `polarity` existed from the
+  beginning, but until this only mock threat data used it. Vitality here is how
+  far the instrument has moved since you opened the position. It's deliberately
+  not your profit and deliberately unsigned, so a short on a stock that has run
+  away from you grows into the biggest, lushest thing in the greenhouse, which is
   exactly what it is.
 
-  **The market is shut most of the time**, which is a problem for a garden whose
-  first rule is that silence must never look like health. Staleness therefore
-  asks the exchange calendar *when this instrument should next print* rather than
-  measuring flat elapsed time: a weekend costs nothing, because nothing was due,
-  and a vendor that goes quiet inside a session is flagged in about three hours
-  instead of four days. The genuine staleness case is a **trading halt**: one
-  symbol stops printing while the rest of the book carries on, and it greys
-  itself because `updatedAt` is the last close on the tape and nothing edits it.
-  The same calendar drives the poll: the source is re-read exactly when it says a
-  bar should have printed, so "should I have heard something by now" and "is
-  there anything new to fetch" are one question asked once.
+  **The market is closed most of the time**, and the garden's first rule is that
+  silence must never look like health. So staleness asks the exchange calendar
+  when an instrument *should* next print, instead of measuring elapsed time. A
+  weekend costs nothing because nothing was due, and a vendor that goes quiet
+  during a session is flagged in about three hours instead of four days. The real
+  staleness case is a **trading halt**: one symbol stops printing while the rest
+  of the book carries on, and it greys out on its own because `updatedAt` is the
+  last close on the tape. The same calendar drives polling, so the source is
+  re-read exactly when it says a bar should have printed.
 
-  **And it costs more.** The league's history backfill collapses a season to
-  about fourteen real computations per club, because a club only moves when a
-  game ends. A price moves every bar, so the same memo earns five to ten times
-  less here (measured: 70 and 35 against 14 and 3.3). Total time barely changed,
-  which is the interesting part — the derivations are logarithmic in the record,
-  so losing the cache was survivable. The numbers are in ARCHITECTURE.md.
+  **It's also more expensive.** The league's history backfill collapses a season
+  to about fourteen real computations per club, because a club only changes when
+  a game ends. A price changes every bar, so the same memoization does five to ten
+  times less work here (measured: 70 and 35 against 14 and 3.3). Total time barely
+  changed, because the derivations are logarithmic in the size of the record. The
+  numbers are in ARCHITECTURE.md.
 
-  Symbols, names, sectors and listing years are real; prices, volumes, fills and
-  the halt are seeded fiction standing in for a live feed, and the snapshot says
-  so in its provenance. There is no outbound network access to a market data
-  vendor from here, which is the same reason the league's season is generated.
-- **The NFL as the first real data source.** The league is the garden, the eight
-  divisions are the beds, and the thirty-two clubs are the plants. Vitality is
-  the record, the point differential, and how much of the roster is available;
-  activity is scoring pace and snaps; maturity is starter experience, roster age,
-  and how long the franchise has existed; trend is recent form against season
-  form. Injuries are blights, division rivals are root grafts, and a club on a
-  bye genuinely stops reporting — so it stands there grey, still, and dusty,
-  which is the staleness state reached honestly rather than by hand.
+  Symbols, names, sectors and listing years are real. Prices, volumes, fills and
+  the halt are seeded fiction standing in for a live feed, and the snapshot's
+  provenance says so.
 
-  The adapter's records are feed-shaped — a schedule of games each holding two
-  box scores, a fifty-three slot depth chart with ages and years of service, an
-  injury report with onsets — and every standing, stat, and availability number
-  is *derived from them as of a timestamp*. That is what makes the whole season
-  scrubbable: drag the sun back past Sunday and the results unwind, an injury
-  from the fourth quarter is gone, and the division reads as the table did on
-  Saturday. Alignment, franchises, and founding years are real; results, rosters,
-  and injuries are seeded fiction standing in for a live feed, and the snapshot
-  says so in its own provenance field. Roster entries are depth-chart slots
-  (`QB1`, `LT`), never named players.
-- **Seasons: the sun's other axis.** Dragging the sun *along* its arc scrubs
-  hours at a turn per day. Dragging it *across* the arc scrubs the year — because
-  that is what a season physically is, the daily circle riding higher or lower,
-  which is why summer days are long. A full sweep of the arc's height is half a
-  year, so both gestures move at the sun's own rate and neither is a faster
-  version of the other. History is kept at two grains to match (hourly for a
-  week, daily for twenty), so the league's whole season is walkable: scrub back
-  eleven weeks and the clubs stand at the records they had in May.
-- Procedural plants driven by health; garden switching; time scrub (history).
-- **Beds are plantings.** Each bed is a *kind* of planting — orchard, grove,
-  hedge, conifer stand, flower border, wildflower meadow, vegetable patch,
-  vineyard, topiary, or (for suppress gardens) an invasive thicket — laid out its
-  own way and filled with the plant forms that belong to it. A bed reads as a
-  composed unit instead of a random thicket. It's a container property, never a
-  health signal, so it spends no part of the reading budget; health still reads
-  through droop, density, and colour within each form.
-- **Produce and structure.** Vegetables and vineyards bear **produce** — fruit on
-  a subset of the plant's leaf points, so a laden plant is healthy and a bare one
-  is not. The **vineyard** trains its vines on a **trellis** (posts and wires)
-  with grapes hanging from the shoots; **topiary** clips foliage to a sphere,
-  cone, cube, or spiral, where neglect reads as shagginess rather than death.
-  Vines and topiary are not L-systems — they're built by hand in
-  `lsystem/bespoke.ts` but emit the same geometry, so they render, sway, and
-  cache like every other plant. Every declared planting is now live.
-- **Plant forms** — broadleaf, bushy, willow, conifer spire, the weed shrub, and
-  the flower/wildflower — each with its own branching grammar and leaf shape:
-  broad, blade, needle, round, or a **bloom** (a stem topped with a head of
-  petals). Within a bed, ordinary plants vary by a hash of the node id, so a
-  planting looks grown; a suppress-polarity node is a weed wherever it grows,
-  keeping the polarity read intact. Leaves and petals grow in fanned clusters, so
-  a healthy plant reads as a full canopy — or a full bloom — and a sick one sheds
-  to bare twigs or a bare stem. Petal colour is decorative and varietal, never a
-  health signal.
-- **You stand inside it.** The viewer is on the path under the glass at eye
-  height, not outside looking in — the beds are either side, the glazing bars
-  are overhead, and the hills are seen through the wall. You drag to look around
-  — including straight up through the roof — and scroll to walk, kept on the path
-  between the planting and the glass so you cannot wander out into the field by
-  accident: being indoors is a constraint rather than a
-  starting position. The cost is that a garden's apparent size is no longer
-  fixed — a three-bed garden and the league differ by how much house is around
-  you, which is the difference a person walking in would get.
-- **The garden is under glass.** A greenhouse — dwarf wall, painted frame,
-  glazing bars, a pitched roof with a vent propped open, and a door standing
-  ajar — sized from whatever is planted, so the league gets a bigger house rather
-  than a cramped one. It answers "how much world has to exist" with a wall three
-  metres away: the field and the hills are still out there and still lit by the
-  same sun, but they are weather now rather than scenery. The sky is the one
-  thing it may not take, so the panes cast no shadow and write no depth and the
-  sun, moon, and stars read straight through the roof — you can still grab the
-  sun to scrub time. **Beds are raised**, held in timber with corner posts and a
-  cap rail; they are raised by lowering the floor, so the soil surface never
-  moved and nothing that measures from a plant had to change. And the house is
-  furnished: a hose on its hook with a length left on the floor, a potting bench
-  on castors, a watering can, shears, gloves, twine, and stacks of terracotta
-  pots. All of it signal-free, against the walls, and still.
-- **Names, at the distance a name belongs.** Every plant carries a nursery tag —
-  a stake with a card, the thing's mark on a roundel and its name beside it —
-  and the tags **are not there until you walk up to a plant**. They fade in
-  inside about nine metres and read fully at four and a half, so the view of a
-  whole house has no text in it at all and the beds are named once you are among
-  them. Health is what you read across the room; a name is what you read at the
-  bed. What goes on the card is chosen by translation, never guessed by the
-  renderer: the league uses its own abbreviations and club colours (`DAL` in
-  Cowboys navy), and a source with no marks of its own takes the documented
-  default — initials on a stable colour — as a deliberate choice. An emblem is
-  fixed for the life of a node, which is what keeps a colour on a card clear of
-  the health channel: identity never moves, signal does.
-- **Tap a tag and the plant explains itself.** A panel opens in the air beside
-  it — world-anchored rather than stuck to the screen, because the same object
-  has to work in a headset — carrying the four axes as numbers, vitality over
-  the last day and over the season as sparklines, the blights, and the source's
-  own payload flattened into rows. It is the only place in the app with numbers
-  in it, which is what a deliberately lossy summary owes you. It reads through
-  the cursor, so scrubbing with a panel open moves the panel; and a stretch
-  nobody recorded is drawn as a **gap in the line**, never bridged, because a
-  trend line across silence is a picture of something that did not happen.
-- **A landscape behind the garden** — layered hills, distant mountains, and a
-  conifer tree line receding into fog. Static and signal-free by design; it is
-  lit and fogged by the same rig as the garden, so it tracks the day/night scrub
-  for free and never competes with the plants for attention.
-- **Textures and grain.** Every surface used to be one flat colour. Turf, soil,
-  and bark now wear generated maps — no image files, just a seeded PRNG filling a
-  byte buffer — and individual leaves, petals, and berries take a small stable
-  jitter so a canopy reads as leaves rather than as one solid green object. The
-  rule throughout is luminance only, never hue: grain darkens and lightens a
-  tuned colour and can never tint it, which is what keeps it clear of the reading
-  budget entirely. Soil furrows run along the bed's rows, so the ground looks
-  worked for what is planted in it.
+- **The World**, the third source and the first where a number can be revised.
+  193 UN member states, with the twenty-two UN subregions as beds. It's the first
+  garden built on figures that are *published* instead of measured, and it broke
+  three things the first two sources had quietly agreed on.
+
+  **Beds aren't all the same size.** The other gardens have eight even beds of
+  four, but subregions hold anywhere from two countries to eighteen. The two-row
+  wrap that works for eight beds turns twenty-two into a sixty-metre strip whose
+  far end you can't see, so past a dozen beds the layout squares the garden off
+  instead. Existing gardens keep their layout, because in those the row is part of
+  the reading.
+
+  **Scrubbing shows what was known, not what was true.** Growth figures are
+  published about seventy-five days after the quarter they describe and revised a
+  month later, so the same quarter has two values and which one you see depends on
+  where the cursor is. A plant shows the figure that had been published at the
+  cursor, and steps on release dates instead of drifting. The alternative would
+  have the garden rewriting its own past every time a statistics office changed
+  its mind.
+
+  **A headline isn't a record.** Unrest and conflict don't come from the generator.
+  They come from a news feed through an extraction layer (`adapters/news/`), which
+  is the first place the app forms a *judgement* about its input instead of a
+  calculation. It won't guess. A headline naming two countries, or none, or that
+  reads like sport, produces nothing. Precision beats recall here: a miss costs a
+  quiet plant, but a wrong attribution states something about a real country in a
+  panel that looks just like the ones showing measured numbers.
+
+  Conflict is a **blight**, never a vitality term. A country at war visibly wilting
+  would be powerful and is the one thing this source mustn't do, because vitality
+  is a comparison and the app would be ranking countries by war. Every derived
+  blight carries the dispatch it came from (headline, outlet, date) and says
+  plainly that it's simulated.
+
+  Countries, ISO codes, subregions, UN accession years, land borders and rough
+  populations are real. Every indicator value and every event is generated. The
+  outlets are called "Simulated Wire" instead of borrowing a real masthead, the
+  links use `.invalid`, and **which countries are shown in conflict is decided by a
+  hash**, because hand-picking would mean taking a position on which real places
+  are at war, in invented data, in a public repository.
+
+- **Prometheus**, the kind of source the whole idea was built for. It runs through
+  the real adapter and translator against a mock server that answers in the exact
+  wire format. See [docs/prometheus.md](docs/prometheus.md).
+
+- **Your own data.** The **+ garden** button opens a builder where you paste JSON,
+  map its fields, preview the result through the real interpreter, and keep it as
+  a garden. See [docs/garden-builder.md](docs/garden-builder.md).
+
+### Reading the garden
+
+- **Plant forms.** Broadleaf, bushy, willow, conifer spire, the weed shrub, and
+  flowers and wildflowers, each with its own branching grammar and leaf shape:
+  broad, blade, needle, round, frond, or a **bloom** (a stem topped with a head of
+  petals). Within a bed, plants vary by a hash of the node id so the planting
+  looks grown. A suppress-polarity node is a weed wherever it grows, so polarity
+  always reads correctly. Leaves and petals grow in fanned clusters, so a healthy
+  plant has a full canopy or a full bloom and a sick one sheds down to bare twigs
+  or a bare stem. Petal colour is decorative and never a health signal.
+- **Beds are plantings.** Each bed is a *kind* of planting (orchard, grove, hedge,
+  conifer stand, flower border, wildflower meadow, vegetable patch, vineyard,
+  topiary, or for suppress gardens an invasive thicket), laid out its own way and
+  filled with the plant forms that belong in it. A bed reads as one composed unit.
+  Planting kind is a container property and never a health signal, so health
+  still reads through droop, density and colour within each form.
+- **Produce and structure.** Vegetables and vineyards bear **produce**, fruit on
+  some of the plant's leaf points, so a laden plant is healthy and a bare one
+  isn't. The **vineyard** trains its vines on a **trellis** of posts and wires with
+  grapes hanging from the shoots. **Topiary** clips foliage into a sphere, cone,
+  cube or spiral, and neglect shows as shagginess instead of death. Vines and
+  topiary are built by hand in `lsystem/bespoke.ts` instead of by L-system, but
+  they output the same geometry, so they render, sway and cache like every other
+  plant.
+- **Fruit and deadwood for finished work.** Things that finish (builds, tasks)
+  hang fruit when they succeed and leave a grey spur of deadwood when they fail.
+  The Pipelines garden shows it. See [docs/completion.md](docs/completion.md).
+- **Droop.** Sick plants wilt toward the ground, stopping at the soil.
+- **Staleness is grey, still and dusty.** A stale plant stops swaying, so silence
+  (a dead adapter) never passes for a thriving plant. A slow fall of pale specks
+  around its base says so up close as well as in silhouette. The dust thickens the
+  longer the silence lasts, and that's the only cue for *how long*. It's the
+  opposite of the activity motes, which rise and glow where dust falls and dulls.
+  The mock gardens each have one silent plant so you can see it.
 - **A plume where something is moving.** The `trend` axis had a row in the
-  channel table from the start and nothing behind it: a club on a three-game run
-  and one on a three-game slide stood there looking identical, and the only place
-  the difference showed was a number in the panel. Now a plant that is climbing
-  throws warm amber specks *up* through its canopy and one that is sliding sheds
-  washed-out slate ones *down* to the soil, so a new viewing has something in it
-  that says look here.
+  channel table from the start but nothing drawing it. A club on a three-game
+  winning run and one on a three-game slide looked identical, and the difference
+  only showed as a number in the panel. Now a plant that's climbing sends warm
+  amber specks *up* through its canopy, and one that's sliding sheds faded slate
+  specks *down* to the soil.
 
-  Direction carries the reading and colour only restates it, which is why amber
-  against slate rather than green against red: the pairing survives every common
-  colour blindness, and in silhouette or in the dark the up and the down still
-  read. Below a deadband nothing is drawn at all, so most of a quiet garden has no
-  plume in it. A **stale plant never plumes** — an old number has no direction —
-  which is also what keeps this clear of the dust, the other falling speck in the
-  garden. Polarity is applied first, so a backlog growing fast sheds rather than
-  rises. The threshold is tuned against the real pipelines rather than argued from
-  the axis; `src/scene/signal.ts` carries the numbers and what they exposed about
-  how differently the sources calibrate trend.
-- Ambient motion: per-plant sway + breathing, drifting motes. Any value that
-  updates on a telemetry tick (activity, vitality) is smoothed so it eases in
-  rather than snapping — see the comments in `src/scene/sway.ts`.
-- Vitality **droop**: sick plants wilt toward the ground (clamped to the soil).
-- Staleness is grey, **still**, and **dusty** — a stale plant stops swaying, so
-  silence (a dead adapter) never passes for a thriving plant, and a slow fall of
-  pale specks around its base says so up close as well as in silhouette. The
-  dust thickens with the length of the silence, which is the only cue that
-  carries *how long*; it is the deliberate inverse of the activity motes, which
-  rise and glow where dust falls and dulls. The mock runs one silent plant per
-  garden so the state is there to look at. Plus "what changed since I last
-  looked" summary.
-- **Time scrub as the sun crossing the sky.** Drag the sun (or the moon, after
-  dark) and history moves with it: the whole look — key light, fill, fog, sky
-  gradient, stars — is a function of the hour under the cursor, so scrubbing
-  reads as time passing rather than as values changing. A full turn is a day, so
-  the mapping is one to one with the sun's real rate. Drag it *across* its arc
-  instead and you move the year at the same kind of rate; the season reads in the
-  light and never in a plant, because bare branches already mean something else.
-- Respects `prefers-reduced-motion`. The sky has no motion of its own; it moves
-  only when the user scrubs.
+  Direction carries the meaning and colour only repeats it, which is why it's
+  amber against slate and not green against red. That pairing survives every
+  common form of colour blindness, and in silhouette or in the dark the up and
+  down still read. Below a threshold nothing is drawn, so most of a quiet garden
+  has no plume. A **stale plant never plumes**, since an old number has no
+  direction, and that also keeps the plume distinct from the falling dust.
+  Polarity is applied first, so a backlog growing fast sheds instead of rising.
+  The threshold is tuned against the real pipelines. `src/scene/signal.ts` has the
+  numbers and notes on how differently the sources calibrate trend.
+- **Ambient motion.** Each plant sways and breathes, and motes drift. Any value
+  that updates on a telemetry tick (activity, vitality) is smoothed so it eases in
+  instead of snapping. See the comments in `src/scene/sway.ts`.
+- **What changed since you last looked**, as a summary.
+- **Respects `prefers-reduced-motion`.** The sky has no motion of its own and only
+  moves when you scrub.
+
+### The place
+
+- **You stand inside it.** You're on the path under the glass at eye height, not
+  outside looking in. The beds are on either side, the glazing bars are overhead,
+  and you see the hills through the wall. Drag to look around (including straight
+  up through the roof) and scroll to walk. You're kept on the path between the
+  planting and the glass so you can't wander out into the field by accident. One
+  consequence is that a garden's apparent size isn't fixed: a three-bed garden
+  and the league differ in how much greenhouse is around you, just as they would if
+  you walked in.
+- **The garden is under glass.** A greenhouse with a dwarf wall, painted frame,
+  glazing bars, a pitched roof with a vent propped open and a door left ajar,
+  sized to whatever is planted, so the league gets a bigger house instead of a
+  cramped one. The field and hills are still out there and lit by the same sun, but
+  now they're weather, not scenery. The glass mustn't block the sky, so the panes
+  cast no shadow and write no depth, and the sun, moon and stars show straight
+  through the roof. You can still grab the sun through it. **Beds are raised** in
+  timber with corner posts and a cap rail. They were raised by lowering the floor,
+  so the soil surface didn't move and nothing that measures from a plant had to
+  change. The house is furnished too: a hose on its hook with some left on the
+  floor, a potting bench on castors, a watering can, shears, gloves, twine and
+  stacks of terracotta pots. None of it carries signal. It's all against the walls
+  and none of it moves.
+- **A landscape behind the garden.** Layered hills, distant mountains and a line
+  of conifers fading into fog. It's static and carries no signal. It's lit and
+  fogged by the same rig as the garden, so it follows the day and night scrub
+  automatically and never competes with the plants for attention.
+- **Textures and grain.** Turf, soil and bark have generated maps (no image files,
+  just a seeded random generator filling a byte buffer), and individual leaves,
+  petals and berries get a small, stable variation so a canopy looks like leaves
+  and not one solid green lump. Grain only ever changes brightness, never hue, so
+  it can't interfere with the health reading. Soil furrows run along the rows so
+  the ground looks worked for what's planted in it.
+- **Light through leaves, a model on the table, relief underfoot.** Leaves let
+  light through, so a backlit canopy glows toward the sun and fades at dusk
+  (`scene/translucency.ts`). It's a lighting effect tinted by the sun, not a colour
+  the plant carries, so it stays out of the health reading. The bonsai table gets
+  a **tilt-shift depth of field** (`scene/tiltshift.ts`, in the `scene/Post.tsx`
+  chain), the shallow focus that makes a shrunk garden look like a physical model.
+  Bark, turf, soil and timber have **normal and roughness maps** built from the
+  same achromatic height field as their colour, so the sun catches their relief.
+  Ambient occlusion, subtle bloom, tapered branches, shaped leaf blades and ground
+  scatter came in the same pass. [docs/graphics.md](docs/graphics.md) has the full
+  ladder and records the decision that XR stays a target.
+
+### Names and details
+
+- **Names appear when you get close.** Every plant has a nursery tag: a stake with
+  a card showing its mark on a roundel and its name beside it. Tags **only appear
+  when you walk up to a plant.** They fade in within about nine metres and are
+  fully visible at four and a half, so a view of the whole house has no text in it
+  and beds get named once you're among them. You read health from across the room
+  and names at the bed. What goes on the card is chosen by translation, never
+  guessed by the renderer. The league uses its own abbreviations and club colours
+  (`DAL` in Cowboys navy), and a source without marks of its own gets the
+  documented default of initials on a stable colour. An emblem never changes for
+  the life of a node, which keeps card colours separate from the health signal:
+  identity stays put and signal moves.
+- **Tap a tag and the plant explains itself.** A panel opens in the air beside it.
+  It's anchored in the world instead of stuck to the screen, because the same
+  object has to work in a headset. It shows the four axes as numbers, vitality
+  over the last day and over the season as sparklines, any blights, and the
+  source's own payload flattened into rows. It's the only place in the app with
+  numbers, which is what a deliberately lossy summary owes you. It follows the
+  cursor, so scrubbing with a panel open updates the panel. A stretch nobody
+  recorded is drawn as a **gap in the line** and never bridged, because a trend
+  line across a silence shows something that didn't happen.
+
+### Time
+
+- **Scrubbing is the sun crossing the sky.** Drag the sun (or the moon, after
+  dark) and history moves with it. The whole look (key light, fill, fog, sky
+  gradient, stars) is a function of the hour under the cursor, so scrubbing feels
+  like time passing instead of values changing. A full turn is a day, matching the
+  sun's real rate.
+- **Seasons are the sun's other axis.** Dragging the sun *along* its arc scrubs
+  hours, one turn per day. Dragging it *across* the arc scrubs the year, because
+  that's physically what a season is: the daily circle riding higher or lower,
+  which is why summer days are long. A full sweep of the arc's height is half a
+  year, so both gestures move at the sun's own rate. The season shows in the light
+  and never in a plant, because bare branches already mean something else. History
+  is kept at two grains to match (hourly for a week, daily for twenty weeks), so
+  you can walk the league's whole season. Scrub back eleven weeks and the clubs
+  stand at the records they had then.
+- **The garden on a table.** History has two grains of time, and this adds a
+  second grain of *space*. Press `t` (or the **overview** button) and the whole
+  garden shrinks to a miniature on the grass, seen from above and outside, instead
+  of walking the length of the aisle. It was built for the World garden, which is
+  193 plants over roughly 35 × 46 metres, too long to see the far end from the
+  near one. The table makes it take-in-at-a-glance.
+
+  It changes your *distance*, not the reading. A plant on the table is the same
+  plant, smaller, and health still reads through droop, colour and density.
+  **It shrinks the garden instead of pulling the camera back** because the scene
+  uses exponential fog: framing a thirty-metre garden would mean standing eighty
+  metres away, where the fog has swallowed it. At bonsai scale the model stays an
+  arm's length away in clear air. The pieces were already there, since `layout.ts`
+  had always returned a `size` "for Bonsai mode scaling" that nothing used, so this
+  is a new camera and frame, not a new layout (`scene/bonsai.ts`).
+
+  The overview has **no text in it**, and that happened on its own: at table
+  distance every plant is past the label fade radius, so the existing rule draws
+  no tags. The switch is a **flight, not a cut** (`scene/fly.ts`). The camera
+  eases out to the table and back down to the path, so the second view reads as
+  the same garden because you watched the eye move there. On the table the camera
+  *orbits*. `look.ts` argues against orbiting in the room, but here the whole
+  garden has become the one object you're examining, so it fits. It's still one
+  garden at a time. Several gardens on a table would be cross-garden comparison in
+  disguise, with green meaning two things at once, and that needs its own design.
+- **The past isn't thrown away.** History used to be backfilled when the page
+  loaded and discarded when it closed, so scrubbing back four months showed four
+  months of fiction regenerated on the spot. A collector now records what was
+  actually observed and puts it back into the buffers on the next visit. Of the
+  archive's 140 daily slots, the league can backfill 85 and the market tape 60.
+  Weekends, byes and the days before each record starts are gaps, and those gaps
+  are what the collector fills in, one visit at a time.
+
+  The key rule is which account wins. A restored observation only goes into a slot
+  the source left empty. A backfill is the source's *current* story about its own
+  past and may include corrections, while our own record is valuable exactly where
+  the source has gone quiet. Only what actually reported gets recorded. The mock
+  garden's dead plant is never written down as saying the same number every hour,
+  which would be the app inventing the one thing the design is built to avoid.
+
+  It survives a reload and several tabs at once. Every page shares one storage
+  key, so a write has to merge before it replaces, or the last tab to close would
+  silently discard what the others saw. It can't collect while no tab is open,
+  which is as far as a browser with no server behind it can go. The stored format
+  is the one a server-side collector would want, so moving the loop to a server
+  changes the backend, not the format. That server side is now built (see
+  [docs/backend.md](docs/backend.md)).
 
 ### Reaching the sun
 
-Dragging the sun is the gesture the concept is about, and for a long time it was
-only half reachable on a desktop. The camera orbited a target at plant height, so
-it always looked somewhat down at the beds: the upper sky, where the sun spends
-most of the day, could not be pointed at with a mouse. Standing inside did not
-cause that — the old outdoor camera had the same limit for the same reason — but
-it removed the one workaround the field allowed, which was backing away until the
-sky came into frame.
+Dragging the sun is the gesture the whole concept is about, and for a long time
+you could only half reach it on desktop. The camera used to orbit a point at
+plant height, so it always looked somewhat down at the beds, and you couldn't
+point a mouse at the upper sky where the sun spends most of the day.
 
-The camera no longer orbits. **Drag to look** around from where you stand, pitch
-included, all the way to straight up; **scroll to walk** along the path. Look up
-and the sun is there to be taken hold of, at midsummer noon as much as at dusk.
+The camera doesn't orbit anymore. **Drag to look** around from where you stand,
+including straight up, and **scroll to walk** along the path. Look up and the sun
+is there to grab, at midsummer noon as easily as at dusk.
 
-The glass is not in the way and never was: it carries no pointer handlers, so R3F
-never raycasts it and the sun, the moon, and their grab handles are reachable
-straight through the roof. **Shift-drag anywhere** still does the same scrub
-without aiming at anything, and the sun visibly moves under it. Left and right
-arrows step an hour (shift, six); up and down step a day (shift, a week); escape
-returns to live. A drag commits to hours or to seasons on its first movement and
-holds it, so a diagonal never means both.
+The glass has never been in the way. It has no pointer handlers, so R3F never
+raycasts it, and the sun, the moon and their grab handles are reachable straight
+through the roof. **Shift-drag anywhere** does the same scrub without aiming at
+anything, and the sun visibly moves with it. Left and right arrows step an hour
+(with shift, six hours). Up and down step a day (with shift, a week). Escape
+returns to live. A drag locks to hours or seasons on its first movement, so a
+diagonal never does both.
 
-In a headset you look up and grab it, which is now the same interaction rather
-than the one shift-drag was standing in for.
+In a headset you look up and grab the sun directly, which is the interaction
+shift-drag was standing in for.
 
 ## What's next
 
-The design docs track the open work. Near-term candidates: a live adapter behind
-any of the `NflSource`, `MarketSource`, `WorldSource`, or `NewsSource`
-interfaces, which is the cheapest change with the largest payoff because every
-one of those seams was built for it — this environment's proxy denies
-`api.worldbank.org`, `feeds.bbci.co.uk`, and `aljazeera.com` alike, which is why
-all of them are generated; **traversal**, which the world garden has now made
-urgent rather than theoretical, since 193 plants across thirty-five by forty-six
-metres is more house than anyone wants to walk; and a vocabulary for completion,
-since tasks and builds finish and plants do not.
+[HANDOFF.md](HANDOFF.md) tracks the open work. The most valuable next step is
+running one of the two built live paths against a real server in a networked
+deploy: Prometheus through its proxy, or the NFL through the proxy to ESPN. This
+environment's network policy blocks `api.worldbank.org`, `feeds.bbci.co.uk`,
+`aljazeera.com` and Prometheus's demo server alike, which is why everything here
+runs on generated or mocked data. After that, the `MarketSource`, `WorldSource`
+and `NewsSource` interfaces were all built to take a live adapter.
