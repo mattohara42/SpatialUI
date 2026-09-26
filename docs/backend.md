@@ -1,312 +1,80 @@
-# The backend — the fetch proxy and the unattended collector loop
+# The backend: fetch proxy and unattended collector
 
-Was a proposal; now the runtime-agnostic core is built and tested, and only two
-thin shells are left to a deploy target. This settles the shape of the one piece
-the whole source pipeline was built around and did not have: a place for a real
-fetch to happen, and a place for the poll to run when no tab is open. Written so
-that when a networked environment exists, the work is standing up a known
-interface — most of which now exists in `src/backend/` — rather than deciding
-what it should be. The **Reference implementation** section below maps the design
-onto the code; the sections before it are the reasoning that shaped it.
+**Status: built.** This started as a proposal. The runtime-agnostic core is now
+built and tested in `src/backend/`, and the Netlify wrappers that host it are in
+`netlify/functions/`. `docs/deploy-netlify.md` is the operator checklist. What's
+still missing is a networked deploy to run it against.
 
-Read `docs/sources.md` for why a real source is two problems wearing one
-sentence and why this is the second's critical-path blocker; `docs/prometheus.md`
-for the adapter this drives; `ARCHITECTURE.md` for the layer contracts. This file
-is the part those do not carry: the backend's exact contract, pinned to the seams
-that already exist in the client, and what stays true whether or not this
-environment ever gets egress.
+The backend is the one piece the source pipeline was designed around but didn't
+have: somewhere for a real fetch to happen, and somewhere for polling to run when
+no tab is open. The first half of this file describes what's built. The second
+half is the design reasoning behind it.
 
----
-
-## The short answer
-
-A live source needs two things a browser cannot give it, and they are **one
-piece of work, not two**:
-
-1. **A fetch that is allowed to happen.** A browser cannot fetch arbitrary
-   third-party hosts — CORS forbids it, a bearer token does not belong in a
-   client, and pointing the app at a user-named host from the page is a
-   request-forgery surface. Verified here, not assumed: every candidate host
-   (`api.worldbank.org`, the Prometheus demo server, the news feeds) answers
-   `403` at the proxy CONNECT, and the agent proxy itself is healthy, so it is
-   policy and not a broken setup.
-
-2. **A poll that keeps running when the tab is shut.** `read(now)` is
-   synchronous and translates the last snapshot the source holds; something has
-   to *fill* that snapshot on the scrape interval by calling `refresh`. The
-   in-app beat does this today (`ecosystemStore.poll` kicks `refresh`
-   fire-and-forget), but only while a tab is open. A source that is live only
-   when someone is looking is not live.
-
-Both resolve to a single server-side process: it does the fetch the browser
-can't, and it runs the loop the tab can't. Everything below is the contract that
-process implements and the exact client seams it plugs into — all of which
-already exist and are tested.
+For background, `docs/sources.md` explains why a real source is really two
+separate problems and why this is the blocker for the second one,
+`docs/prometheus.md` covers the adapter this drives, and `ARCHITECTURE.md` covers
+the layer contracts.
 
 ---
 
-## The line, and how little is above it
+## Why a backend
 
-Data flows one way — **adapters emit raw records → translation maps them to
-normalized nodes → the store holds them → the scene subscribes** — and the whole
-Prometheus path below the network is already built and pinned offline against
-captured wire-shape responses. What the backend adds sits at exactly one seam.
+A live source needs two things a browser can't provide, and one server-side
+process covers both:
 
-Three client-side seams are already the right shape and must not be rebuilt:
+1. **A fetch that's allowed to happen.** A browser can't fetch arbitrary
+   third-party hosts. CORS blocks it, a bearer token doesn't belong in a client,
+   and letting the page hit a host the user names opens a request-forgery hole.
+   We checked this here instead of assuming it: every candidate host
+   (`api.worldbank.org`, the Prometheus demo server, the news feeds) answers `403`
+   at the proxy CONNECT, and the agent proxy itself is healthy. It's policy, not
+   a broken setup.
+2. **A poll that keeps running when the tab is closed.** `read(now)` is
+   synchronous and translates the last snapshot the source holds. Something has
+   to update that snapshot on the scrape interval by calling `refresh`. The in-app
+   beat does this today (`ecosystemStore.poll` fires `refresh` without awaiting
+   it), but only while a tab is open. A source that's only live while someone is
+   watching isn't really live.
 
-- **`FetchLike` (`adapters/prometheus/query.ts`).** The adapter's only dependency
-  on the outside world, injected rather than imported: `(url, init) =>
-  Promise<{ ok, status, json() }>`. `globalThis.fetch` satisfies it with no
-  adapter, and so does a function that calls *our own* proxy. This is the single
-  argument that changes to go live.
-
-- **`refresh` / `adopt` (`state/sources.ts`, `adapters/prometheus/index.ts`).**
-  `refresh(now)` fetches a fresh `PromSnapshot` and adopts it; `adopt(snapshot)`
-  takes one *without fetching* — named in the code as "the seam a backend that
-  already fetched would hand results back through." A backend that polls
-  server-side and pushes snapshots to the client uses `adopt`; a client that
-  pulls from the proxy itself uses `refresh`. Both already exist.
-
-- **`ObservedRecord` (`state/persist.ts`, `state/collector.ts`).** What the app
-  watched, stored sparsely — one sample per node per slot, when a node reported.
-  The collector comment is explicit that this is "as far as a browser-only app
-  honestly goes… the seam is the same one a server would sit behind, because
-  `ObservedRecord` is already the wire format." Moving the loop server-side is a
-  change of *where it runs*, not of *what it writes*.
-
-So the backend is not a new layer in the pipeline. It is the runtime the fetch
-and the poll move into, handing results back through seams the client already
-exposes.
+The server does the fetch the browser can't and runs the loop the tab can't. It
+plugs into client seams that already exist and are tested.
 
 ---
 
-## Prometheus first — and why not the others
+## What's built
 
-Prometheus is the first real source, for reasons `docs/sources.md` argues at
-length and this doc takes as settled:
+`src/backend/` is pure and passes its tests offline. Every piece takes its
+network and its storage as arguments, so the same code runs under any HTTP
+framework and any persistence layer. The tests drive it with the Prometheus mock
+and an in-memory store.
 
-- It is genuinely live and it **never finishes**, so it sidesteps the completion
-  vocabulary entirely.
-- `up{}` is staleness the source *states about itself*, so the backend does not
-  have to infer liveness from a clock — it fetches a second vector and the
-  translator already reads it.
-- Building its plumbing forces the real fetch, the real poll, and the proxy —
-  which every later user source (FIFA, fundraising, a declarative HTTP/JSON
-  source) then reuses unchanged.
-
-FIFA stresses nothing new and is a poor thing to build first; fundraising walks
-into polarity-as-a-position and revised filings and should wait. The backend is
-built once, for Prometheus, and generalized afterward.
-
----
-
-## The proxy contract
-
-A thin server-side endpoint that does the fetch the browser is forbidded to,
-and nothing else. It is a `FetchLike` with a network on the far side.
-
-**Shape.** One route the client calls in place of a direct Prometheus URL:
-
-```
-POST /api/proxy/prometheus
-  body: { sourceId, promql }         // never a raw baseUrl from the client
-  → 200 { status, data }             // the untouched PromApiResponse envelope
-  → 4xx/5xx { error }                // surfaced, not swallowed
-```
-
-The endpoint's responsibilities, and its refusals:
-
-- **It resolves `sourceId` to a *server-held* endpoint and token.** The client
-  names *which configured source*, never a host. The base URL and bearer token
-  live in server config, so a client can only reach servers an operator
-  registered — this is what closes the request-forgery hole, and it is why the
-  proxy is a real trust boundary and not a CORS shim. `PromQuery.token` stays on
-  the server; the client never sees it and the node never carries it (the type
-  comment already says "never logged, never stored on a node").
-
-- **It returns the wire envelope untouched.** `parseInstantVector` and
-  `fetchPromSnapshot` already know how to turn `PromApiResponse` into a
-  `PromSnapshot` — value-as-string, seconds-to-ms, error-envelope-throws,
-  NaN/Inf-dropped. The proxy must not re-parse or "clean" anything, or it splits
-  that logic across two codebases. It is a pipe with an allowlist, not a
-  translator.
-
-- **It preserves the error/empty distinction.** A `status: "error"` envelope is
-  not an empty garden; the parser throws on it deliberately so the app can tell a
-  dead query from an empty one. The proxy passes the envelope through so that
-  distinction survives the hop.
-
-The client wiring is then the single-argument swap the whole design promised. In
-`state/sources.ts`, the Prometheus source's `fetchImpl` goes from
-`mockPromFetch()` to a `FetchLike` that POSTs to the proxy:
-
-```ts
-const proxyFetch: FetchLike = async (url, init) => {
-  const promql = new URL(url).searchParams.get('query') ?? '';
-  return fetch('/api/proxy/prometheus', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ sourceId: 'prometheus', promql }),
-    signal: init?.signal,
-  });
-};
-```
-
-Nothing downstream changes. The live test (`prometheus.live.test.ts`) already
-asserts the whole path against a real server; the proxy just moves *where* the
-real server is reached from.
-
----
-
-## The collector loop contract
-
-The proxy answers when asked. The loop is what does the asking when no one is
-looking. It is the half `collector.ts` names as missing — "a collector that truly
-runs whether or not anyone is looking is a process, and this project has no server
-to put one in."
-
-**Shape.** For each configured live source, on the source's own cadence:
-
-1. **Ask on the schedule the source already states.** `StaleSchedule.dueAfter`
-   answers both "should I have heard by now" and "is there anything new to
-   fetch" — the poll and staleness are one question (`state/sources.ts`). The
-   loop reads the schedule and refreshes when a reading is owed; it invents no
-   clock of its own. For Prometheus that is `promStaleSchedule(scrapeIntervalMs)`:
-   due one interval after the last sample, grey after two of silence.
-
-2. **Fetch, translate, observe.** Run `fetchPromSnapshot` → `translatePromSnapshot`
-   → `observe` into an `ObservedRecord`, the same three steps `ecosystemStore`
-   runs client-side today, moved server-side. The record is *exactly* the format
-   already defined: sparse, one sample per node per slot, absolute slots, rounded
-   at the door to four decimals. `encodeRecord` is a plain stringify by design,
-   so the server writes the identical bytes the browser's `localStorage` holds
-   now.
-
-3. **Serve the record back on connect.** When a tab opens, it restores the
-   server's `ObservedRecord` the same way it restores the local one today —
-   `restoreRecord` lays observations back into the history buffers, into the gaps
-   a source left and never over what it currently says. The merge is already
-   written (`mergeRecord`), so a client that also collected while open reconciles
-   with the server's record rather than fighting it.
-
-**Two honest limits to state, not paper over:**
-
-- **The fine tier is largely redundant; the coarse tier is the point.** Over a
-  week the hourly tier overlaps what a live source can still re-tell; over a
-  season the daily tier is the only place those days exist at all. Shedding drops
-  fine first (`shedRecord`). The backend inherits that asymmetry — it is why
-  running the loop unattended *buys* something a re-fetch on reload cannot.
-
-- **Write cadence, not every sample.** Observation is cheap and happens on every
-  reading; serializing a season is not (`WRITE_INTERVAL_MS`, 30s). The server
-  keeps the same floor, so a crash costs at most half a minute of an
-  hourly-grained series.
-
----
-
-## Auth, secrets, and the trust boundary
-
-The proxy is the only component that holds a credential, and that is the whole
-reason it is a server and not a CORS relaxation:
-
-- **Tokens live in server config, keyed by `sourceId`.** Never in the client
-  bundle, never in a query string, never on a node's `raw`. `PromQuery.token`
-  is read server-side and attached as `Authorization: Bearer` inside
-  `fetchPromSnapshot`; the client's proxy call carries no secret.
-
-- **The client names sources, the server names hosts.** A registered-source
-  allowlist is what makes "point the garden at a URL" safe. When the
-  garden-builder's *fetch* half lands (`docs/garden-builder.md` step 6), adding a
-  source is an operator registering an endpoint, not the client passing one — the
-  same boundary, widened by configuration rather than by trusting the page.
-
----
-
-## Provenance and the honesty constraints
-
-The backend inherits every constraint the app already holds itself to, and one
-of them it must actively preserve across the hop:
-
-- **`provenance.kind` must read `live`, and the live test checks it.**
-  `fetchPromSnapshot` stamps `kind: 'live'` with the endpoint and query; the
-  mock stamps `captured`. The HUD's "this is simulated" marker derives from that,
-  so the proxy path must produce a `live` snapshot — which it does for free,
-  because the proxy returns the wire envelope and `fetchPromSnapshot` runs
-  unchanged. The test `expect(source.snapshot?.provenance.kind).toBe('live')` is
-  the tripwire that this stayed true.
-
-- **Provenance travels with every value.** The World garden made this
-  load-bearing: every derived judgment keeps the evidence it came from. A backend
-  value has to carry where it came from so the inspection HUD can always answer
-  "says who". `raw` on the node already exists for exactly this payload.
-
-- **Third-party terms apply the moment real content is ingested.** A vendor's or
-  a wire's terms on storing and showing their data bind a live source. Prometheus
-  (an operator's own metrics) sidesteps this; a news or vendor feed does not, and
-  the feature must surface that, not bury it. Flagged as a ship-blocker in the
-  World/news work and inherited here wholesale.
-
----
-
-## What stays offline-testable — and how we verify without egress
-
-The reason this doc can be written and the backend built with confidence in an
-environment that has no network: **the seam is exercised offline, and only the
-socket is missing.**
-
-- The proxy has a pure core — resolve `sourceId`, forward `promql`, return the
-  envelope — testable against a captured `PromApiResponse` with no server, the
-  same way `mockPromFetch` stands in for the socket today.
-- The collector loop is the client loop moved; its logic (`observe`,
-  `mergeRecord`, `restoreRecord`, `shedRecord`) is already pure and node-tested.
-- `prometheus.live.test.ts` is the one test that needs a real server, and it is
-  `skipIf` no `PROM_LIVE_URL` is reachable. It asserts only what any real
-  Prometheus must satisfy — well-formed nodes, vitals in range, `provenance.live`
-  — never a specific value. Point it at a proxy URL and it certifies the whole
-  path the moment there is one to point at.
-
-So "we can't reach a server here" blocks *running* the live path, not *building
-and testing* it. Every piece but the socket is green offline, which is the state
-the rest of the pipeline is already in.
-
----
-
-## Reference implementation — the shipped core
-
-`src/backend/` is the runtime-agnostic half, pure and green offline (19 tests).
-Every piece takes its network and its storage as injected arguments, so the same
-code runs under any HTTP framework and any persistence, and the tests drive it
-with the Prometheus mock and an in-memory store.
-
-- **`registry.ts` — the allowlist.** `promRegistry([{ id, query, mapping,
-  scrapeIntervalMs }])`. `query` carries the base URL and bearer token,
-  server-side; `resolve(id)` is how the proxy turns a client-named id into a host
-  it was allowed to reach, and `all()` is what the loop walks.
-
-- **`proxy.ts` — the pipe with an allowlist.** `handleProxyRequest(registry,
-  fetchImpl, { sourceId, promql })` resolves the source, **404s an unknown id**
-  and **403s any PromQL that is neither the source's registered query nor `up`**
-  (no query injection past the boundary), attaches the token, forwards, and
-  returns the wire envelope untouched. An HTTP route is a thin shell over this —
-  read the body, call it, write `status`/`body` back.
-
-- **`collectorLoop.ts` — the poll, moved off the tab.** `createCollectorLoop({
-  registry, fetchImpl, storage })` builds a `promSource` per registered source and
-  a `createCollector`, and `tick(now)` refreshes whatever `dueSources` says is
-  owed (awaited, not fire-and-forget), reads it, and notes it into the record. A
-  failed fetch does not advance — staleness greys the garden, the honest reading.
-  The scheduler that calls `tick` on a clock is the other thin shell (a
-  `setInterval`, a cron, a scheduled function — the deploy target's choice).
-
-- **`storage.ts` — the reference store.** `memoryStorage()` implements the same
-  three-method `CollectorStorage` the browser's `localStorage` does. The
-  persistent adapter is the same three methods over a file or a KV row — the one
-  place a runtime leaks in, left out of the typed core because a file read is
-  `fs`, which this repo does not type, and because the record format is fixed
-  wherever the bytes land:
+- **`registry.ts` is the allowlist.** `promRegistry([{ id, query, mapping,
+  scrapeIntervalMs }])`. `query` holds the base URL and bearer token on the
+  server. The proxy uses `resolve(id)` to turn a client-supplied id into a host
+  it's allowed to reach, and the loop walks `all()`.
+- **`proxy.ts` is a pipe with an allowlist.** `handleProxyRequest(registry,
+  fetchImpl, { sourceId, promql })` resolves the source. It **returns 404 for an
+  unknown id** and **403 for any PromQL that isn't the source's registered query
+  or `up`**, so a client can't inject queries past the boundary. It then attaches
+  the token, forwards the request, and returns the response envelope unchanged.
+  An HTTP route is a thin wrapper: read the body, call this, write `status` and
+  `body` back.
+- **`collectorLoop.ts` moves the poll off the tab.** `createCollectorLoop({
+  registry, fetchImpl, storage })` builds a `promSource` for each registered
+  source plus a `createCollector`. `tick(now)` refreshes whatever `dueSources`
+  says is owed (awaited this time), reads it, and writes it into the record. A
+  failed fetch doesn't advance, and the garden greys from staleness, which is the
+  right reading. Whatever calls `tick` on a clock is another thin wrapper: a
+  `setInterval`, a cron job or a scheduled function, depending on the host.
+- **`storage.ts` is the reference store.** `memoryStorage()` implements the same
+  three-method `CollectorStorage` interface as the browser's `localStorage`. A
+  persistent version is the same three methods over a file or a key-value row.
+  That's the one place the runtime leaks in, so it's kept out of the typed core
+  (this repo doesn't type `fs`, and the record format is the same wherever the
+  bytes end up):
 
   ```ts
-  // file-storage.ts — the ~6-line shell, on a runtime with fs
+  // file-storage.ts: the ~6-line shell, on a runtime with fs
   import { readFileSync, writeFileSync, rmSync } from 'node:fs';
   import type { CollectorStorage } from '../state/collector';
   export const fileStorage = (path: string): CollectorStorage => ({
@@ -316,11 +84,11 @@ with the Prometheus mock and an in-memory store.
   });
   ```
 
-- **`proxyFetch.ts` — the single-argument client swap, now wired.**
-  `promProxyFetch(proxyUrl, sourceId)` returns a `FetchLike` that POSTs
-  `{ sourceId, promql }` to the proxy instead of reaching a host directly, and
-  `state/sources.ts` selects it through `promFetchImpl(PROM_PROXY_URL)` — a plain
-  function of one env var, `VITE_PROM_PROXY_URL`:
+- **`proxyFetch.ts` is the one-argument client swap.** `promProxyFetch(proxyUrl,
+  sourceId)` returns a `FetchLike` that POSTs `{ sourceId, promql }` to the proxy
+  instead of calling a host directly. `state/sources.ts` picks it through
+  `promFetchImpl(PROM_PROXY_URL)`, a plain function of one env var,
+  `VITE_PROM_PROXY_URL`:
 
   ```ts
   export function promFetchImpl(proxyUrl: string | undefined, sourceId = 'prometheus') {
@@ -330,65 +98,257 @@ with the Prometheus mock and an in-memory store.
   if (!PROM_PROXY_URL) prometheus.adopt(syntheticPromSnapshot());
   ```
 
-  Unset (dev, and every test) keeps the in-process mock, so the app runs with no
-  egress and nothing downstream changes; set the var in a networked deploy and the
-  same source pulls live through the proxy, starting empty and filling on its first
-  refresh rather than showing mock data behind a live label. The selection is a
-  pure exported function precisely so "going live is one argument" is a tested
-  fact, not a claim (`proxyFetch.test.ts`).
+  With the variable unset (in dev and in every test) the in-process mock stays,
+  the app makes no outbound requests, and nothing downstream changes. With it set,
+  the same source pulls live data through the proxy. It starts empty and fills on
+  its first refresh, so it never shows mock data under a live label. The selection
+  is a pure exported function so that "going live is one argument" is covered by a
+  test (`proxyFetch.test.ts`).
+- **`nflProxy.ts` and `nflProxyFetch.ts`** do the same job for ESPN's NFL feed,
+  with an allowlist of paths instead of queries. See `docs/nfl-live.md`.
 
-The three shells that were "not here" — the HTTP route, the scheduler, and the
-persistent `CollectorStorage` — **now exist for Netlify** in `netlify/functions/`
-(`prometheus-proxy.ts`, `collect-scheduled.ts`, and a Blobs-backed store), wired to
-this same core; `docs/deploy-netlify.md` is the operator checklist. They live
-outside the app's `tsc`/`vitest` scope because their runtime is Netlify's, not the
-browser's — the deliberate seam between the tested core and the deploy target. The
-`prometheus.live.test.ts` tripwire (`provenance.kind === 'live'`) is preserved
-across the proxy hop and checked in `proxyFetch.test.ts`.
+The three wrappers the core needs to actually run (the HTTP route, the scheduler,
+and persistent storage) **exist for Netlify** in `netlify/functions/`:
+`prometheus-proxy.ts`, `nfl-proxy.ts`, `collect-scheduled.ts`, and a store backed
+by Netlify Blobs. They sit outside the app's `tsc` and `vitest` scope because they
+run on Netlify, not in the browser, and that boundary between the tested core and
+the host is intentional. The check that live data is stamped `live` survives the
+proxy hop and is tested in `proxyFetch.test.ts`.
 
-## The minimal viable backend
+---
 
-Smallest thing that is honestly live, in build order:
+## Where it plugs in
 
-1. **A single-route proxy** (`POST /api/proxy/prometheus`) with one hardcoded
-   registered source, its endpoint and token in server config. Pure core tested
-   against a captured envelope; the route is a thin shell over it.
-2. **The client swap** — `fetchImpl: proxyFetch` behind a build flag, so the app
-   ships pointed at the mock and flips to the proxy where one exists. Wired and
-   unit-tested against a mock proxy; no downstream change.
-3. **The collector loop** running `fetch → translate → observe` on the schedule,
-   writing `ObservedRecord` to server storage, served back on connect. Reuses the
-   pure collector; the only new code is the scheduler and the store adapter.
-4. **Generalize** — the registered-source allowlist becomes the operator side of
-   the garden-builder's fetch half, and the declarative HTTP/JSON source
-   (`translation/declarative.ts`) drops in behind the same proxy with a different
-   `sourceId`.
+Data flows one way: **adapters emit raw records, translation maps them to
+normalized nodes, the store holds them, and the scene subscribes.** The whole
+Prometheus path below the network was already built and tested offline against
+captured responses. The backend attaches at exactly one point, through three
+client-side seams that already had the right shape:
 
-Steps 1–3 make Prometheus genuinely live. Step 4 is where every other source
-follows for free, which was the point of building Prometheus first.
+- **`FetchLike` (`adapters/prometheus/query.ts`).** The adapter's only link to
+  the outside world, passed in instead of imported: `(url, init) =>
+  Promise<{ ok, status, json() }>`. `globalThis.fetch` fits it directly, and so
+  does a function that calls our own proxy. This is the one argument that changes
+  to go live.
+- **`refresh` and `adopt` (`state/sources.ts`, `adapters/prometheus/index.ts`).**
+  `refresh(now)` fetches a new `PromSnapshot` and adopts it. `adopt(snapshot)`
+  takes one *without* fetching. The code describes it as the way "a backend that
+  already fetched would hand results back." A backend that polls on the server and
+  pushes snapshots to the client would use `adopt`. A client that pulls from the
+  proxy itself uses `refresh`. Both exist.
+- **`ObservedRecord` (`state/persist.ts`, `state/collector.ts`).** What the app
+  watched, stored sparsely: one sample per node per slot, only when the node
+  reported. As the collector's comment puts it, "`ObservedRecord` is already the
+  wire format." Moving the loop to a server changes where it runs, not what it
+  writes.
+
+So the backend isn't a new layer in the pipeline. It's where the fetch and the
+poll now run, and it hands results back through seams the client already has.
+
+---
+
+## Why Prometheus first
+
+`docs/sources.md` makes the full case. In brief:
+
+- It's genuinely live and it **never finishes**, so it didn't need the completion
+  vocabulary.
+- `up{}` is the source reporting its own liveness, so the backend doesn't have to
+  guess from a clock. It fetches a second vector and the translator already reads
+  it.
+- Building its plumbing forces a real fetch, a real poll and a proxy, which every
+  later source (FIFA, fundraising, the declarative HTTP/JSON source) reuses.
+
+FIFA doesn't test anything new, so it's a poor first choice. Fundraising runs into
+polarity depending on whose side you're on, and into revised filings, so it should
+wait. The backend was built once for Prometheus and extended to the NFL after.
+
+---
+
+## The proxy contract
+
+A thin server-side endpoint that does the fetch the browser isn't allowed to and
+nothing else. It's a `FetchLike` with a network on the other side.
+
+```
+POST /api/proxy/prometheus
+  body: { sourceId, promql }         // never a raw baseUrl from the client
+  → 200 { status, data }             // the untouched PromApiResponse envelope
+  → 4xx/5xx { error }                // surfaced, not swallowed
+```
+
+What it does, and what it refuses to do:
+
+- **It resolves `sourceId` to an endpoint and token held on the server.** The
+  client says which configured source it wants and never names a host. The base
+  URL and token live in server config, so a client can only reach servers an
+  operator registered. That closes the request-forgery hole, and it's why the
+  proxy is a real trust boundary and not just a way around CORS.
+  `PromQuery.token` stays on the server. The client never sees it and no node
+  carries it (the type comment says "never logged, never stored on a node").
+- **It returns the response envelope unchanged.** `parseInstantVector` and
+  `fetchPromSnapshot` already turn a `PromApiResponse` into a `PromSnapshot`:
+  values arrive as strings, seconds become milliseconds, error envelopes throw, and
+  NaN and Inf are dropped. If the proxy re-parsed or "cleaned" anything, that
+  logic would be split across two places. It passes data through an allowlist and
+  doesn't translate.
+- **It keeps errors distinct from empty results.** A `status: "error"` envelope
+  isn't an empty garden. The parser throws on it on purpose so the app can tell a
+  broken query from one with no results, and passing the envelope through keeps
+  that distinction intact.
+
+Nothing downstream of the client changes. The live test (`prometheus.live.test.ts`)
+already covers the whole path against a real server, and the proxy only changes
+where that server is reached from.
+
+---
+
+## The collector loop contract
+
+The proxy answers when asked. The loop is what does the asking when nobody's
+looking. `collector.ts` described it as the missing half: "a collector that truly
+runs whether or not anyone is looking is a process, and this project has no server
+to put one in."
+
+For each configured live source, on that source's own schedule, it:
+
+1. **Asks when the source says to.** `StaleSchedule.dueAfter` answers both
+   "should I have heard something by now?" and "is there anything new to fetch?"
+   (polling and staleness are the same question, see `state/sources.ts`). The loop
+   refreshes when a reading is owed and has no clock of its own. For Prometheus
+   that's `promStaleSchedule(scrapeIntervalMs)`: due one interval after the last
+   sample, grey after two intervals of silence.
+2. **Fetches, translates and records.** It runs `fetchPromSnapshot`, then
+   `translatePromSnapshot`, then `observe` into an `ObservedRecord`. These are the
+   same three steps `ecosystemStore` runs in the browser today. The record uses
+   the existing format: sparse, one sample per node per slot, absolute slots,
+   rounded to four decimals on the way in. `encodeRecord` is a plain stringify,
+   so the server writes the same bytes the browser's `localStorage` holds.
+3. **Serves the record back when a tab connects.** A new tab restores the
+   server's `ObservedRecord` the same way it restores the local one today.
+   `restoreRecord` fills observations into the gaps a source left in the history
+   buffers and never overwrites what the source currently says. `mergeRecord`
+   already exists, so a tab that also collected while open reconciles with the
+   server's record instead of fighting it.
+
+Two limits worth knowing:
+
+- **The coarse tier is what matters.** Over a week, the hourly tier mostly
+  overlaps what a live source can still tell you again. Over a season, the daily
+  tier is the only place those days exist. When space runs short the fine tier
+  goes first (`shedRecord`). That's why running the loop unattended gets you
+  something a re-fetch on reload can't.
+- **It writes on a timer, not on every sample.** Recording an observation is
+  cheap and happens on every reading. Serializing a whole season isn't, so writes
+  happen at most every `WRITE_INTERVAL_MS` (30s). The server keeps the same
+  minimum, so a crash loses at most half a minute of an hourly series.
+
+---
+
+## Auth and secrets
+
+The proxy is the only component that holds a credential, and that's the reason
+it has to be a server instead of a CORS workaround.
+
+- **Tokens live in server config, keyed by `sourceId`.** They never appear in the
+  client bundle, in a query string, or in a node's `raw`. `PromQuery.token` is read
+  on the server and sent as `Authorization: Bearer` inside `fetchPromSnapshot`. The
+  client's proxy call carries no secret.
+- **The client names sources and the server names hosts.** An allowlist of
+  registered sources is what makes "point the garden at a URL" safe. When the
+  garden builder gets its fetch half (the last step in `docs/garden-builder.md`),
+  adding a source will mean an operator registering an endpoint, not the client
+  passing one. It's the same boundary, widened by configuration and never by
+  trusting the page.
+
+---
+
+## Provenance and honesty
+
+The backend inherits every rule the app already follows, and one of them has to
+survive the extra hop:
+
+- **`provenance.kind` must be `live`, and a test checks it.** `fetchPromSnapshot`
+  stamps `kind: 'live'` with the endpoint and query, and the mock stamps
+  `captured`. The HUD's "this is simulated" marker is derived from that. Because
+  the proxy returns the envelope unchanged and `fetchPromSnapshot` runs as normal,
+  proxied data comes out `live` automatically. The assertion
+  `expect(source.snapshot?.provenance.kind).toBe('live')` guards it.
+- **Provenance travels with every value.** The World garden established that every
+  derived judgement keeps the evidence it came from. A value from the backend has
+  to say where it came from, so the inspection HUD can always answer "says who?".
+  The node's `raw` field exists for exactly this.
+- **Third-party terms apply as soon as real content comes in.** A vendor's or a
+  news wire's terms on storing and showing their data bind a live source.
+  Prometheus (an operator's own metrics) avoids this. A news or vendor feed
+  doesn't, and the feature has to make that visible. The World and news work
+  flagged it as a ship-blocker, and it applies here too.
+
+---
+
+## Testing without network access
+
+This could be built with confidence in an environment with no network because
+the seams run offline and only the socket is missing.
+
+- The proxy's core (resolve `sourceId`, forward `promql`, return the envelope) is
+  tested against a captured `PromApiResponse` with no server, the same way
+  `mockPromFetch` stands in for the socket today.
+- The collector loop is the browser loop moved. Its logic (`observe`,
+  `mergeRecord`, `restoreRecord`, `shedRecord`) is already pure and tested.
+- `prometheus.live.test.ts` is the one test that needs a real server, and it's
+  skipped unless `PROM_LIVE_URL` is set. It only asserts what any real Prometheus
+  has to satisfy (well-formed nodes, vitals in range, `provenance.live`) and never
+  checks a specific value. Point it at a proxy URL and it tests the whole path.
+
+So having no server here stops us *running* the live path, not building and
+testing it. Everything except the socket passes offline.
+
+---
+
+## Build order
+
+The smallest version that's genuinely live:
+
+1. ~~**A single-route proxy**~~ (`POST /api/proxy/prometheus`) with one registered
+   source whose endpoint and token live in server config. **Done.**
+2. ~~**The client swap.**~~ `fetchImpl` points at the proxy behind a build flag,
+   so the app ships using the mock and switches to the proxy where one exists.
+   **Done.**
+3. ~~**The collector loop**~~ running fetch, translate and observe on schedule,
+   writing `ObservedRecord` to server storage and serving it back on connect.
+   **Done** (for Prometheus).
+4. **Generalize.** The registered-source allowlist becomes the operator side of
+   the garden builder's fetch, and the declarative HTTP/JSON source
+   (`translation/declarative.ts`) goes behind the same proxy with a different
+   `sourceId`. The collector loop also needs extending beyond Prometheus (the NFL
+   proxy exists but the loop doesn't cover it yet).
+
+Steps 1 to 3 make Prometheus live. Step 4 is where every other source gets the
+same treatment cheaply, which was the reason for building Prometheus first.
 
 ---
 
 ## Open questions
 
-Named rather than answered, because they are the decisions a real deployment
-forces and this doc's job is to have them waiting rather than to guess:
+These are decisions a real deployment will force. They're listed here so they're
+waiting when it happens:
 
-- **Push or pull to the connected client?** The loop writes the record
-  server-side regardless. Whether an open tab pulls fresh snapshots through the
-  proxy on its own beat (via `refresh`) or the server pushes them (via `adopt`
-  over a socket) is a latency/complexity trade-off; both seams exist, so this can
-  be deferred without rework.
-- **Where does server state live?** The record is small and the format is fixed;
-  a file, a KV store, or a row are all adequate. The store adapter is the only
-  place that decision leaks, mirroring how `collector.ts` isolates `localStorage`.
-- **Multi-tenant, eventually.** A registered source per operator is single-tenant
-  by construction. User-defined sources at scale mean per-user config and quotas
-  on the loop — real, but strictly past the point where one Prometheus garden is
-  live, and out of scope until then.
+- **Push or pull to a connected tab?** The loop writes the record on the server
+  either way. An open tab can pull fresh snapshots through the proxy on its own
+  schedule (via `refresh`), or the server can push them (via `adopt` over a
+  socket). It's a trade between latency and complexity, and both seams exist, so
+  it can wait without rework. Pull is what's built today.
+- **Where does server state live?** The record is small and its format is fixed,
+  so a file, a key-value store or a database row would all work. The store adapter
+  is the only place the choice shows up, the same way `collector.ts` keeps
+  `localStorage` in one place. The Netlify deploy uses Blobs.
+- **Multiple tenants, eventually.** One registered source per operator is
+  single-tenant by design. User-defined sources at scale would need per-user
+  config and quotas on the loop. That's real work, but only after one Prometheus
+  garden is actually live.
 
-The test the whole thing has to pass is unchanged from every source before it: a
-stranger glancing at the garden reads health correctly without being told the
-domain, and the app never asserts something it cannot show the evidence for. A
-backend that serves a confident-looking wrong plant has failed that test as
-surely as a bad mapping would.
+The test is the same as for every source before it: a stranger glancing at the
+garden reads health correctly without being told the domain, and the app never
+claims something it can't show evidence for. A backend that serves a confident but
+wrong plant fails that test just as a bad mapping would.

@@ -1,14 +1,14 @@
 # Testing a real-world data source: Prometheus
 
-`docs/sources.md` names Prometheus as *the archetype the whole idea was built
-for* and the right first real source. This is the record of building it as far
-as this environment allows, and — the question that started it — **how you test
-a real-world source when the environment's egress is policy-restricted.**
+`docs/sources.md` calls Prometheus the source the whole idea was built for, and
+the right one to connect first. This file records how far we got building it
+here, and how you test a real source when the environment blocks outbound
+traffic.
 
-The short version: the source is written so that the *only* thing a networked
-run adds is a real socket. Everything else — the wire parsing, the mapping, the
-translation to nodes — is exercised offline against captured responses, and the
-live end-to-end test switches on the moment a real server is reachable.
+The short answer is that the source is written so a networked run only adds a
+real socket. Wire parsing, mapping and translation to nodes all run offline
+against captured responses. The live end-to-end test switches on as soon as a
+real server is reachable.
 
 ## The three layers, and where each is tested
 
@@ -18,15 +18,15 @@ live end-to-end test switches on the moment a real server is reachable.
 | the mapping → nodes | `translation/prometheus.ts` | `translation/prometheus.test.ts` |
 | the whole path, live | `adapters/prometheus/index.ts` (`promSource`) | `prometheus.live.test.ts`, against a real server |
 
-The captured responses (`adapters/prometheus/fixtures.ts`) are in the exact wire
-shape a real Prometheus returns — value as a string, timestamp in seconds,
-labels under `metric` — so a fixture and a live server produce a
-byte-identical `PromSnapshot`, and the translator cannot tell which it got.
+The captured responses (`adapters/prometheus/fixtures.ts`) use the exact wire
+shape a real Prometheus returns: the value is a string, the timestamp is in
+seconds, and labels sit under `metric`. A fixture and a live server therefore
+produce byte-identical `PromSnapshot`s, and the translator can't tell them apart.
 
 ## Running the live test
 
-The deterministic suites run everywhere and need no network. The live test is
-skipped unless you point it at a real Prometheus:
+The deterministic suites run anywhere with no network. The live test is skipped
+unless you point it at a real Prometheus:
 
 ```sh
 PROM_LIVE_URL=https://prometheus.demo.prometheus.io \
@@ -34,77 +34,77 @@ PROM_LIVE_QUERY=up \
   npm test -- prometheus.live
 ```
 
-It asserts only what *any* real server must satisfy — a poll produces a garden
-of well-formed plants with vitals in `[0, 1]` — never a specific value, because a
-live server's numbers are not ours to pin.
+It only asserts what any real server has to satisfy: a poll produces a garden of
+well-formed plants with vitals in `[0, 1]`. It never checks a specific value,
+because we don't control a live server's numbers.
 
-**In this environment it fails with `403`,** because outbound egress is denied by
-policy at the proxy (`up{}` never leaves the network boundary). That is the same
-constraint `docs/sources.md` keeps flagging, now demonstrable rather than
-asserted: the code reaches the socket and the socket is what is blocked. Nothing
-else in the path is.
+**In this environment it fails with `403`.** Outbound traffic is denied by policy
+at the proxy, so the `up{}` query never leaves the network. That's the same
+constraint `docs/sources.md` keeps mentioning, and this test shows it directly:
+the code gets as far as the socket, and the socket is the only thing blocked.
 
-## The mapping is the source — and it is declarative
+## The mapping is declarative
 
-The hand-written translators (league, market, world) each decided their mapping
-in code. Prometheus is regular enough that its mapping is *data* — this is the
-first step toward the declarative source `docs/sources.md` sketches. A
-`PromMapping` states the things the numbers cannot:
+The hand-written translators (league, market, world) each define their mapping
+in code. Prometheus is regular enough that its mapping can be data, which is the
+first step toward the declarative source sketched in `docs/sources.md`. A
+`PromMapping` states the things the numbers can't tell you:
 
-- **the scale** — what value reads as 0 and what reads as 1. `min > max`
-  expresses "lower is better" (a latency, an error rate) with no extra flag; the
-  arithmetic just runs backwards.
-- **polarity — mandatory.** A rising error rate is a thriving weed, not a healthy
-  tree, and only the operator can say which. It is a required field.
-- **trend is derived** from the previous poll, never supplied. The config names
-  the level; the delta is computed across refreshes.
-- **`up{} == 0` is staleness the source states about itself** — it becomes a
-  critical *down* blight and the plant's clock stops at its last real sample, so
-  it greys as the silence it is rather than staying fresh because we asked.
-- **labels are the bed grouping** (`job`, typically) and the plant name
-  (`instance`).
+- **The scale.** Which value reads as 0 and which reads as 1. Setting `min > max`
+  means "lower is better" (latency, error rate) without a separate flag, because
+  the arithmetic just runs backwards.
+- **Polarity, which is required.** A rising error rate should grow a thriving
+  weed, not a healthy tree, and only the operator knows which way a metric
+  points.
+- **Trend is derived** from the previous poll and never supplied. The config
+  names the level and the delta is computed across refreshes.
+- **`up{} == 0` means the target says it's down.** It becomes a critical *down*
+  blight, and the plant's clock stops at its last real sample. The plant greys
+  out like any other silence instead of looking fresh just because we asked.
+- **Labels give the grouping.** Usually `job` becomes the bed and `instance`
+  becomes the plant name.
 
-## The one seam friction, named
+## The one awkward fit
 
-`LiveSource.read(now)` is synchronous, because every source so far is a
-generator. A network fetch is not. `promSource` resolves this the honest way:
-`read` translates the **last snapshot it holds**, synchronously; `refresh` is the
-async fetch that fills it; and the previous poll's vitality is threaded through
-so trend is a real delta across refreshes.
+`LiveSource.read(now)` is synchronous because every earlier source was a
+generator. A network fetch isn't. `promSource` handles this by splitting the
+work: `read` synchronously translates the last snapshot it holds, `refresh` is
+the async fetch that updates that snapshot, and the previous poll's vitality is
+carried forward so trend is a real delta between refreshes.
 
-What that leaves open is deliberate and is *not* a translator problem: something
-has to *call* `refresh` on the scrape interval, and a shut browser tab cannot.
-That caller is the unattended collector loop `docs/sources.md` describes — a
-backend — and the observation record already stores in the shape it wants. So a
-*live* Prometheus garden is `promSource` plus that loop, and `promSource` is the
-whole of the part that lives in the client.
+That leaves one gap on purpose, and it isn't a translation problem. Something
+has to call `refresh` on the scrape interval, and a closed browser tab can't. That
+caller is the unattended collector loop described in `docs/sources.md`, which
+means a backend. The observation record is already stored in the shape that loop
+needs. A live Prometheus garden is `promSource` plus that loop, and `promSource`
+is all of the client-side part.
 
 ## Wired in behind a mock fetch
 
-`promSource` is now in `state/sources.ts` — the eighth garden — pointed at a mock
-instead of a server. `adapters/prometheus/mock.ts` is a `FetchLike` that answers
-`/api/v1/query` from a synthetic seven-target fleet in the exact wire shape above,
-so the whole path runs in the app with the socket the only thing missing. Three
-things make an async fetch source fit the synchronous composition the other
-sources assume:
+`promSource` is registered in `state/sources.ts` as a garden of its own, pointed at
+a mock instead of a server. `adapters/prometheus/mock.ts` is a `FetchLike` that
+answers `/api/v1/query` from a synthetic seven-target fleet, in the same wire
+shape described above. The whole path runs in the app and only the socket is
+missing. Three changes let an async source fit the synchronous composition the
+other sources assume:
 
-- **Primed synchronously.** `syntheticPromSnapshot()` builds a parsed snapshot
-  without the promise, and `adopt` hands it to the source before compose reads it,
-  so the garden is populated on the first `read` rather than empty until a fetch
-  lands.
-- **`refresh` on the beat.** `LiveSource` gained an optional `refresh(now)`; the
-  store's `poll` kicks it fire-and-forget for any source that has one, so the next
-  beat's `read` sees the fetched snapshot. This is the mock standing in for the
-  backend loop — the caller the section above says a shut tab cannot be. A fetch
-  that rejects simply does not advance, and staleness greys the garden, which is
-  the honest reading of a feed that went quiet.
-- **Due on the scrape interval, not every beat.** `promStaleSchedule` now marks a
-  target owed one interval after its last sample (and stale one interval beyond
-  that), so the poll re-reads on the scrape cadence rather than continuously.
+- **It's primed synchronously.** `syntheticPromSnapshot()` builds a parsed
+  snapshot without a promise, and `adopt` hands it to the source before compose
+  reads it. The garden is populated on the first `read` instead of sitting empty
+  until a fetch lands.
+- **`refresh` runs on the beat.** `LiveSource` gained an optional `refresh(now)`.
+  The store's `poll` fires it without awaiting for any source that has one, so
+  the next beat's `read` sees the new snapshot. Here the mock stands in for the
+  backend loop that a closed tab can't provide. A rejected fetch just doesn't
+  advance, and the garden greys out from staleness, which is the right reading of
+  a feed that went quiet.
+- **It's due on the scrape interval, not every beat.** `promStaleSchedule` marks
+  a target as owed one interval after its last sample, and stale one interval
+  after that. The poll re-reads at the scrape cadence instead of continuously.
 
-The mock fleet moves — latencies walk on a slow per-target curve, so trend is a
-real delta across refreshes — and one replica is held down (`up{} == 0`, last
-sample frozen in the past) so the garden exercises the staleness-and-blight read,
-not just the healthy one. Swapping `mockPromFetch` for the platform `fetch` and a
-real `PromQuery` endpoint is the whole of what "go live" means; the unattended
-refresh loop for a shut tab remains the backend's job.
+The mock fleet moves. Latencies drift on a slow per-target curve, so trend is a
+real delta between refreshes. One replica is held down (`up{} == 0`, with its
+last sample frozen in the past) so the garden shows the staleness and blight
+reading as well as the healthy one. Going live means swapping `mockPromFetch` for
+the platform `fetch` and pointing it at a real `PromQuery` endpoint. Refreshing
+while the tab is closed is still the backend's job.

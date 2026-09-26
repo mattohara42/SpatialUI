@@ -1,284 +1,275 @@
 # User-defined data sources
 
-A proposal, not a description of built state. Written to memorialize a design
-direction for future sessions: **how an end user points the garden at their own
-data** — a FIFA league, a Prometheus server, a political-fundraising feed —
-without writing TypeScript.
+This started as a proposal for **how an end user points the garden at their own
+data** (a FIFA league, a Prometheus server, a political fundraising feed) without
+writing TypeScript. Much of it is now built. The status of each step is in the
+sequence at the end.
 
-Read `ARCHITECTURE.md` for the layer contracts and `README.md` for the one-way
-data flow. This file is the part those do not carry: which half of "add a source"
-already exists, which half does not, and the specific traps the missing half
-walks into — most of which the World garden already paid for once and wrote down.
+`ARCHITECTURE.md` covers the layer contracts and `README.md` the one-way data
+flow. This file covers which half of "add a source" existed already, which half
+didn't, and the traps the missing half runs into. The World garden hit most of
+those traps first and wrote them down.
 
 ---
 
 ## The short answer
 
-"Let an end user add their own source" is **two problems wearing one sentence**,
-and they are very different in difficulty:
+"Let an end user add their own source" sounds like one problem but it's two, and
+they're very different in difficulty:
 
-1. **Developer extensibility — mostly already built.** Adding a source today is
-   writing a translator and one line in `state/sources.ts`. The seam is real and
-   load-bearing: three sources already come through it. A FIFA source is nearly a
-   copy of the NFL one; Prometheus is the archetype the whole project was built
-   for; fundraising is a published-then-revised numeric source like the World
-   garden. All three are a competent afternoon *for someone who writes code*.
+1. **Developer extensibility, which mostly already existed.** Adding a source
+   means writing a translator and adding one line to `state/sources.ts`. That seam
+   is real and every built-in source uses it. A FIFA source would be close to a
+   copy of the NFL one. Prometheus is the case the whole project was built for.
+   Fundraising is published and then revised, like the World garden. For someone
+   who writes code, each is an afternoon's work.
+2. **Configuration at runtime by a non-developer, which is the real work.** For a
+   user who doesn't write code, the mapping from raw data to a garden has to become
+   configuration instead of code, and it needs a place to enter it and a place for
+   it to run. That's a product on top of the pipeline, and all the hard parts are
+   there.
 
-2. **Non-developer configuration at runtime — not built at all, and the real
-   work.** For a user who does not write code, the mapping from raw data to a
-   garden has to become *configuration* rather than *code*, plus a place to
-   enter it and a place for it to run. This is a product on top of the pipeline,
-   and everything hard is in here.
-
-The rest of this document is mostly about the second, because the first is a
-known quantity and the second is where the design decisions live.
+Most of this file is about the second problem, because the first is well
+understood and the second is where the design decisions are.
 
 ---
 
-## What already exists — the seam
+## What already existed: the seam
 
-The architecture anticipated this from the start. Data flows one way — **adapters
-emit raw records → translation maps them to normalized nodes → the store holds
-them → the scene subscribes** — and nothing below the scene knows what Prometheus
-is, while nothing above `translation/` knows what a plant is. Adding a source
-means writing a translator, not widening the node type.
+The architecture planned for this from the start. Data flows one way: **adapters
+emit raw records, translation maps them to normalized nodes, the store holds them,
+and the scene subscribes.** Nothing below the scene knows what Prometheus is, and
+nothing above `translation/` knows what a plant is. Adding a source means writing
+a translator, not widening the node type.
 
-Concretely, three pieces are already in place and worth not rebuilding:
+Three pieces were already in place and shouldn't be rebuilt:
 
 - **`LiveSource` (`state/sources.ts`).** A source is four things: a `gardenId`, a
-  staleness `policy`, `read(now)` that returns a `TranslatedGarden` (nodes,
-  edges, and both history tiers), and a `pollable` flag. `SOURCES` is the whole
-  list; the composition point in `state/ecosystemStore.ts` walks it, registers
-  each source's stale schedule, and lays the observation record back over the
-  gaps. A live adapter drops in behind this interface with nothing downstream
-  changing — the docs already call that swap the highest-value thing a networked
-  environment could do.
-
-- **Poll and staleness are one question.** `StaleSchedule.dueAfter` answers both
-  "should I have heard something by now" (the grey, dusty staleness state) and
-  "is there anything new to fetch" (the poll). A source that can say when it will
-  next speak has already said when to re-ask it. Any new source gets this for
-  free by supplying a policy.
-
+  staleness `policy`, a `read(now)` that returns a `TranslatedGarden` (nodes, edges
+  and both history tiers), and a `pollable` flag. `SOURCES` is the full list. The
+  composition step in `state/ecosystemStore.ts` walks it, registers each source's
+  stale schedule, and fills gaps from the observation record. A live adapter slots
+  in behind this interface without anything downstream changing.
+- **Polling and staleness are one question.** `StaleSchedule.dueAfter` answers
+  both "should I have heard something by now?" (the grey, dusty stale state) and
+  "is there anything new to fetch?" (the poll). A source that can say when it'll
+  next report has already said when to ask it again. Any new source gets this by
+  supplying a policy.
 - **The observation record (`state/persist.ts`, `state/collector.ts`).** What the
-  app actually watched is written down sparsely — one sample per node per slot,
-  when a node reported — and laid back into the buffers on the next visit, into
-  the gaps a source left and never over what it currently says. Crucially, *the
-  stored shape is the one a server-side collector would want*, so moving the
-  loop somewhere it can run unattended is **a change of backend, not of format**.
-  That matters here: a user's live source needs somewhere to run when their tab
-  is shut, and the record was already designed for that move.
+  app actually saw is written down sparsely, one sample per node per slot, only
+  when a node reported. On the next visit it's laid back into the history buffers,
+  filling gaps a source left and never overwriting what the source currently says.
+  The stored shape is the one a server-side collector would want, so moving the
+  loop somewhere it can run unattended **changes the backend, not the format.**
+  That matters because a user's live source needs somewhere to run while their tab
+  is closed, and the record was designed for that move.
 
-So the developer path is: write a `read(now)` that fetches and translates, give
-it a policy, add it to `SOURCES`. Done. The user path has to turn each of those
-steps into data.
+So the developer path is: write a `read(now)` that fetches and translates, give it
+a policy, and add it to `SOURCES`. The user path has to turn each of those steps
+into data.
 
-**And the first turn of that crank now exists.** `translation/declarative.ts`
-interprets a mapping over plain fetched JSON — an array of records and dotted
-paths for id, label, level, and bed — into the same flat nodes the hand-written
-translators produce. It is the general case of what `translation/prometheus.ts`
-proved for one wire shape: the axis scale, mandatory polarity, derived trend, and
-group-by-for-beds are all *config*, so a second garden of that shape is a
-`DeclarativeMapping` object rather than a copy of a translator. It also maps
-declared **completions** — fruit and deadwood for finished work, the verb a CI
-feed or a to-do list needs. It does not yet cover edges or the
-published-vs-described split the world garden needs — each named in the file
-against the translator that is its spec. What is still missing above it is a
-fetch/backend and a UI, below.
+**The first part of that now exists.** `translation/declarative.ts` interprets a
+mapping over plain JSON (an array of records, plus dotted paths for id, label,
+level and bed) into the same flat nodes the hand-written translators produce. It
+generalizes what `translation/prometheus.ts` did for one wire shape. The axis
+scale, the required polarity, the derived trend and the bed grouping are all
+config, so a second garden of that shape is a `DeclarativeMapping` object instead
+of a copied translator. It also maps declared **completions**, the fruit and
+deadwood for finished work that a CI feed or a to-do list needs. It doesn't cover
+edges yet, or the split between when something was published and what date it
+describes, which the World garden needs. The file notes both, next to the
+translator that defines the expected behaviour.
 
 ---
 
-## What does not exist — configuration, mapping, and a place to run
+## What the user path needs: configuration, mapping, and a place to run
 
 Three things stand between the seam and an end user.
 
 ### 1. A connection, as configuration
 
-Point at a source without code: a URL or endpoint, auth (token, key), and a poll
-cadence. The cadence is nearly free — it is a `StaleSchedule` — but the fetch is
-not, for one blunt reason: **a browser cannot fetch arbitrary third-party URLs.**
-CORS forbids it, secrets do not belong in a client, and pointing the app at a
-user-named host from the browser is a request-forgery surface. So a real
-connection needs a **proxy/backend** to do the fetching, which is the same
-backend the "run unattended" problem needs. These are one piece of work, not two.
+The user needs to point at a source without code: a URL or endpoint, auth (a
+token or key) and a poll schedule. The schedule is nearly free, since it's just a
+`StaleSchedule`. The fetch isn't, for a simple reason: **a browser can't fetch
+arbitrary third-party URLs.** CORS blocks it, secrets don't belong in a client,
+and letting the browser hit a host the user names opens a request-forgery hole.
+A real connection needs a **proxy or backend** to do the fetching. That's the same
+backend the "run unattended" problem needs, so it's one piece of work, not two.
 
-### 2. The mapping, as configuration — the crux
+### 2. The mapping, as configuration
 
-This is the hard part, and it is hard because the translator is not a
-transcription. It is **the only place the mappings are decided**, and it decides
-things that are not present in the raw data at all. Look at what
-`EcosystemNode` demands that a metric does not carry:
+This is the hard part. It's hard because a translator doesn't just copy values
+across. It's **the one place the mapping gets decided**, and it decides things the
+raw data doesn't contain at all. Here's what `EcosystemNode` needs that a metric
+doesn't carry:
 
-- **The four axes, as comparisons in [0, 1].** `vitality`, `activity`,
-  `maturity`, `trend` are normalized — 0 is dying, 1 is thriving — not raw
-  numbers. The user has to declare *what 0 and 1 mean for their metric*: a
-  min/max, a percentile within the garden, "higher is better" or worse. This is
-  the subtlest decision in the whole scheme and the one the World garden already
-  drew blood on: vitality is a *comparison*, so if you map a raw quantity onto it
-  naively you are ranking things against each other, and "a country visibly
-  wilting because it is at war" is exactly the reading that source forbade. A
-  mapping UI has to make the user choose the scale deliberately, not default it.
-- **Polarity — mandatory, never inferable.** Is growth good news? A short
-  position, a weed, a rising failed-login count, the *opposition's* fundraising —
-  all are `suppress`, and a suppress node grows as a weed so thriving reads as
-  alarm. This is the one rule the entire environment model exists to hold: one
-  garden at a time so green cannot mean two opposite things at once. The user
-  *must* state it; it cannot be guessed from the numbers.
-- **Trend is derived, not supplied.** It is the signed delta, computed in
+- **The four axes, as comparisons between 0 and 1.** `vitality`, `activity`,
+  `maturity` and `trend` are normalized (0 is dying, 1 is thriving), not raw
+  numbers. The user has to say what 0 and 1 mean for their metric: a min and max,
+  a percentile within the garden, whether higher is better or worse. This is the
+  subtlest decision in the whole design, and the World garden already learned it
+  the hard way. Vitality is a comparison, so mapping a raw quantity onto it
+  naively ranks things against each other, and "a country visibly wilting because
+  it's at war" is exactly what that source ruled out. A mapping UI has to make the
+  user choose the scale on purpose instead of defaulting it.
+- **Polarity, which is required and can't be inferred.** Is growth good news? A
+  short position, a weed, a rising count of failed logins, the *opposition's*
+  fundraising are all `suppress`, and a suppress node grows as a weed so that
+  thriving looks alarming. This is the rule the whole environment model exists to
+  protect. Only one garden is shown at a time so green can't mean two opposite
+  things at once. The user has to state polarity, because the numbers can't reveal
+  it.
+- **Trend is derived, not supplied.** It's the signed change, computed in
   translation from history, because "down 6% today" reads differently from
-  "sitting low". A declarative source supplies levels; the system derives trend —
-  the config says which field is the level, not what the trend is.
-- **Beds, emblems, planting — all translator choices.** Grouping plants into beds
-  (a "group by" field: division, sector, subregion, PromQL label), the mark on
-  the tag (`emblem`), and the planting kind are none of them derivable from the
-  four axes. The config needs a group-by, an optional emblem source, and a
-  default planting.
-- **Edges, optionally.** Root grafts are relationships — rivalries, dependencies,
-  correlations — and are their own collection. A first-cut declarative source can
-  skip them; a good one takes an optional edge spec.
+  "sitting low". A declarative source supplies levels and the system derives
+  trend. The config says which field is the level, not what the trend is.
+- **Beds, emblems and planting are all translator choices.** Grouping plants into
+  beds (by division, sector, subregion, a PromQL label), the mark on the tag
+  (`emblem`), and the planting kind can't be derived from the four axes. The config
+  needs a group-by, an optional emblem source and a default planting.
+- **Edges, optionally.** Root grafts are relationships (rivalries, dependencies,
+  correlations) and are a separate collection. A first version can skip them, and
+  a good one takes an optional edge spec.
 
-The shape this points to is a **declarative mapping**: a config object saying
-*fetch this, on this cadence; this JSON path is the id, this the label, this the
-level; scale it this way; polarity is this; group into beds by that; here is the
-provenance.* Translate that config into the same nodes and edges the hand-written
-translators produce, and the hand-written translators become the reference
-implementation of what the config can express. Once mapping is data, **FIFA and
-fundraising are configurations, not code**, and a UI is a form over the config.
+This points to a **declarative mapping**: a config object that says *fetch this,
+on this schedule; this JSON path is the id, this is the label, this is the level;
+scale it like this; polarity is this; group into beds by that; here's the
+provenance.* Turn that config into the same nodes and edges the hand-written
+translators produce, and those translators become the reference for what the
+config can express. Once the mapping is data, **FIFA and fundraising become
+configurations, not code**, and a UI is a form over the config.
 
-### 3. Somewhere to run, and to be honest about
+### 3. Somewhere to run, honestly
 
-Two constraints the honesty of the app imposes on any user source:
+The app's honesty rules put two constraints on any user source:
 
-- **Provenance travels with the data.** The World garden made this load-bearing:
-  every derived judgment keeps the evidence it came from, and the "this is
-  simulated" marker derives from `provenance.live` so a live adapter drops it by
-  being live. A user source pointing at real data has to carry where each value
-  came from, so the inspection HUD can always answer "says who". `raw` already
-  exists on the node for exactly this payload.
-- **Third-party text and terms.** The moment a source ingests someone else's
-  content — a news wire, a data vendor — its terms on storing and showing that
-  text apply. The World/news work already flagged this as a ship-blocker for
-  going live. A user-source feature inherits it wholesale and should surface it,
-  not bury it.
-
----
-
-## Two constraints in the node contract to fix first
-
-Small, concrete, and they block the general case:
-
-- **`Domain` — opened.** It was a closed enum of seven, and the worry recorded
-  here was that it "feeds materials", so a new domain would have no look.
-  Checking the code retired half that worry: nothing in the renderer keys
-  materials off `domain` at all — a plant's look comes from `plantingType` and
-  the L-system archetype, both chosen in translation, and the only thing that
-  reads `domain` is the inspection HUD, which renders it as text. So `Domain` is
-  now `KnownDomain | (string & {})`: the seven ship as autocompleted literals with
-  `'general'` added as the named fallback bucket, and a user source names its own
-  (`fundraising`, `fifa`) with nothing downstream to teach. `isKnownDomain` is for
-  code that wants to branch on the built-in set — never as a gate that rejects an
-  unfamiliar string, which would be the closed enum back again.
-- **The node type must stay narrow.** Its own rule: *never a field only one domain
-  uses* — those live in `raw`. A declarative source must respect that, and
-  `translation/declarative.ts` does: everything source-specific goes into
-  `raw.record`, never onto the node. The temptation to add per-source fields to
-  the node is the thing the flat contract exists to refuse.
+- **Provenance travels with the data.** The World garden made this essential.
+  Every derived judgement keeps the evidence it came from, and the "this is
+  simulated" marker is derived from `provenance.live`, so a live adapter drops the
+  marker just by being live. A user source pointing at real data has to record
+  where each value came from so the inspection HUD can always answer "says who?".
+  The node's `raw` field exists for exactly this.
+- **Third-party text and terms.** As soon as a source ingests someone else's
+  content, such as a news wire or a data vendor, their terms on storing and showing
+  it apply. The World and news work already flagged this as a blocker for going
+  live. A user-source feature inherits the problem in full and should make it
+  visible, not bury it.
 
 ---
 
-## The user's three examples, concretely
+## Two node-contract constraints that had to be fixed first
 
-- **FIFA** — feed-shaped, almost the NFL adapter again. Vitality from table
-  position and form, beds from confederations or groups, grafts from group draws
-  or rivalries, emblems from club colours. Once the declarative path exists this
-  is a config, not code. It also does *not* stress anything new, which is why it
-  is a good confidence check but a poor thing to build first.
+Both were small and specific, and both blocked the general case.
 
-- **Prometheus** — *the archetype the whole idea was built for*, and the right
-  first real source. A PromQL query returns series; gauges and counters map to
-  vitality and activity; `up{}` is staleness stated by the source itself; labels
-  are the natural bed grouping. It is genuinely live, it never *finishes* (so it
-  sidesteps the completion gap below), and building it forces the real-fetch,
-  real-poll, backend-proxy plumbing that every user source then reuses. It needs
-  network access this environment does not have — which is precisely why it keeps
-  being deferred, and why it is the thing to do the moment there is a server.
-
-- **Political fundraising** — a published-then-revised numeric source, structurally
-  the World garden: filings get amended, so what you knew at a date differs from
-  what is now on record, and the scrub must show what was known. Two sharp traps
-  it walks straight into: **polarity is a position** — "is this campaign growing
-  good news?" depends on whose side the viewer is on, the same edge the World
-  garden handled by refusing to hand-pick — and **a fundraising goal *finishes***,
-  which the vocabulary has no word for (see below). Provenance is non-negotiable
-  here.
+- **`Domain` is now open.** It used to be a closed enum of seven, and the worry
+  was that it drove materials, so a new domain would have no look. Checking the
+  code removed most of that worry. Nothing in the renderer picks materials based on
+  `domain`. A plant's look comes from `plantingType` and the L-system archetype,
+  both chosen in translation, and the only thing that reads `domain` is the
+  inspection HUD, which shows it as text. `Domain` is now `KnownDomain | (string &
+  {})`. The seven built-in values autocomplete, `'general'` is added as the named
+  catch-all, and a user source can name its own (`fundraising`, `fifa`) with
+  nothing downstream to update. `isKnownDomain` is for code that wants to branch on
+  the built-in set. Don't use it to reject unfamiliar strings, because that would
+  just bring the closed enum back.
+- **The node type has to stay narrow.** Its own rule is that a field only one
+  domain uses belongs in `raw`, not on the node. A declarative source has to follow
+  that, and `translation/declarative.ts` does: everything source-specific goes into
+  `raw.record`. The flat contract exists to resist the urge to add per-source
+  fields to the node.
 
 ---
 
-## The gap that blocked a whole class of sources: completion — now closed
+## The three examples
 
-Plants grow; they do not *finish*. Tasks, builds, goals, and harvests do.
-Prometheus gauges were safe, but "CI pipelines", "a sprint", "a fundraising
-target" all genuinely complete, and the health vocabulary had no term for it.
-That gap is now filled: `Completion` sits on the node beside `Blight` with the
-opposite sign — a discrete terminal event carried as-of a timestamp, read as
-fruit for `done` and deadwood for `failed` (`ecosystem/completion.ts`,
-`scene/Completions.tsx`, `docs/completion.md`). So a user *can* point the garden
-at a to-do list — and the declarative interpreter now speaks the verb: a
-`DeclarativeMapping` takes an optional `completions` block (an array path, plus
-`atPath`/`outcomePath`/`labelPath` and a `doneWhen` set) that maps a record's
-finished work onto the node's `completions`. It is safe as config where the level
-is not, because a completion is a discrete event the source *states* — it
-happened, at a time, with an outcome — rather than a comparison the config has to
-invent; the only judgement is which outcome values count as success.
+- **FIFA** is feed-shaped and close to the NFL adapter. Vitality comes from table
+  position and form, beds from confederations or groups, grafts from group draws or
+  rivalries, and emblems from club colours. With the declarative path it's a
+  config, not code. It doesn't test anything new, which makes it a good confidence
+  check and a poor first thing to build.
+- **Prometheus** is the case the whole idea was built for, and the right first
+  real source. A PromQL query returns series. Gauges and counters map to vitality
+  and activity, `up{}` is the source reporting its own staleness, and labels are
+  the natural bed grouping. It's genuinely live and never *finishes*, so it avoided
+  the completion gap. Building it forced the real fetch, real poll and backend
+  proxy that every user source then reuses.
+- **Political fundraising** is published and then revised, which makes it
+  structurally like the World garden. Filings get amended, so what you knew on a
+  given date differs from what's on record now, and scrubbing back has to show
+  what was known at the time. It runs into two traps. First, **polarity depends on
+  the viewer**: whether a campaign growing is good news depends on whose side
+  you're on, the same problem the World garden handled by refusing to pick a side.
+  Second, **a fundraising goal finishes**, which needed the completion vocabulary
+  below. Provenance is essential here.
 
 ---
 
-## Recommended sequence
+## Completion: the gap that blocked a whole class of sources, now closed
 
-1. ~~**Prometheus as a hand-written `LiveSource`**~~ — **done, and wired into
-   `SOURCES` behind a mock fetch.** `translation/prometheus.ts` +
-   `adapters/prometheus/` translate the wire, `prometheus.live.test.ts` proves the
-   live pull the moment a server is reachable (it 403s here by egress policy, not
-   by any gap in the code), and `promSource` is now the eighth garden — pointed at
-   `mockPromFetch` (`adapters/prometheus/mock.ts`) instead of a socket. It fetches
-   through the exact `fetchImpl` seam a real server drops into, primed
-   synchronously and refreshed on the beat (see `docs/prometheus.md`). Going live
-   is a swap of that one argument plus the unattended refresh loop of step 6.
-2. ~~**Open `Domain`**~~ — **done.** Now `KnownDomain | (string & {})` with
-   `'general'` as the named fallback; no material map was needed, because nothing
-   keyed materials off `domain` in the first place (see above).
-3. **Generalize `read(now)` into a declarative HTTP/JSON source + mapping
-   config** — **first cut done, offline half.** `translation/declarative.ts`
-   interprets a mapping over fetched JSON: records path, field paths, the
-   axis-scaling rule, mandatory polarity, optional activity field, group-by for
-   beds, provenance. The three hand-written translators are its spec; what it does
-   not yet express (edges, the world's as-of split, a completion verb) is named in
-   the file. What remains is the *fetch* half — a real HTTP call needs the backend
-   proxy of step 6, because a browser cannot fetch arbitrary third-party hosts.
-4. ~~**Settle the completion vocabulary**~~ — **done, including the config verb.**
-   Fruit and deadwood ship (`ecosystem/completion.ts`, `docs/completion.md`), and
-   `translation/declarative.ts` now maps a record's finished work onto the node's
-   `completions` via an optional `completions` block — so a config-driven CI feed
-   or to-do list hangs fruit without a developer writing a translator.
-5. **A configuration UI** over the mapping — **first cut done, offline half**
+Plants grow but don't *finish*. Tasks, builds, goals and harvests do. Prometheus
+gauges were fine, but CI pipelines, sprints and fundraising targets all genuinely
+complete, and the health vocabulary had no word for that.
+
+That gap is filled. `Completion` sits on the node beside `Blight` with the
+opposite sign: a discrete, final event with a timestamp, shown as fruit for `done`
+and deadwood for `failed` (`ecosystem/completion.ts`, `scene/Completions.tsx`,
+`docs/completion.md`). So a user *can* point the garden at a to-do list, and the
+declarative interpreter supports it. A `DeclarativeMapping` takes an optional
+`completions` block (an array path, plus `atPath`, `outcomePath`, `labelPath` and
+a `doneWhen` set) that maps a record's finished work onto the node's
+`completions`.
+
+Completions are safe to leave to config in a way the level isn't. A completion is
+an event the source *states* (it happened, at a time, with an outcome), not a
+comparison the config has to invent. The only judgement call is which outcome
+values count as success.
+
+---
+
+## Sequence
+
+1. ~~**Prometheus as a hand-written `LiveSource`.**~~ **Done, and in `SOURCES`
+   behind a mock fetch.** `translation/prometheus.ts` and `adapters/prometheus/`
+   translate the wire format. `prometheus.live.test.ts` covers the live pull once
+   a server is reachable (here it gets a 403 because of network policy, not a code
+   problem). `promSource` is a registered garden pointed at `mockPromFetch`
+   (`adapters/prometheus/mock.ts`) instead of a real server. It fetches through the
+   same `fetchImpl` a real server would use, is primed synchronously and refreshed
+   on the beat (see `docs/prometheus.md`). Going live means swapping that one
+   argument and running the unattended refresh loop from step 6.
+2. ~~**Open `Domain`.**~~ **Done.** It's now `KnownDomain | (string & {})` with
+   `'general'` as the named fallback. No material map was needed, because nothing
+   picked materials by `domain` in the first place.
+3. **A declarative HTTP/JSON source with a mapping config.** **First version done,
+   offline half.** `translation/declarative.ts` interprets a mapping over JSON:
+   records path, field paths, the axis scaling rule, required polarity, an
+   optional activity field, group-by for beds, provenance, and completions. The
+   three hand-written translators define the expected behaviour. What it doesn't
+   express yet (edges, and the World garden's published-versus-described dates) is
+   noted in the file. The *fetch* half is still missing, because a real HTTP call
+   to an arbitrary host needs the backend proxy from step 6.
+4. ~~**Settle the completion vocabulary.**~~ **Done, including config.** Fruit and
+   deadwood ship (`ecosystem/completion.ts`, `docs/completion.md`), and
+   `translation/declarative.ts` maps a record's finished work onto the node's
+   `completions` through an optional `completions` block. A config-driven CI feed
+   or to-do list gets fruit without a developer writing a translator.
+5. **A configuration UI over the mapping.** **First version done, offline half**
    (`docs/garden-builder.md`). A modal (`src/GardenBuilder.tsx`) turns a pasted
    JSON snapshot and a `DeclarativeMapping` into a garden, previewed through the
-   real interpreter and persisted so it survives a reload; FIFA and fundraising
-   are now things a user sets up, not things a developer writes. What it does not
-   do is *fetch* — a user brings one snapshot by hand, because the live pull past
-   the browser's CORS wall is step 6. The config UI was reachable without the
-   network; only the fetch was not.
-6. **A backend** for the fetch proxy and the unattended collector loop — now the
-   critical-path blocker for everything with "needs network" on it. The observation
-   record already stores in the shape this wants, so it is a change of backend, not
-   of format. **Its contract is now drawn** in `docs/backend.md`: the proxy route,
-   the collector loop, the single-argument client swap, and what stays
-   offline-testable when there is no egress — pinned to the `FetchLike`,
-   `refresh`/`adopt`, and `ObservedRecord` seams that already exist.
+   real interpreter and saved so it survives a reload. FIFA and fundraising are
+   now things a user sets up instead of things a developer writes. It doesn't
+   *fetch*: a user brings one snapshot by hand, because pulling live data past the
+   browser's CORS limits is step 6. The config UI never needed the network. Only
+   the fetch did. The form doesn't offer the completions block yet.
+6. **A backend for the fetch proxy and the unattended collector loop.** **Built
+   for Prometheus and the NFL, deployable to Netlify, not yet run against a live
+   server.** The design and code are described in `docs/backend.md` and the deploy
+   steps in `docs/deploy-netlify.md`. The observation record already had the shape
+   a server wants, so it was a change of backend, not of format. What's left is
+   extending the proxy and collector to arbitrary user-registered sources.
 
-The test the whole feature has to pass is the one every source so far has passed:
-a stranger glancing at the garden reads health correctly without being told the
-domain, and the app never asserts something it cannot show the evidence for.
-A mapping tool that lets a user produce a confident-looking wrong plant has
-failed that test, and the World garden's whole design is the record of how much
-that matters.
+Every source so far has had to pass the same test, and a user-defined one does
+too: a stranger glancing at the garden reads health correctly without being told
+the domain, and the app never claims something it can't show evidence for. A
+mapping tool that lets a user produce a confident but wrong plant has failed that
+test, and the World garden's whole design shows how much that matters.
