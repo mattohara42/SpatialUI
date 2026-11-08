@@ -12,3 +12,6 @@ node_modules/.vite/
 .env
 .env.*
 !.env.example
+
+# Claude Code personal settings. Approved commands saved here can contain secrets.
+.claude/settings.local.json
